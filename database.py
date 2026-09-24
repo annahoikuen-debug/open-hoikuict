@@ -70,6 +70,7 @@ def create_db_and_tables() -> None:
     _migrate_guardian_confirmation_columns()
     _migrate_pickup_history_columns()
     _migrate_add_daily_contact_columns()
+    _migrate_spec_20260924_columns()
     _migrate_add_parent_account_columns()
     _migrate_add_guardian_columns()
     _migrate_parent_mail_delivery_columns()
@@ -90,6 +91,23 @@ def create_db_and_tables() -> None:
     _migrate_care_certification_and_extended_care_columns()
     _migrate_extended_care_billing_transfer()
     _validate_sqlite_foreign_keys()
+
+
+def _migrate_spec_20260924_columns() -> None:
+    additions = {
+        "daily_contact_replies": {"pending_draft": "JSON"},
+        "attendance_verification_histories": {
+            "reason": "VARCHAR", "previous_status": "VARCHAR", "actor_user_id": "CHAR(32)",
+        },
+    }
+    with engine.begin() as conn:
+        for table, fields in additions.items():
+            columns = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if not columns:
+                continue
+            for name, kind in fields.items():
+                if name not in columns:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
 
 
 def _migrate_family_archive() -> None:
