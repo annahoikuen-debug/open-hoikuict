@@ -40,12 +40,16 @@ class SpecRestoreTests(RestoreFixture):
                 connection.execute("DROP TABLE family_archive_logs")
                 connection.execute("DROP INDEX ix_families_archived_at")
                 connection.execute("ALTER TABLE families DROP COLUMN archived_at")
+        # The development branch also requires provenance fields absent on the pilot.
+        metadata = {key: value for key, value in {
+            "recovery_kit_ref":"test-kit", "actor_ref":"test-operator", "baseline_ref":"test-baseline",
+            "schema_contract":"staff-sessions-20260920",
+        }.items() if key in BackupConfig.__dataclass_fields__}
         backup = create_backup(BackupConfig(output_root=self.paths.backups,
             database_url=os.environ["HOIKUICT_DATABASE_URL"], facility_db=self.data / "facility.sqlite",
             storage_root=self.storage, git_sha=CURRENT_SHA, app_image="sha256:" + "e" * 64,
-            cloudflared_image="sha256:" + "f" * 64, recovery_kit_ref="test-kit", actor_ref="test-operator",
-            baseline_ref="test-baseline", schema_contract="staff-sessions-20260920", compose_sha256="c" * 64,
-            facility_ref="synthetic", quiesced=True))
+            cloudflared_image="sha256:" + "f" * 64, compose_sha256="c" * 64,
+            facility_ref="synthetic", quiesced=True, **metadata))
         source = backup / "db/hoikuict.db"
         before = file_hash(source)
         SQLModel.metadata.create_all(self.engine)
