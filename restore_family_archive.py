@@ -1,4 +1,4 @@
-"""Recognize only the additive family archive schema when restoring old backups."""
+"""Recognize the approved additive archive and September 24 restore migrations."""
 
 from contextlib import closing
 import re
@@ -7,7 +7,14 @@ import sqlite3
 from sqlalchemy.dialects.sqlite import dialect
 from sqlalchemy.schema import CreateIndex, CreateTable
 
-from models import FamilyArchiveLog
+from models import FamilyArchiveLog, GuardianHoursAudit, GuardianHoursSetting
+
+SPEC_COLUMNS = {
+    "daily_contact_replies": {"pending_draft": "JSON"},
+    "attendance_verification_histories": {
+        "reason": "VARCHAR", "previous_status": "VARCHAR", "actor_user_id": "CHAR(32)",
+    },
+}
 
 
 def _tokens(sql):
@@ -38,7 +45,7 @@ def _archive_schema():
     return {row[:3]: _tokens(row[3]) for row in rows}
 
 
-def _project(rows):
+def _archive_project(rows):
     expected = _archive_schema()
     additions = {row[:3]: _tokens(row[3]) for row in rows if row[:3] in expected}
     family = next(
@@ -71,10 +78,60 @@ def _project(rows):
     return remaining, archived
 
 
+def _spec_schema():
+    with closing(sqlite3.connect(":memory:")) as connection:
+        for model in (GuardianHoursSetting, GuardianHoursAudit):
+            connection.execute(str(CreateTable(model.__table__).compile(dialect=dialect())))
+        return {
+            row[:3]: _tokens(row[3]) for row in connection.execute(
+                "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'"
+            )
+        }
+
+
+def _project(rows):
+    expected = _spec_schema()
+    additions = {row[:3]: _tokens(row[3]) for row in rows if row[:3] in expected}
+    found = set()
+    normalized = []
+    for row in rows:
+        if row[:3] in expected:
+            continue
+        if row[0] != "table" or row[1] not in SPEC_COLUMNS:
+            normalized.append(row)
+            continue
+        tokens = _tokens(row[3])
+        for name, kind in SPEC_COLUMNS[row[1]].items():
+            if name not in tokens:
+                continue
+            declaration = [name, *_tokens(kind)]
+            index = tokens.index(name)
+            end = index + len(declaration)
+            if tokens.count(name) != 1 or tokens[index:end] != declaration or end >= len(tokens):
+                return None
+            if tokens[end] == ",":
+                del tokens[index:end + 1]
+            elif tokens[end] == ")" and tokens[index - 1] == ",":
+                del tokens[index - 1:end]
+            else:
+                return None
+            found.add((row[1], name))
+        normalized.append((*row[:3], " ".join(tokens)))
+    has_spec = bool(additions or found)
+    if has_spec and (additions != expected or found != {
+        (table, name) for table, fields in SPEC_COLUMNS.items() for name in fields
+    }):
+        return None
+    archive = _archive_project(normalized)
+    if archive is None:
+        return None
+    return archive[0], ({"archive"} if archive[1] else set()) | ({"spec24"} if has_spec else set())
+
+
 def compatible(source_rows, current_rows):
     source, current = _project(source_rows), _project(current_rows)
     return bool(
-        source and current and source[0] == current[0] and (current[1] or not source[1])
+        source and current and source[0] == current[0] and source[1] <= current[1]
     )
 
 
@@ -88,11 +145,23 @@ def upgrade_copy(database, current_rows):
             return
         if not compatible(rows, current_rows):
             raise ValueError("Unsupported restore schema")
-        if _project(rows)[1] or not _project(current_rows)[1]:
-            return
-        expected = _archive_schema()
+        missing = _project(current_rows)[1] - _project(rows)[1]
         with connection:
-            connection.execute("ALTER TABLE families ADD COLUMN archived_at DATETIME")
+            connection.execute("BEGIN")
+            expected = {}
+            if "archive" in missing:
+                connection.execute("ALTER TABLE families ADD COLUMN archived_at DATETIME")
+                expected.update(_archive_schema())
+            if "spec24" in missing:
+                for table, fields in SPEC_COLUMNS.items():
+                    for name, kind in fields.items():
+                        connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
+                expected.update(_spec_schema())
             for row in sorted(current_rows, key=lambda row: row[0] != "table"):
                 if row[:3] in expected:
                     connection.execute(row[3])
+            upgraded = connection.execute(
+                "SELECT type,name,tbl_name,sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name"
+            ).fetchall()
+            if _project(upgraded) != _project(current_rows):
+                raise ValueError("Restore migration did not reach the approved schema")
