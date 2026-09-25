@@ -13,7 +13,7 @@
         <input type="hidden" name="date" value="{{ target_date_value }}"><input type="hidden" name="status" value="{{ option.value }}">
         <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter" value="{{ selected_filter }}"><input type="hidden" name="classroom_id" value="{{ selected_classroom_id_value }}">
         <input type="hidden" name="notify_parent" value="false"><input type="hidden" name="reason" value="">
-        <button type="button" data-status-key="{{ option.value }}" data-child-name="{{ row.child.full_name }}" data-requires-reason="{{ 'true' if row.verification or row.alarm_is_active else 'false' }}" aria-pressed="{{ 'true' if row.verification and row.verification_key == option.value else 'false' }}" onclick="openVerificationDialog(this)">{{ option.label }}</button>
+        <button type="button" data-status-key="{{ option.value }}" data-child-name="{{ row.child.full_name }}" data-requires-reason="{{ 'true' if row.verification else 'false' }}" aria-pressed="{{ 'true' if row.verification and row.verification_key == option.value else 'false' }}" onclick="openVerificationDialog(this)">{{ option.label }}</button>
       </form>
       {% endfor %}
       {% else %}<span data-readonly-status="{{ row.verification_key }}" class="border border-slate-200 bg-white rounded px-2 py-1">{{ row.verification_label }}</span>{% endif %}

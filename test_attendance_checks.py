@@ -218,7 +218,7 @@ class AttendanceChecksTests(unittest.TestCase):
 
         self.assertIsNotNone(verification)
         self.assertEqual(verification.updated_by_name, "確認担当")
-        self.assertEqual(len(histories), 2)
+        self.assertEqual(len(histories), 1)
         self.assertTrue(all(history.updated_by_name == "確認担当" for history in histories))
 
     def test_list_shows_compact_summary_row_and_detail_toggle(self):
@@ -274,6 +274,11 @@ class AttendanceChecksTests(unittest.TestCase):
         )
 
     def test_unknown_queues_in_app_and_push_delivery_for_linked_parent(self):
+        self.client.post(
+            f"/attendance-checks/{self.child_id}/verification",
+            data={"date": self.day.isoformat(), "status": "present"},
+            follow_redirects=False,
+        )
         response = self.client.post(
             f"/attendance-checks/{self.child_id}/verification",
             data={

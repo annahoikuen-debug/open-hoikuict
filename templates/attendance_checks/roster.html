@@ -15,7 +15,7 @@
     <div class="roster-columns">{% for key,label in states %}{% set members = group.rows|selectattr('attendance_state','equalto',key)|list %}
       <section class="roster-column"><h3 class="column-title state-{{ key }}">{{ label }}<b>{{ members|length }}</b></h3><div class="name-list">
         {% for row in members %}<a class="name-button" href="/attendance-checks/?date={{ target_date_value }}#attendance-check-row-{{ row.child.id }}"
-          data-name="{{ row.child.full_name }}" data-classroom="{{ row.classroom_name }}" data-state="{{ label }}"
+          data-child-id="{{ row.child.id }}" data-name="{{ row.child.full_name }}" data-classroom="{{ row.classroom_name }}" data-state="{{ label }}"
           data-arrival="{{ row.check_in_at.strftime('%H:%M') if row.check_in_at else '未打刻' }}" data-departure="{{ row.check_out_at.strftime('%H:%M') if row.check_out_at else '未打刻' }}"
           data-verification="{{ row.verification_label }}" data-contact="{{ row.entry.contact_type.label if row.entry else '未提出' }}"
           data-alarm="{{ row.alarm_reasons|join(' / ') if row.alarm_is_active else 'なし' }}" data-contact-url="/daily-contacts/{{ row.child.id }}?date={{ target_date_value }}">{{ row.child.full_name }}{% if row.alarm_is_active %}<span class="alarm-dot" title="アラームあり">●<span class="sr-only">アラームあり</span></span>{% endif %}</a>{% else %}<span class="empty">―</span>{% endfor %}
@@ -28,7 +28,7 @@
   <p><span data-detail="classroom"></span> / {{ target_date_value }} / <strong data-detail="state"></strong></p>
   <dl class="grid grid-cols-2 gap-3 rounded bg-slate-50 p-3 text-sm"><div><dt>登園</dt><dd data-detail="arrival"></dd></div><div><dt>降園</dt><dd data-detail="departure"></dd></div><div><dt>目視確認</dt><dd data-detail="verification"></dd></div><div><dt>家庭からの連絡</dt><dd data-detail="contact"></dd></div></dl>
   <p class="text-sm">アラーム: <span data-detail="alarm"></span></p>
-  <div class="flex flex-wrap gap-4 text-sm text-indigo-700"><a data-detail-link="checks" class="underline">出欠確認へ</a><a data-detail-link="contact" class="underline">保護者連絡の詳細へ</a></div>
+  <div class="flex flex-wrap gap-4 text-sm text-indigo-700">{% if current_user.can_edit %}<a data-detail-link="memo" class="underline">メモを書く</a>{% endif %}<a data-detail-link="records" class="underline">記録を見る</a><a data-detail-link="checks" class="underline">出欠確認へ</a><a data-detail-link="contact" class="underline">保護者連絡の詳細へ</a></div>
 </dialog>
-<script src="/static/js/attendance-roster.js?v=20260924" defer></script>
+<script src="/static/js/attendance-roster.js?v=20260925-1" defer></script>
 {% endblock %}

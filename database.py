@@ -71,6 +71,7 @@ def create_db_and_tables() -> None:
     _migrate_pickup_history_columns()
     _migrate_add_daily_contact_columns()
     _migrate_spec_20260924_columns()
+    _migrate_observation_sharing_columns()
     _migrate_add_parent_account_columns()
     _migrate_add_guardian_columns()
     _migrate_parent_mail_delivery_columns()
@@ -91,6 +92,15 @@ def create_db_and_tables() -> None:
     _migrate_care_certification_and_extended_care_columns()
     _migrate_extended_care_billing_transfer()
     _validate_sqlite_foreign_keys()
+
+
+def _migrate_observation_sharing_columns() -> None:
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(child_observation_logs)")}
+        if columns:
+            for name, kind in {"visibility": "VARCHAR", "shared_staff_ids": "JSON"}.items():
+                if name not in columns:
+                    conn.exec_driver_sql(f"ALTER TABLE child_observation_logs ADD COLUMN {name} {kind}")
 
 
 def _migrate_spec_20260924_columns() -> None:

@@ -504,11 +504,25 @@ def update_attendance_verification(
             AttendanceVerification.target_date == target_day,
         )
     ).first()
+    def result(notice=None):
+        if _is_hx_request(request):
+            context = _build_page_context(
+                request=request, session=session, current_user=current_user,
+                target_day=target_day, selected_layout=selected_layout,
+                selected_filter=selected_filter, selected_classroom_id=selected_classroom_id,
+                notice=notice,
+            )
+            return templates.TemplateResponse(request, "attendance_checks/_board.html", context)
+        return RedirectResponse(url=_build_redirect_url(
+            target_day=target_day, selected_layout=selected_layout,
+            selected_filter=selected_filter, selected_classroom_id=selected_classroom_id,
+            notice=notice,
+        ), status_code=303)
+
     previous_status = verification.status.value if verification else None
-    alarm = session.exec(select(AttendanceAlarmState).where(
-        AttendanceAlarmState.child_id == child_id, AttendanceAlarmState.target_date == target_day,
-    )).first()
-    if (verification or (alarm and alarm.is_active)) and not reason.strip():
+    if verification and verification.status == next_status:
+        return result()
+    if verification and not reason.strip():
         raise HTTPException(400, "訂正理由を入力してください。")
     if len(reason.strip()) > 500:
         raise HTTPException(400, "訂正理由は500文字以内で入力してください。")
@@ -541,7 +555,7 @@ def update_attendance_verification(
     session.flush()
 
     notice = None
-    if next_status == AttendanceVerificationStatus.unknown and notify_parent:
+    if previous_status is not None and next_status == AttendanceVerificationStatus.unknown and notify_parent:
         notifications = notify_attendance_confirmation_needed(
             session,
             child=child,
@@ -560,26 +574,4 @@ def update_attendance_verification(
     )
     session.commit()
 
-    if _is_hx_request(request):
-        context = _build_page_context(
-            request=request,
-            session=session,
-            current_user=current_user,
-            target_day=target_day,
-            selected_layout=selected_layout,
-            selected_filter=selected_filter,
-            selected_classroom_id=selected_classroom_id,
-            notice=notice,
-        )
-        return templates.TemplateResponse(request, "attendance_checks/_board.html", context)
-
-    return RedirectResponse(
-        url=_build_redirect_url(
-            target_day=target_day,
-            selected_layout=selected_layout,
-            selected_filter=selected_filter,
-            selected_classroom_id=selected_classroom_id,
-            notice=notice,
-        ),
-        status_code=303,
-    )
+    return result(notice)

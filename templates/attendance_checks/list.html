@@ -50,12 +50,14 @@
     </div>
   </form>
 
+  <p id="verification-inline-error" role="alert" class="text-sm text-rose-700"></p>
   {% include "attendance_checks/_board.html" %}
 </div>
 
 <dialog id="verification-dialog" class="rounded-xl p-5 shadow-xl backdrop:bg-slate-900/40 w-[min(92vw,32rem)]">
   <form id="verification-confirm" class="space-y-4">
     <h2 id="verification-title" class="font-bold text-lg"></h2>
+    <div class="flex gap-2"><button type="button" data-reason-preset="誤入力" class="rounded border px-3 py-2">誤入力</button><button type="button" data-reason-preset="変更連絡あり" class="rounded border px-3 py-2">変更連絡あり</button></div>
     <label class="block text-sm">理由 <span id="verification-required"></span><textarea id="verification-reason" rows="3" maxlength="500" class="mt-1 w-full rounded border p-2"></textarea></label>
     <p class="text-sm text-slate-600">記録者: {{ current_user.name }}。日時・変更前後の内容とともに残ります。</p>
     <label id="verification-notify-label" class="block text-sm" hidden><input type="checkbox" id="verification-notify"> 保護者に出欠確認の通知を送る</label>
@@ -63,5 +65,5 @@
     <div class="flex justify-end gap-3"><button type="button" onclick="document.getElementById('verification-dialog').close()" class="rounded border px-4 py-2">戻る</button><button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-white">記録する</button></div>
   </form>
 </dialog>
-<script src="/static/js/attendance-checks.js?v=20260924-2" defer></script>
+<script src="/static/js/attendance-checks.js?v=20260925-1" defer></script>
 {% endblock %}
