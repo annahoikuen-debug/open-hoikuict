@@ -4,3 +4,4 @@
 @media(pointer:coarse){.name-button,.check-status button,.check-open{min-height:40px}}
 #verification-notify-label[hidden]{display:none!important}
 .check-status form:has([data-status-key=private_absent]){flex:1.6}
+.attendance-checks-page{max-width:1000px}

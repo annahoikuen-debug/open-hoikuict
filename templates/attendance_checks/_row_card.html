@@ -22,7 +22,7 @@
   </div>
   <div id="{{ detail_id }}" class="mt-4 hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
     {% if (row.has_check_in or row.check_out_at) and current_user.can_edit %}<a class="mb-3 inline-block text-sm text-rose-700 underline" href="/attendance/{{ row.child.id }}/correction?date={{ target_date_value }}&amp;return_to=checks&amp;return_query={{ return_query|urlencode }}">誤打刻を取り消す</a>{% endif %}
-    <div class="grid gap-4 lg:grid-cols-4">
+    <div class="grid gap-4 sm:grid-cols-2">
       <section class="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
         <h3 class="text-sm font-semibold text-slate-700">保護者連絡</h3>
         <a href="/daily-contacts/{{ row.child.id }}?date={{ target_date_value }}" class="text-xs text-indigo-700 underline">保護者連絡の詳細へ</a>
