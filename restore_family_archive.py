@@ -16,6 +16,11 @@ SPEC_COLUMNS = {
     },
 }
 SHARING_COLUMNS = {"child_observation_logs": {"visibility": "VARCHAR", "shared_staff_ids": "JSON"}}
+MONTHLY_COLUMNS = {"monthly_sheet": "JSON", "monthly_sheet_key": "VARCHAR"}
+MONTHLY_INDEXES = {
+    "uq_monthly_sheet_key": "CREATE UNIQUE INDEX uq_monthly_sheet_key ON plan_documents(monthly_sheet_key) WHERE monthly_sheet_key IS NOT NULL",
+    "ix_plan_documents_monthly_sheet_key": "CREATE UNIQUE INDEX ix_plan_documents_monthly_sheet_key ON plan_documents (monthly_sheet_key)",
+}
 
 
 def _tokens(sql):
@@ -117,7 +122,45 @@ def _sharing_project(rows):
     return normalized, bool(found)
 
 
+def _monthly_project(rows):
+    """Accept exactly the nullable sheet columns and approved uniqueness indexes."""
+    normalized, found, indexes = [], set(), set()
+    for row in rows:
+        if row[0] == "index" and row[1] in MONTHLY_INDEXES:
+            if row[2] != "plan_documents" or _tokens(row[3]) != _tokens(MONTHLY_INDEXES[row[1]]):
+                return None
+            indexes.add(row[1])
+            continue
+        if row[:3] != ("table", "plan_documents", "plan_documents"):
+            normalized.append(row)
+            continue
+        tokens = _tokens(row[3])
+        for name, kind in MONTHLY_COLUMNS.items():
+            if name not in tokens:
+                continue
+            index = tokens.index(name)
+            end = index + 2
+            if tokens.count(name) != 1 or tokens[index:end] != [name, kind] or end >= len(tokens):
+                return None
+            if tokens[end] == ",":
+                del tokens[index:end + 1]
+            elif tokens[end] == ")" and tokens[index - 1] == ",":
+                del tokens[index - 1:end]
+            else:
+                return None
+            found.add(name)
+        normalized.append((*row[:3], " ".join(tokens)))
+    if found or indexes:
+        if found != set(MONTHLY_COLUMNS) or not indexes:
+            return None
+    return normalized, bool(found)
+
+
 def _project(rows):
+    monthly = _monthly_project(rows)
+    if monthly is None:
+        return None
+    rows, has_monthly = monthly
     sharing = _sharing_project(rows)
     if sharing is None:
         return None
@@ -157,7 +200,7 @@ def _project(rows):
     archive = _archive_project(normalized)
     if archive is None:
         return None
-    return archive[0], ({"archive"} if archive[1] else set()) | ({"spec24"} if has_spec else set()) | ({"spec25"} if has_sharing else set())
+    return archive[0], ({"archive"} if archive[1] else set()) | ({"spec24"} if has_spec else set()) | ({"spec25"} if has_sharing else set()) | ({"monthly27"} if has_monthly else set())
 
 
 def compatible(source_rows, current_rows):
@@ -193,6 +236,12 @@ def upgrade_copy(database, current_rows):
                 for table, fields in SHARING_COLUMNS.items():
                     for name, kind in fields.items():
                         connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
+            if "monthly27" in missing:
+                for name, kind in MONTHLY_COLUMNS.items():
+                    connection.execute(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}")
+                for row in current_rows:
+                    if row[0] == "index" and row[1] in MONTHLY_INDEXES:
+                        connection.execute(row[3])
             for row in sorted(current_rows, key=lambda row: row[0] != "table"):
                 if row[:3] in expected:
                     connection.execute(row[3])
