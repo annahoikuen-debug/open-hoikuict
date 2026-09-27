@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/static/css/monthly-library.css">
+<link rel="stylesheet" href="{{ static_asset_url('css/monthly-library.css') }}">
 <div id="drive-monthly-plan" lang="ja" aria-label="月案の帳票編集">
   {% if request.app.state.monthly_library_fixture is defined %}<p role="note" style="padding:12px;background:#fff5d6;color:#624600">検証用：園児・文例・履歴はすべて架空データです。本番の記録には保存されません。</p>{% endif %}
   <header><strong>月案</strong><span id="document-status"></span><a id="document-link" hidden>承認・文書情報</a></header>
@@ -31,4 +31,4 @@
   <div id="message" role="status" aria-live="polite"></div>
 </div>
 <script id="monthly-library-boot" type="application/json">{{ boot | tojson }}</script>
-<script src="/static/js/monthly-library.js" defer></script>
+<script src="{{ static_asset_url('js/monthly-library.js') }}" defer></script>

@@ -1,7 +1,10 @@
 """Monthly output regression tests against a fictional, isolated database."""
 import json
+import hashlib
+import re
 from copy import deepcopy
 from io import BytesIO
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from xml.etree import ElementTree as ET
@@ -39,6 +42,38 @@ class MonthlyExportTests(unittest.TestCase):
     def dump(self):
         with self.fixture.engine.connect() as con:
             return '\n'.join(con.connection.driver_connection.iterdump())
+
+    def test_editor_and_saved_document_load_the_actual_versioned_assets(self):
+        from fastapi.staticfiles import StaticFiles
+        import template_utils
+        self.fixture.app.mount('/static', StaticFiles(directory=template_utils._STATIC_ROOT), name='static')
+        saved = self.saved()
+        for role in (Role.CAN_EDIT, Role.VIEW_ONLY):
+            self.fixture.user.role = role
+            for path in (f"/plans/monthly-library?document_id={saved['document_id']}",
+                         f"/plans/documents/{saved['document_id']}"):
+                page = self.client.get(path)
+                self.assertEqual(page.status_code, 200)
+                for asset in ('js/monthly-library.js', 'css/monthly-library.css'):
+                    pattern = r'(?:src|href)="(/static/' + re.escape(asset) + r'\?v=([0-9a-f]{16}))"'
+                    match = re.search(pattern, page.text)
+                    self.assertIsNotNone(match, path)
+                    response = self.client.get(match[1])
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(hashlib.sha256(response.content).hexdigest()[:16], match[2])
+                    self.assertNotIn(f'"/static/{asset}"', page.text)
+
+    def test_rendered_asset_url_changes_when_content_changes(self):
+        root = Path(self.fixture.temp.name) / 'versioned-assets'
+        for name in ('js', 'css'):
+            (root / name).mkdir(parents=True)
+            (root / name / f'monthly-library.{name}').write_bytes(b'original asset')
+        with patch('template_utils._STATIC_ROOT', root):
+            before = self.client.get('/plans/monthly-library').text
+            (root / 'js/monthly-library.js').write_bytes(b'updated asset!')
+            after = self.client.get('/plans/monthly-library').text
+        pattern = r'src="(/static/js/monthly-library.js\?v=[0-9a-f]{16})"'
+        self.assertNotEqual(re.search(pattern, before)[1], re.search(pattern, after)[1])
 
     def test_pdf_snapshot_escapes_text_embeds_font_and_does_not_save(self):
         before = self.dump()
