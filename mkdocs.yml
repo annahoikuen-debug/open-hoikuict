@@ -163,6 +163,32 @@ nav:
           - ドキュメントの更新: documentation.md
       - 変更履歴:
           - history.md
+          - 2026-09-27 main・デモへの統合: main-demo-integration-2026-09-27.md
+          - 2026-09-27 月案の配信キャッシュ修正: deployment-monthly-asset-cache-2026-09-27.md
+          - 2026-09-27 主任印欄の本番更新: deployment-monthly-chief-stamp-2026-09-27.md
+          - 2026-09-27 印刷・Excel出力の本番更新: deployment-monthly-print-export-2026-09-27.md
+          - 2026-09-27 月案帳票の本番更新: deployment-monthly-library-2026-09-27.md
+          - 2026-09-27 保護者お知らせ順の本番更新: deployment-parent-notice-order-2026-09-27.md
+          - 2026-09-27 月案の実装・検証:
+              - 帳票と文例検索: implementation-monthly-library-2026-09-27.md
+              - Ollama接続: implementation-monthly-ollama-2026-09-27.md
+              - Ollama実機検証: verification-monthly-ollama-2026-09-27.md
+              - 印刷・Excel出力: implementation-monthly-print-export-2026-09-27.md
+              - 保護者お知らせ順: implementation-parent-notice-order-2026-09-27.md
+          - 2026-09-27 月案の仕様・操作見本:
+              - 帳票レイアウト要件: monthly-library-layout-requirements-2026-09-27.md
+              - 帳票の操作見本: monthly-library-proposal-2026-09-27.md
+              - 検索・文例追加の操作見本: monthly-search-proposal-2026-09-27.md
+              - 印刷・Excel出力の操作見本: monthly-print-export-proposal-2026-09-27.md
+              - 主任印欄の操作見本: monthly-chief-stamp-proposal-2026-09-27.md
+              - 本体への引き継ぎ: handoff-monthly-library-to-open-hoikuict-2026-09-27.md
+              - 先行調査の引き継ぎ: handoff-monthly-library-to-plan-docs-2026-09-27.md
+          - 2026-09-25 PC出欠画面の本番更新: deployment-desktop-attendance-2026-09-25.md
+          - 2026-09-25 PC出欠画面の実装: implementation-desktop-attendance-2026-09-25.md
+          - 2026-09-25 名前・メモ・出欠訂正の本番更新: deployment-spec-2026-09-25.md
+          - 2026-09-25 名前・メモ・出欠訂正の実装: implementation-2026-09-25.md
+          - 2026-09-24 出欠・園連絡・閉園設定の本番更新: deployment-spec-2026-09-24.md
+          - 2026-09-24 出欠・園連絡・閉園設定の実装: implementation-2026-09-24.md
           - 2026-09-23 園内接続・Gmail案内の仕様: windows-lan-guide-proposal-2026-09-23.md
           - 2026-09-23 Windows段階導入の仕様: windows-server-installer-proposal-2026-09-23.md
           - 2026-09-23 GitHubからの導入アプリ: github-installer-2026-09-23.md

@@ -1,6 +1,7 @@
 # 連携契約
 
 - ステータス: 現行契約
+- 2026-09-27追加: 月案の原本帳票は任意の `monthly_sheet` を使用する。既存の月案10項目は変更しない。[帳票の保存契約・動作](implementation-monthly-library-2026-09-27.md)。
 - 現況再確認: 2026-09-13（`plan_docs/contracts.py`、認証アダプター、ルーター、保存層を照合）
 
 この文書は `hoiku-plan-docs`、`open-hoikuict`、`hoiku-plan-writer` の間で共有する文書作成機能の初期契約です。
