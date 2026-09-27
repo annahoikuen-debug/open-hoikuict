@@ -77,11 +77,8 @@ class Layout:
         self.pages.append(page)
         title = f"{c['target_month']}　{c['age']}歳児　" + ('乳児指導計画' if c['age'] < 3 else '月指導計画')
         self.cell(page, 0, 0, 4, 72, title, 'title')
-        chief = c['age'] == 1 or c['age'] >= 3
         labels = [('クラス：' + c['classroom_name'], 0, 22), ('担任：' + c['owner_name'], 22, 28),
-                  ('園長印：', 50, 11 if chief else 22)]
-        if chief:
-            labels.append(('主任：', 61, 11))
+                  ('園長印：', 50, 11), ('主任印：', 61, 11)]
         height = self.height([v for v, _, _ in labels], [s for _, _, s in labels], 5)
         for text, col, span in labels:
             self.cell(page, 4, col, height, span, text, 'meta')

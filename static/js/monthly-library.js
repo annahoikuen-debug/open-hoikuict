@@ -73,8 +73,7 @@
   function common(keys) { return `<table class="common" aria-label="クラス共通欄"><thead><tr>${keys.map(k=>`<th>${esc(label(k))}</th>`).join('')}</tr></thead><tbody><tr>${keys.map(k=>`<td>${cell(k)}</td>`).join('')}</tr></tbody></table>`; }
   const monthLabel = () => `${ctx().target_month.slice(0,4)}年${Number(ctx().target_month.slice(5))}月`;
   function head() {
-    const chief = ctx().age === 1 || !individual();
-    return `<table class="head" aria-label="基本情報"><tbody><tr><td rowspan="2" class="title" style="width:30%"><small>${esc(monthLabel())}</small>${individual() ? '乳児指導計画' : '月 指導計画'}</td><th>クラス</th><th>担任</th><th>園長印</th>${chief?'<th>主任</th>':''}${individual()?'<th>行事</th>':''}</tr><tr><td>${esc(ctx().classroom_name)}</td><td><input class="meta" data-owner aria-label="担任名" maxlength="100" value="${esc(ctx().owner_name)}" ${editable()?'':'readonly'}></td><td></td>${chief?'<td></td>':''}${individual()?`<td>${cell('common:events')}</td>`:''}</tr></tbody></table>`;
+    return `<table class="head" aria-label="基本情報"><tbody><tr><td rowspan="2" class="title" style="width:30%"><small>${esc(monthLabel())}</small>${individual() ? '乳児指導計画' : '月 指導計画'}</td><th>クラス</th><th>担任</th><th>園長印</th><th>主任印</th>${individual()?'<th>行事</th>':''}</tr><tr><td>${esc(ctx().classroom_name)}</td><td><input class="meta" data-owner aria-label="担任名" maxlength="100" value="${esc(ctx().owner_name)}" ${editable()?'':'readonly'}></td><td></td><td></td>${individual()?`<td>${cell('common:events')}</td>`:''}</tr></tbody></table>`;
   }
   function personalHead(first) { return `<colgroup><col style="width:12%"><col style="width:23%"><col style="width:21%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th rowspan="2">${first}</th><th colspan="2">個人別保育計画</th><th rowspan="2">環境構成・<br>援助活動</th><th rowspan="2">評価・反省</th></tr><tr><th>生活・健康<small>食事・睡眠・排泄・清潔</small></th><th>あそび<small>あそび・ことば</small></th></tr></thead>`; }
   function pages() {
