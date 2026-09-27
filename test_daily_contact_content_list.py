@@ -4,12 +4,14 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from sqlalchemy import event
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from auth import Role
 from models import AttendanceRecord, Child, ChildStatus, DailyContactEntry, DailyContactReply, DailyContactReplyStatus, ParentContactType
 from routers import daily_contacts
-from test_spec_changes_20260917 import workbench
+from test_spec_changes_20260917 import workbench as _shared_workbench
+
+workbench = _shared_workbench
 
 
 def add_contact(w, **values):

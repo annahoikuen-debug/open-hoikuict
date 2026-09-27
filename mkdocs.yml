@@ -163,6 +163,14 @@ nav:
           - ドキュメントの更新: documentation.md
       - 変更履歴:
           - history.md
+          - 2026-09-28 保護者連絡一覧:
+              - mainへの統合: main-contact-integration-2026-09-28.md
+              - 内容一覧の仕様・操作見本: parent-contact-content-list-proposal-2026-09-28.md
+              - 実装・検証: validation-parent-contact-content-list-2026-09-28.md
+              - 内容一覧の本番更新: deployment-parent-contact-list-2026-09-28.md
+              - 名前表示の本番更新: deployment-contact-name-only-2026-09-28.md
+              - 返信欄への移動の仕様: parent-contact-reply-link-proposal-2026-09-28.md
+              - 返信欄への移動の本番更新: deployment-contact-reply-jump-2026-09-28.md
           - 2026-09-27 main・デモへの統合: main-demo-integration-2026-09-27.md
           - 2026-09-27 月案の配信キャッシュ修正: deployment-monthly-asset-cache-2026-09-27.md
           - 2026-09-27 主任印欄の本番更新: deployment-monthly-chief-stamp-2026-09-27.md

@@ -1,8 +1,6 @@
 from datetime import date, timedelta
 import re
 import unicodedata
-import re
-import unicodedata
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -57,11 +55,6 @@ def _normalize_sort(raw: Optional[str]) -> str:
 
 def _normalize_view(raw: Optional[str]) -> str:
     return "status" if raw == "status" else "content"
-
-
-def _temperature_display(raw: Optional[str]) -> str:
-    value = unicodedata.normalize("NFKC", str(raw or "")).strip()
-    return value + "℃" if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value) else value
 
 
 def _temperature_display(raw: Optional[str]) -> str:
@@ -212,7 +205,6 @@ def daily_contact_list(
             "reply_by_child_id": reply_by_child_id,
             "pickup_by_child_id": pickup_by_child_id,
             "stool_labels": STOOL_LABELS,
-            "temperature_display": _temperature_display,
             "temperature_display": _temperature_display,
             "contact_counts": {"total": len(children), "submitted": len(entries),
                                "missing": len(children) - len(entries),
