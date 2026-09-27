@@ -76,6 +76,11 @@
     </div>
   </section>
 
+  {% if monthly_boot %}
+    {% with boot=monthly_boot, classrooms=[], detail_mode=true %}
+      {% include "plan_docs/monthly_library/_sheet.html" %}
+    {% endwith %}
+  {% endif %}
   {% if document.confirmation_items %}
     <section class="notice">
       <strong>確認が必要な入力</strong>

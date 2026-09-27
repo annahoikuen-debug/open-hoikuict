@@ -84,6 +84,7 @@ def create_db_and_tables() -> None:
     _migrate_add_calendar_columns()
     _migrate_survey_tables()
     _migrate_plan_document_child_record_columns()
+    _migrate_monthly_sheet_columns()
     _migrate_plan_document_action_columns()
     _migrate_plan_review_notification_columns()
     _migrate_parent_push_delivery_columns()
@@ -549,6 +550,21 @@ def _migrate_survey_tables() -> None:
     # New survey tables are created by SQLModel.metadata.create_all().
     # Keep this hook explicit for future additive indexes or backfills.
     return
+
+
+def _migrate_monthly_sheet_columns() -> None:
+    # Additive migration: existing monthly/individual plans remain untouched.
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(plan_documents)")}
+        if not columns:
+            return
+        for name, kind in (("monthly_sheet", "JSON"), ("monthly_sheet_key", "VARCHAR")):
+            if name not in columns:
+                conn.exec_driver_sql(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}")
+        conn.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_sheet_key "
+            "ON plan_documents(monthly_sheet_key) WHERE monthly_sheet_key IS NOT NULL"
+        )
 
 
 def _migrate_plan_document_child_record_columns() -> None:
