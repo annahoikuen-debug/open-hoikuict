@@ -284,9 +284,28 @@
     } catch(error) { announce(error.message+' この画面の入力は残っています。',true); }
     finally { saving=false; status(); }
   }
+  function exportMonthly(kind) {
+    commitEdit();
+    const snapshot=clone(ctx()), mode=snapshot.editable?'current':'saved';
+    const payload={kind,mode,document_id:snapshot.document_id,lock_version:snapshot.lock_version,
+      classroom_id:snapshot.classroom_id,target_month:snapshot.target_month,age:snapshot.age};
+    if(mode==='current')Object.assign(payload,{owner_name:snapshot.owner_name,
+      fields:Object.fromEntries(Object.entries(snapshot.sheet.fields).map(([k,v])=>[k,{body:v.body||''}]))});
+    const token=document.querySelector('meta[name="csrf-token"]')?.content || document.querySelector('input[name="csrf_token"]')?.value || '';
+    const form=document.createElement('form');
+    form.method='POST';form.action='/plans/monthly-library/export-file';form.target='_blank';form.hidden=true;
+    for(const [name,value] of Object.entries({csrf_token:token,snapshot:JSON.stringify(payload)})){
+      const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);
+    }
+    document.body.append(form);form.submit();form.remove();
+    announce(kind==='pdf'?'印刷確認を開いています。帳票の保存はしていません。':'Excelのダウンロードを開始しました。帳票の保存はしていません。');
+  }
+  document.querySelector('[data-monthly-print]')?.addEventListener('click',()=>exportMonthly('pdf'));
   root.addEventListener('click',event=>{
     const button=event.target.closest('button');
     if(!button)return;
+    if(button.id==='print-monthly'){exportMonthly('pdf');return;}
+    if(button.id==='excel-monthly'){exportMonthly('xlsx');return;}
     if(button.id==='save'){save();return;}
     if(button.id==='generate'){generateAI();return;}
     if(button.id==='history-toggle'){commitEdit();showHistory=!showHistory;loadHistory();return;}
@@ -353,6 +372,30 @@
   window.addEventListener('beforeunload',event=>{
     if(saving || [...cache.values()].some(dirty)){event.preventDefault();event.returnValue='';}
   });
+  // Direct browser printing also uses plain text, all roster pages and no application chrome.
+  window.addEventListener('beforeprint',()=>{
+    commitEdit();document.querySelector('#monthly-print-root')?.remove();
+    const printRoot=document.createElement('div');printRoot.id='monthly-print-root';
+    const oldPage=current.page;
+    const paperPages=[];
+    if(individual()) {
+      for(let i=0;i<pages().length;i++) {
+        current.page=i;
+        paperPages.push(head()+common(['common:goal','common:home','common:review'])+roster());
+      }
+    } else paperPages.push(group());
+    current.page=oldPage;
+    printRoot.innerHTML=paperPages.map((html,i)=>`<section class="print-sheet">${html}<p class="print-footer">${i+1} / ${paperPages.length}</p></section>`).join('');
+    printRoot.querySelectorAll('textarea').forEach(el=>{
+      const text=document.createElement('div');text.className='print-text';text.textContent=body(el.dataset.cell);el.replaceWith(text);
+    });
+    printRoot.querySelectorAll('input').forEach(el=>{
+      const text=document.createElement('div');text.className='print-text';text.textContent=el.value;el.replaceWith(text);
+    });
+    document.body.append(printRoot);
+  });
+  window.addEventListener('afterprint',()=>document.querySelector('#monthly-print-root')?.remove());
+
   render();
   new ResizeObserver(()=>all('textarea.cell').forEach(autosize)).observe(q('.paper'));
 })();

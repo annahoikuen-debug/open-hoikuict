@@ -3,7 +3,10 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+from pydantic import ValidationError
+from html import escape
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
@@ -20,6 +23,7 @@ from ..services.monthly_library import (
 )
 from ..store import ConcurrentUpdateError, DocumentRepositoryDep
 from ..services.monthly_ai import GenerateInput, availability, generate
+from ..services.monthly_export import ExportInput, export_context, render_export
 from ..templating import render_template
 
 router = APIRouter(prefix="/monthly-library", tags=["monthly-library"])
@@ -130,6 +134,44 @@ def generate_candidates(payload: GenerateInput, request: Request, user: CurrentU
     if not definition or not definition["section"]:
         raise HTTPException(422, "この欄はAI提案の対象ではありません")
     return generate(user.nursery_ref, payload, definition)
+
+
+@router.post("/export")
+def export(payload: ExportInput, request: Request, user: CurrentUser, repository: DocumentRepositoryDep):
+    return _export_response(payload, request, user, repository)
+
+
+def _export_response(payload, request, user, repository, pdf_attachment=False):
+    require_actor(user, request)
+    classroom, document, sheet = _scope(user, repository, payload.classroom_id,
+        payload.target_month, payload.age, payload.document_id)
+    snapshot = export_context(payload, user, repository, classroom, document, sheet)
+    return render_export(snapshot, payload.kind, payload.mode,
+        fixture=bool(getattr(request.app.state, 'monthly_library_fixture', False)),
+        pdf_attachment=pdf_attachment, download_snapshot=payload.model_dump_json(),
+        csrf_token=request.cookies.get('hoikuict_csrf', ''))
+
+
+@router.post("/export-file")
+def export_file(request: Request, user: CurrentUser, repository: DocumentRepositoryDep,
+                snapshot: str = Form(max_length=4000000), download_pdf: bool = Form(default=False)):
+    # A native form response works in browsers that do not support blob: tabs/downloads.
+    try:
+        payload = ExportInput.model_validate_json(snapshot)
+        response = _export_response(payload, request, user, repository, pdf_attachment=download_pdf)
+        if payload.kind == 'pdf' and not download_pdf:
+            return HTMLResponse(json.loads(response.body)['html'], headers={'Cache-Control':'no-store'})
+        return response
+    except ValidationError:
+        message, code = '出力する入力内容を確認してください。', 422
+    except HTTPException as exc:
+        if exc.status_code == 303:
+            raise
+        message, code = str(exc.detail), exc.status_code
+    return HTMLResponse('<!doctype html><html lang="ja"><meta charset="utf-8"><title>月案の出力</title>'
+        '<main><h1>出力できませんでした</h1><p>' + escape(message) + '</p>'
+        '<p>編集画面の入力は保持されています。編集画面に戻ってもう一度お試しください。</p></main></html>',
+        status_code=code, headers={'Cache-Control':'no-store'})
 
 
 @router.post("/save")
