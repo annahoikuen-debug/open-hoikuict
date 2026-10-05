@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>職員シフト自動作成 確認用モック | open-hoikuict</title>
+<!-- This mock loads no external stylesheet, font, or script, and submits nothing. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<!-- ============ 確認用パネル（本番の画面には入れない） ==================== -->
+<div class="mock-bar" role="region" aria-label="確認用パネル">
+  <div class="mock-bar__inner">
+    <p class="mock-bar__title">確認用パネル<span class="mock-bar__note">本番の画面には表示されません</span></p>
+    <label class="mock-bar__label" for="mock-state">状態を切り替えて試す</label>
+    <select id="mock-state" class="mock-bar__select"></select>
+    <label class="mock-bar__label" for="mock-view">画面</label>
+    <select id="mock-view" class="mock-bar__select">
+      <option value="facility">2 施設設定</option>
+      <option value="contracts">3 職員契約・資格の一括入力</option>
+      <option value="generate">4 シフト生成</option>
+      <option value="result">5 生成結果</option>
+    </select>
+    <button type="button" id="mock-reset" class="mock-bar__btn">入力を初期化</button>
+  </div>
+</div>
+
+<!-- ============ 配備版 templates/base.html から抽出したサイドバー ============ -->
+<div class="mock-layout">
+<!-- DEPLOYED_SIDEBAR -->
+  <div class="mock-main">
+    <p class="mock-banner">
+      架空データによる確認用モックです。実在する園児・職員・シフトではありません。
+      本番DB・外部送信・CBC（シフト計算）の実行には接続しません。入力内容は保存されません。
+    </p>
+
+    <!-- ==================== 画面2 施設設定 ==================== -->
+    <section class="view" id="view-facility" hidden>
+      <div class="page-head">
+        <h1 class="page-title">施設設定</h1>
+        <p class="page-sub">シフト自動作成の計算条件。保育所の実際の運用に合わせてください。</p>
+      </div>
+      <div id="facility-state"></div>
+      <form class="card" id="facility-form" novalidate>
+        <h2 class="card__title">開園時間</h2>
+        <div class="grid">
+          <label class="field">
+            <span class="field__label">開園時刻</span>
+            <input type="time" name="day_open" step="900">
+            <span class="field__hint">シフト枠の最初の時間帯の始まり</span>
+          </label>
+          <label class="field">
+            <span class="field__label">閉園時刻</span>
+            <input type="time" name="day_close" step="900">
+            <span class="field__hint">シフト枠の最後の時間帯の終り</span>
+          </label>
+          <label class="field">
+            <span class="field__label">時間帯の粒度</span>
+            <select name="granularity_min">
+              <option value="15">15分</option>
+              <option value="30">30分</option>
+              <option value="60">60分</option>
+            </select>
+            <span class="field__hint">細かいほど条件は厳しくなります。計算量も増えます</span>
+          </label>
+          <label class="field">
+            <span class="field__label">定員</span>
+            <input type="number" name="capacity" min="1" max="300">
+            <span class="field__hint">参考値。配置基準の計算には使いません</span>
+          </label>
+        </div>
+
+        <h2 class="card__title">配置基準</h2>
+        <label class="field">
+          <span class="field__label">保育所の所在地・事業区分</span>
+          <select name="staffing_standard_key" id="standard-select"></select>
+          <span class="field__hint" id="standard-source"></span>
+        </label>
+        <div class="note" id="standard-summary"></div>
+        <label class="check">
+          <input type="checkbox" name="enforce_min_two">
+          <span>2名ルールを適用する（園児が1名でも在園している時間帯は職員を2名以上にする）</span>
+        </label>
+
+        <h2 class="card__title">休園日・祝日</h2>
+        <div id="closed-day-list" class="chips"></div>
+        <div class="row">
+          <input type="date" id="closed-day-date" class="mock-input">
+          <select id="closed-day-kind" class="mock-input">
+            <option value="closed">休園日</option>
+            <option value="holiday">祝日（出勤は的配置基準を適用しない）</option>
+          </select>
+          <button type="button" class="btn btn--ghost" id="closed-day-add">追加</button>
+        </div>
+
+        <h2 class="card__title">計算の実行時間</h2>
+        <div class="grid">
+          <label class="field">
+            <span class="field__label">実行時間の上限（秒）</span>
+            <input type="number" name="time_limit_sec" min="5" max="300" step="5">
+            <span class="field__hint">値を大きくすると計算に時間がかかります。15〜60秒を推奨（未確定の仮値です）</span>
+          </label>
+          <label class="field">
+            <span class="field__label">緩和の段階</span>
+            <select name="relax_level">
+              <option value="0">L0 厳格（すべての制約を満たす）</option>
+              <option value="1">L1</option>
+              <option value="2">L2</option>
+              <option value="3">L3</option>
+              <option value="4">L4（大部分を緩和）</option>
+            </select>
+            <span class="field__hint">解けないときに段階を緩めます。緩めた制約は結果に表示します</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary">保存する</button>
+          <button type="button" class="btn btn--ghost" id="facility-cancel">取消</button>
+          <span class="actions__note">保存は架空データ内のメモ上进行します。実際の保存は行いません。</span>
+        </div>
+        <div id="facility-msg"></div>
+      </form>
+      <div id="facility-audit"></div>
+    </section>
+
+    <!-- ==================== 画面3 職員契約・資格 ==================== -->
+    <section class="view" id="view-contracts" hidden>
+      <div class="page-head">
+        <h1 class="page-title">職員契約・資格</h1>
+        <p class="page-sub">シフト生成に必要な職員ごとの条件。資格が1件もない職員は生成から除外されます。</p>
+      </div>
+      <div id="contracts-state"></div>
+      <div class="card">
+        <div class="toolbar">
+          <label class="field field--inline">
+            <span class="field__label">表示</span>
+            <select id="contracts-filter" class="mock-input">
+              <option value="all">全員</option>
+              <option value="incomplete">未入力のある職員</option>
+              <option value="noplaceable">配置対象外の職種</option>
+            </select>
+          </label>
+          <span class="toolbar__note" id="contracts-count"></span>
+          <button type="button" class="btn btn--ghost" id="contracts-csv">CSV取り込みにする</button>
+        </div>
+        <div class="table-wrap">
+          <table class="grid-table" id="contracts-table">
+            <thead>
+              <tr>
+                <th scope="col">職員</th>
+                <th scope="col">資格（主）</th>
+                <th scope="col">資格（副）</th>
+                <th scope="col">雇用形態</th>
+                <th scope="col">週契約<br>時間</th>
+                <th scope="col">1日契約<br>時間</th>
+                <th scope="col">週最大<br>出勤日数</th>
+                <th scope="col">最大連続<br>勤務日数</th>
+                <th scope="col">最早<br>始業</th>
+                <th scope="col">最遅<br>終業</th>
+                <th scope="col">配置</th>
+              </tr>
+            </thead>
+            <tbody id="contracts-body"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="contracts-save">一括で保存する</button>
+          <button type="button" class="btn btn--ghost" id="contracts-reset">取消（未保存の変更を戻す）</button>
+          <span class="actions__note" id="contracts-msg"></span>
+        </div>
+      </div>
+      <div id="contracts-audit"></div>
+    </section>
+
+    <!-- ==================== 画面4 生成 ==================== -->
+    <section class="view" id="view-generate" hidden>
+      <div class="page-head">
+        <h1 class="page-title">シフト生成</h1>
+        <p class="page-sub">対象月と配置基準を決め、シフト案を作成します。計算はバックグラウンドで行います。</p>
+      </div>
+      <div id="generate-state"></div>
+      <form class="card" id="generate-form" novalidate>
+        <div class="grid">
+          <label class="field">
+            <span class="field__label">対象月</span>
+            <input type="month" name="target_month">
+            <span class="field__hint">翌月以降を指定します</span>
+          </label>
+          <label class="field">
+            <span class="field__label">配置基準</span>
+            <select name="staffing_standard_key" id="generate-standard"></select>
+            <span class="field__hint">施設設定の初期値が入ります。変更できます</span>
+          </label>
+        </div>
+        <div id="generate-inputs"></div>
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="generate-run">シフト案を生成する</button>
+          <button type="button" class="btn btn--ghost" id="generate-cancel">取消</button>
+        </div>
+        <div id="generate-msg"></div>
+      </form>
+      <div id="generate-progress"></div>
+      <div id="generate-joblist"></div>
+    </section>
+
+    <!-- ==================== 画面5 結果 ==================== -->
+    <section class="view" id="view-result" hidden>
+      <div class="page-head">
+        <h1 class="page-title">生成結果</h1>
+        <p class="page-sub" id="result-sub"></p>
+      </div>
+      <div id="result-state"></div>
+      <div id="result-body"></div>
+    </section>
+  </div>
+</div>
+
+<script src="mock_data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

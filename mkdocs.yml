@@ -163,6 +163,7 @@ nav:
           - ドキュメントの更新: documentation.md
       - 変更履歴:
           - history.md
+          - 2026-10-03 職員シフト自動作成の統合: shift-schedule-integration-proposal-2026-10-03.md
           - 2026-09-28 保護者連絡一覧:
               - mainへの統合: main-contact-integration-2026-09-28.md
               - 内容一覧の仕様・操作見本: parent-contact-content-list-proposal-2026-09-28.md

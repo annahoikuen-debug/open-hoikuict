@@ -1,4 +1,4 @@
-fastapi==0.135.1
+﻿fastapi==0.135.1
 starlette==0.52.1
 uvicorn[standard]==0.41.0
 sqlmodel==0.0.37
@@ -18,3 +18,12 @@ qrcode==8.2
 mkdocs>=1.6,<2
 mkdocs-material
 pymdown-extensions
+
+# 職員シフト自動作成（vendor/nushift = shiftai コア）用の数値・MILP 依存。
+# shiftai 本体は pip install せず vendor/ から sys.path で読む（streamlit は入れない）。
+# pulp は 3 以上にすると LpVariable(cat=) / LpProblem(cat=) の仕様が変わって
+# shiftai/solver.py の解デコードが壊れるため <3 で固定する。実行ファイルは同梱。
+# 詳細は vendor/nushift/README.md と docs/shift-schedule-integration-proposal-2026-10-03.md。
+pandas>=3.0,<4
+numpy>=2.4
+pulp>=2.9,<3

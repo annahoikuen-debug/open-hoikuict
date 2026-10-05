@@ -1,0 +1,9 @@
+{
+  "commit": "ab947ba718a8d2c64da66e2cafb255f01cda14ad",
+  "sidebar_source": [
+    "templates/base.html"
+  ],
+  "normalized_sha256": {
+    "templates/base.html": "275f7d523dd54bb28aa9f65b3b6da2e386e438b5034a1fe559dbcc2fceedf75c"
+  }
+}
