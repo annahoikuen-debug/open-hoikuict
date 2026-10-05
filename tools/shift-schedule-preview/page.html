@@ -19,6 +19,7 @@
     <select id="mock-state" class="mock-bar__select"></select>
     <label class="mock-bar__label" for="mock-view">画面</label>
     <select id="mock-view" class="mock-bar__select">
+      <option value="arrival">1 登園予定時刻</option>
       <option value="facility">2 施設設定</option>
       <option value="contracts">3 職員契約・資格の一括入力</option>
       <option value="generate">4 シフト生成</option>
@@ -36,6 +37,91 @@
       架空データによる確認用モックです。実在する園児・職員・シフトではありません。
       本番DB・外部送信・CBC（シフト計算）の実行には接続しません。入力内容は保存されません。
     </p>
+
+    <!-- ==================== 画面1 登園予定時刻 ==================== -->
+    <section class="view" id="view-arrival" hidden>
+      <div class="page-head">
+        <h1 class="page-title">登園予定時刻</h1>
+        <p class="page-sub">園児ごとの既定値と、その日の例外だけを登録します。降園予定は既存の出欠画面で入力します。</p>
+      </div>
+      <div id="arrival-state"></div>
+
+      <div class="card">
+        <h2 class="card__title">補完の優先順位</h2>
+        <div class="note">
+          <p style="margin:0 0 .4rem">登園時刻は次の順で決まります。上から順に途中で止まります。</p>
+          <ol style="margin:0 0 .4rem 1.1rem;padding:0">
+            <li>実績打刻（対象日が今日以前の場合）</li>
+            <li>その日の上書き（例外日）</li>
+            <li>園児ごとの既定値</li>
+            <li>保育必要量区分の開始時刻</li>
+            <li>開園時刻</li>
+          </ol>
+          <p style="margin:0">補完元は上の5つのどれで決まったかを、園児ごとにこの表に出します。</p>
+          <p style="margin:.4rem 0 0">
+            <label class="field field--inline">
+              <span class="field__label">確認する日</span>
+              <input type="date" id="arrival-day" value="2026-11-04" min="2026-11-01" max="2026-11-30">
+              <span class="field__hint">例外日がある日に変えると、補完元が「その日の上書き」に変わります</span>
+            </label>
+          </p>
+        </div>
+        <div class="summary" style="margin-top:.8rem" id="arrival-summary"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">園児ごとの既定値</h2>
+        <div class="actions" style="justify-content:space-between;align-items:center">
+          <label class="field field--inline">
+            <span class="field__label">表示</span>
+            <select id="arrival-filter" class="mock-input">
+              <option value="all">全員</option>
+              <option value="unset">既定値がない園児</option>
+              <option value="set">既定値がある園児</option>
+            </select>
+          </label>
+          <span class="mock-hint" id="arrival-count"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="grid-table">
+            <thead>
+              <tr>
+                <th>園児</th>
+                <th>保育必要量区分</th>
+                <th>既定の登園予定</th>
+                <th>区分の開始時刻</th>
+                <th>補完元</th>
+              </tr>
+            </thead>
+            <tbody id="arrival-body"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" id="arrival-save">一括で保存する</button>
+          <button type="button" class="btn btn--ghost" id="arrival-reset">取消（未保存の変更を戻す）</button>
+        </div>
+        <div id="arrival-msg"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">例外日（その日だけ上書き）</h2>
+        <p class="card__hint" style="font-size:.8rem;color:var(--muted);margin:0 0 .6rem">
+          通院や行事の日にだけ変えます。登録のない日は既定値を使います。
+        </p>
+        <div class="table-wrap">
+          <table class="grid-table">
+            <thead>
+              <tr><th>園児</th><th>日付</th><th>登園予定</th><th>理由</th><th></th></tr>
+            </thead>
+            <tbody id="override-body"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn--ghost" id="override-add">例外日を追加する</button>
+        </div>
+        <div id="override-msg"></div>
+      </div>
+    </section>
 
     <!-- ==================== 画面2 施設設定 ==================== -->
     <section class="view" id="view-facility" hidden>
@@ -200,6 +286,7 @@
           <button type="submit" class="btn btn--primary" id="generate-run">シフト案を生成する</button>
           <button type="button" class="btn btn--ghost" id="generate-cancel">取消</button>
         </div>
+        <p class="mock-hint" id="generate-blocked" hidden></p>
         <div id="generate-msg"></div>
       </form>
       <div id="generate-progress"></div>

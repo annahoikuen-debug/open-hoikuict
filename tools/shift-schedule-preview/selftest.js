@@ -35,6 +35,108 @@ window.addEventListener('load', function () {
     });
 
     /* ---- facility: valid save / invalid save / cancel / closed-day add+remove ---- */
+    step('arrival/names-the-fallback', function () {
+      /* 優先順位3〜5に落ちる園児がいるとき、补完元が名指しで出ること。 */
+      state.view = 'arrival'; state.mock.arrival = 'default'; renderView(); renderCurrent();
+      const body = document.getElementById('result-body');
+      const warn = document.querySelectorAll('#arrival-body .badge--warn').length;
+      const danger = document.querySelectorAll('#arrival-body .badge--danger').length;
+      const rows = document.querySelectorAll('#arrival-body tr').length;
+      if (!rows) { throw new Error('no child rows'); }
+      if (!warn && !danger) { throw new Error('expected some children to fall back to level 4/5'); }
+      if (document.getElementById('arrival-summary').textContent.indexOf('保育必要量区分') < 0) {
+        throw new Error('summary must name the fallback level');
+      }
+      if (body) { /* no-op */ }
+      return 'rows=' + rows + ' level4=' + warn + ' level5=' + danger;
+    });
+    step('arrival/filter-unset', function () {
+      const sel = document.getElementById('arrival-filter');
+      sel.value = 'unset';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      const rows = document.querySelectorAll('#arrival-body tr').length;
+      const unset = state.children.filter(function (c) { return !c.planned; }).length;
+      if (rows !== unset) { throw new Error('filter rows ' + rows + ' != unset ' + unset); }
+      sel.value = 'all'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'unset rows=' + rows;
+    });
+    step('arrival/save-blocked-by-invalid', function () {
+      state.mock.arrival = 'invalid'; renderCurrent();
+      document.getElementById('arrival-save').click();
+      const t = document.getElementById('arrival-msg').textContent;
+      if (t.indexOf('保存できません') < 0) { throw new Error('expected a blocked save, got: ' + t); }
+      return t.replace(/\s+/g, ' ').trim().slice(0, 100);
+    });
+    step('arrival/edit-default', function () {
+      state.mock.arrival = 'default'; renderCurrent();
+      const row = document.querySelector('#arrival-body tr[data-child="C-01"]');
+      const input = row.querySelector('input[data-f="planned"]');
+      input.value = '08:15';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      const after = state.children.filter(function (c) { return c.id === 'C-01'; })[0].planned;
+      if (after !== '08:15') { throw new Error('edit not applied, got ' + after); }
+      const level = document.querySelector('#arrival-body tr[data-child="C-01"] .badge').textContent;
+      if (level.indexOf('園児ごとの既定値') < 0) { throw new Error('expected level 3 after edit, got ' + level); }
+      return 'C-01 -> 08:15, 補完元=' + level;
+    });
+    step('arrival/override-add-remove', function () {
+      const before = document.querySelectorAll('#override-body tr[data-ov]').length;
+      document.getElementById('override-add').click();
+      const added = document.querySelectorAll('#override-body tr[data-ov]').length;
+      if (added !== before + 1) { throw new Error('override not added'); }
+      document.querySelector('#override-body tr[data-ov="' + (added - 1) + '"] [data-remove-ov]').click();
+      const removed = document.querySelectorAll('#override-body tr[data-ov]').length;
+      if (removed !== before) { throw new Error('override not removed'); }
+      return 'add/remove ok (' + before + ' -> ' + added + ' -> ' + removed + ')';
+    });
+    step('generate/button-disabled-with-reason', function () {
+      /* CBC 不在などで生成できない状態では、ボタンが無効で理由が隣に出ること。 */
+      ['empty', 'blocked', 'nocbc'].forEach(function (v) {
+        state.view = 'generate'; state.mock.generate = v; renderView(); renderCurrent();
+        const btn = document.getElementById('generate-run');
+        if (!btn.disabled) { throw new Error(v + ': generate button must be disabled'); }
+        const hint = document.getElementById('generate-blocked');
+        if (hint.hidden || !hint.textContent.trim()) {
+          throw new Error(v + ': disabled button must state a reason');
+        }
+      });
+      /* failed は「解なし」なので再実行できなければならない。 */
+      state.mock.generate = 'failed'; renderCurrent();
+      if (document.getElementById('generate-run').disabled) {
+        throw new Error('failed: must stay pressable to retry');
+      }
+      return 'empty/blocked/nocbc disabled with reason, failed pressable';
+    });
+
+    step('arrival/override-shows-on-its-day', function () {
+      /* 確認する日を例外日の日に変えると、補完元が「その日の上書き」に変わること。 */
+      state.view = 'arrival'; state.mock.arrival = 'default'; renderView(); renderCurrent();
+      const day = document.getElementById('arrival-day');
+      const readLevel = function (child) {
+        const cell = document.querySelector('#arrival-body tr[data-child="' + child + '"] .badge');
+        return cell ? cell.textContent : '(none)';
+      };
+      const before = readLevel('C-02');
+      day.value = '2026-11-10';
+      day.dispatchEvent(new Event('change', { bubbles: true }));
+      const after = readLevel('C-02');
+      if (before.indexOf('その日の上書き') >= 0) { throw new Error('C-02 should not start as an override'); }
+      if (after.indexOf('その日の上書き') < 0) {
+        throw new Error('C-02 on 2026-11-10 must resolve to その日の上書き, got ' + after);
+      }
+      day.value = '2026-11-04'; day.dispatchEvent(new Event('change', { bubbles: true }));
+      if (readLevel('C-02').indexOf('その日の上書き') >= 0) { throw new Error('override leaked to another day'); }
+      return 'C-02: ' + before + ' -> ' + after + ' -> back to default';
+    });
+    step('arrival/no-arrival-before-opening', function () {
+      /* 保育必要量区分の開始時刻は施設の開園時刻以上。誤った赤表示がないこと。 */
+      state.mock.arrival = 'default'; renderCurrent();
+      const flagged = document.querySelectorAll('#arrival-body tr.is-missing').length;
+      if (flagged) { throw new Error(flagged + ' children wrongly flagged as invalid'); }
+      return 'no child flagged in the default state';
+    });
+
+    /* ---- facility: valid save / invalid save / cancel / closed-day add+remove ---- */
     step('facility/valid-save', function () {
       state.view = 'facility'; state.mock.facility = 'default'; renderView(); renderCurrent();
       const f = document.getElementById('facility-form');
@@ -43,11 +145,16 @@ window.addEventListener('load', function () {
     });
     step('facility/invalid-save', function () {
       state.mock.facility = 'invalid'; renderCurrent();
+      /* 状態切替した時点で、どの項目が悪いのか名指しで出ていること。 */
+      const banner = document.getElementById('facility-state').textContent;
+      if (banner.indexOf('閉園時刻は開園時刻より後にしてください') < 0) {
+        throw new Error('state switch must name the offending field, got: ' + banner.trim());
+      }
       const f = document.getElementById('facility-form');
       f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       const t = document.getElementById('facility-msg').textContent;
       if (t.indexOf('保存できません') < 0) { throw new Error('expected a validation error, got: ' + t); }
-      return t.replace(/\s+/g, ' ').trim().slice(0, 80);
+      return 'banner names the field; ' + t.replace(/\s+/g, ' ').trim().slice(0, 60);
     });
     step('facility/empty-save', function () {
       state.mock.facility = 'empty'; renderCurrent();
@@ -235,7 +342,9 @@ window.addEventListener('load', function () {
     });
 
     step('result/principal-only-approval', function () {
-      /* 業務ルール2026-10-03: 園長の承認で確定。園長以外は確定できない。 */
+      /* 業務ルール2026-10-03: 園長の承認で確定。園長以外は確定できない。
+         採用する上限は決定値（10時間＝BLOCKER）に固定して判定する。 */
+      state.gate = '10';
       state.mock.result = 'clean'; setLongDay(false);
       state.viewer.principal = false; renderCurrent();
       const btn = document.getElementById('approve');
@@ -275,7 +384,35 @@ window.addEventListener('load', function () {
       state.mock.result = 'short'; renderCurrent();
       return 'gap table rendered=' + (document.getElementById('result-body').innerHTML.indexOf('人手不足') >= 0);
     });
+    step('result/gate-changes-approval', function () {
+      /* 採用する上限が BLOCKER/WARNING の数と確定可否に反映されることを確かめる。
+         8.75〜10時間の帯域に職員が1名いるので、8時間45分だと BLOCKER になる。 */
+      state.mock.result = 'clean'; setLongDay(false);
+      state.viewer.principal = true;
+      const read = function (gate) {
+        state.gate = gate; renderCurrent();
+        const body = document.getElementById('result-body').textContent;
+        const bw = body.match(/BLOCKER \/ WARNING\s*([\d]+)\s*\/\s*([\d]+)/);
+        return {
+          bw: bw ? bw[1] + '/' + bw[2] : '?',
+          disabled: document.getElementById('approve').disabled,
+        };
+      };
+      const at10 = read('10');
+      const at875 = read('8.75');
+      const off = read('off');
+      state.gate = '10'; renderCurrent();
+      if (at10.bw === at875.bw) {
+        throw new Error('gate must change BLOCKER/WARNING: both ' + at10.bw);
+      }
+      if (at10.disabled) { throw new Error('10h gate should allow approval when clean'); }
+      if (!at875.disabled) { throw new Error('8.75h gate must block approval (band staff becomes BLOCKER)'); }
+      if (off.disabled) { throw new Error('off gate should not block approval'); }
+      return '10h=' + at10.bw + '(確定可) / 8.75h=' + at875.bw + '(確定不可) / off=' + off.bw;
+    });
+
     step('result/approve-marks-approved', function () {
+      state.gate = '10';
       state.mock.result = 'clean'; setLongDay(false);
       state.viewer.principal = true; renderCurrent();
       const btn = document.getElementById('approve');

@@ -3,12 +3,18 @@
  */
 'use strict';
 
-const VIEWS = ['facility', 'contracts', 'generate', 'result'];
+const VIEWS = ['arrival', 'facility', 'contracts', 'generate', 'result'];
 
 const MOCK_STATES = {
+  arrival: [
+    { id: 'default', label: '入力済み（既定値と例外日がある）' },
+    { id: 'empty', label: '未入力（全員が保育必要量区分にフォールバック）' },
+    { id: 'partial', label: '一部入力（5名だけ既定値あり）' },
+    { id: 'invalid', label: 'エラー（閉園より後・開園より前・対象月外の例外日）' },
+  ],
   facility: [
     { id: 'default', label: '入力済み（現在の設定）' },
-    { id: 'empty', label: '未入力（開園・閉園・定員・配置基準が空）' },
+    { id: 'empty', label: '未入力（開園・閉園・定員・配置基準・実行時間の上限が空）' },
     { id: 'partial', label: '一部入力（閉園・定員が空）' },
     { id: 'invalid', label: 'エラー（閉園時刻が開園時刻より前）' },
   ],
@@ -55,8 +61,14 @@ function staffVariant(id) {
 }
 
 const state = {
-  view: 'facility',
-  mock: { facility: 'default', contracts: 'all', generate: 'ready', result: 'clean' },
+  view: 'arrival',
+  mock: { arrival: 'default', facility: 'default', contracts: 'all', generate: 'ready', result: 'clean' },
+  children: childVariant('default'),
+  childrenSaved: childVariant('default'),
+  overrides: overridesVariant('default'),
+  overridesSaved: overridesVariant('default'),
+  arrivalFilter: 'all',
+  arrivalDay: '2026-11-04',
   facility: Object.assign({}, FACILITY_DEFAULT, { closed_days: FACILITY_DEFAULT.closed_days.slice() }),
   facilitySaved: JSON.parse(JSON.stringify(FACILITY_DEFAULT)),
   staff: staffVariant('all'),
@@ -93,13 +105,14 @@ function renderStateOptions() {
     }).join('');
   sel.value = state.mock[state.view];
 }
+/* The sidebar has one entry for the whole module, so keep it highlighted on every screen. */
 function renderView() {
   VIEWS.forEach(function (v) {
     const el = document.getElementById('view-' + v);
     if (el) { el.hidden = (v !== state.view); }
   });
   $$('[data-nav]').forEach(function (a) { a.removeAttribute('title'); });
-  const nav = $('[data-nav="' + state.view + '"]');
+  const nav = $('[data-nav="arrival"]');
   if (nav) { nav.title = '確認中の画面'; }
   $('#mock-view').value = state.view;
   renderStateOptions();
@@ -175,8 +188,14 @@ function validateFacility(quiet) {
       ? '<p class="msg msg--danger"><strong>保存できません。</strong><br>' + problems.map(esc).join('<br>') + '</p>'
       : '<p class="msg msg--ok">保存しました（このモックでは画面内のメモのみです）。</p>';
   }
+  /* Name the offending fields, not just the count: the reviewer must see which input
+   is wrong on a state switch, before pressing 保存する. */
   $('#facility-state').innerHTML = problems.length
-    ? '<div class="note note--danger" style="margin-bottom:1rem">未入力・不備が ' + problems.length + ' 件あります。</div>'
+    ? '<div class="note note--danger" style="margin-bottom:1rem">' +
+      '<strong>未入力・不備が ' + problems.length + ' 件あります。</strong>' +
+      '<ul style="margin:.4rem 0 0 1.1rem;padding:0">' +
+      problems.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') +
+      '</ul></div>'
     : '';
   return problems;
 }
@@ -322,7 +341,29 @@ function loadGenerate(variantId) {
 
   renderGenerateInputs(variantId);
   renderGenerateJobs(variantId);
+  applyGenerateButton(variantId);
   if (variantId === 'running') { runProgress(form); }
+}
+
+/* Disable the button in states that cannot run, and state the reason once, in one place.
+   'failed' means "no solution found", so the reviewer must be able to press it again. */
+function generateBlockedReason(variantId) {
+  if (variantId === 'empty') { return '対象月を入力してください。'; }
+  if (variantId === 'blocked') { return '前提データが未入力なので生成できません。'; }
+  if (variantId === 'nocbc') { return 'CBC が利用できないため生成できません。'; }
+  return null;
+}
+
+function applyGenerateButton(variantId) {
+  const btn = $('#generate-run');
+  const reason = generateBlockedReason(variantId);
+  btn.disabled = !!reason;
+  btn.title = reason || '';
+  const hint = $('#generate-blocked');
+  if (hint) {
+    hint.textContent = reason ? ('この状態では生成できません: ' + reason) : '';
+    hint.hidden = !reason;
+  }
 }
 
 function renderGenerateInputs(variantId) {
@@ -346,10 +387,6 @@ function renderGenerateInputs(variantId) {
       : '') +
     '<li style="color:var(--muted)">登園予定が未設定で保育標準時間から補完する園児: 約 ' + fallback + '名</li>' +
     '</ul></div>';
-  if (variantId === 'nocbc') {
-    html += '<div class="note note--danger" style="margin-top:.6rem">CBC（シフト計算ライブラリ）が見つかりません。' +
-      'この場合、シフトの生成と検証はできません。園の他の機能は使えます。</div>';
-  }
   html += '</div>';
   $('#generate-inputs').innerHTML = html;
 }
@@ -438,8 +475,9 @@ function renderGenerateErrors(variantId) {
     box.innerHTML = '<p class="msg msg--danger"><strong>生成できません。</strong><br>' +
       (p.length ? p.map(esc).join('<br>') : '前提データが未入力です。') + '</p>';
   } else if (variantId === 'nocbc') {
-    box.innerHTML = '<p class="msg msg--danger">CBC が利用できないため生成できません。' +
-      'この状態では園の他の機能は通常どおり使えます。</p>';
+    box.innerHTML = '<p class="msg msg--danger"><strong>生成できません。</strong><br>' +
+      'CBC（シフト計算ライブラリ）が見つかりません。この場合、シフトの生成も検証もできません。<br>' +
+      '園の他の機能は通常どおり使えます。</p>';
   } else if (variantId === 'failed') {
     box.innerHTML = '<p class="msg msg--danger">30秒以内に解が見つかりませんでした。' +
       '緩和の段階を L1 以上にするか、配置基準・職員契約を確認してください。</p>';
@@ -474,16 +512,21 @@ function renderResult(variantId) {
   const warnings = violations.filter(function (v) { return v.severity === 'WARNING'; });
   /* BLOCKER を持つ状態では、人手不足も同じ時間帯を指しているため併せて表示する */
   const gaps = (variantId === 'short' || variantId === 'blocker') ? GAP_ROWS_SHORT : GAP_ROWS_OK;
-  /* 月次の時間外労働は「案」なので超過では止めない。止めるのは1日10時間超だけ。 */
-  const monthBlockers = monthBandTally().hardViolations.length;
+  /* 月次の時間外労働は「案」なので超過では止めない。止めるのは採用した上限が示す閾値だけ。 */
+  const gateT = gateSeverity(monthBandTally(), state.gate);
+  const monthBlockers = gateT.blockers.length;
+  const monthWarnings = gateT.warnings.length;
+  const monthWarningTotal = warnings.length + monthWarnings;
   const hasBlocker = blockers.length + monthBlockers > 0;
 
   stateBox.innerHTML = hasBlocker
     ? '<div class="note note--danger" style="margin-bottom:1rem"><strong>BLOCKER が ' +
       (blockers.length + monthBlockers) + ' 件あるため、このシフト案は確定できません。</strong>' +
       (monthBlockers
-        ? 'うち ' + monthBlockers + ' 名は1日の勤務が10時間を超えています。'
-        : '') +
+        ? 'うち ' + monthBlockers + ' 名が採用した上限（' + gateT.rule.label + '）で BLOCKER です。'
+        : (monthWarnings
+          ? '採用した上限（' + gateT.rule.label + '）で WARNING が ' + monthWarnings + ' 名です。確定はできます。'
+          : '')) +
       '共有する前に配置基準・職員契約を確認してください。</div>'
     : '<div class="note note--ok" style="margin-bottom:1rem">BLOCKER はありません。' +
       'ただし参考値です。確定の判断は園長が行ってください。</div>';
@@ -508,9 +551,10 @@ function renderResult(variantId) {
     '</p><p class="stat__note">' + (hasBlocker ? 'BLOCKER あり' : 'BLOCKER なし') + '</p></div>' +
     '<div class="stat"><p class="stat__label">配置対象の職員</p><p class="stat__value">' + placeable.length + '</p>' +
     '<p class="stat__note">／ 配置対象外 ' + (state.staff.length - placeable.length) + '名</p></div>' +
-    '<div class="stat"><p class="stat__label">BLOCKER / WARNING</p><p class="stat__value' +
-    (hasBlocker ? ' stat__value--danger' : (warnings.length ? ' stat__value--warn' : '')) + '"">' +
-    (blockers.length + monthBlockers) + ' / ' + warnings.length + '</p><p class="stat__note">全21種類の判定＋月次の時間外労働日数</p></div>' +
+'<div class="stat"><p class="stat__label">BLOCKER / WARNING</p><p class="stat__value' +
+    (hasBlocker ? ' stat__value--danger' : (monthWarningTotal ? ' stat__value--warn' : '')) + '">' +
+    (blockers.length + monthBlockers) + ' / ' + monthWarningTotal + '</p><p class="stat__note">' +
+    esc(gateT.rule.label) + '＋全21種類の判定</p></div>' +
     '<div class="stat"><p class="stat__label">月額人件費の目安</p><p class="stat__value">' +
     Math.round(cost / 10000).toLocaleString() + '万円</p><p class="stat__note">1,500円/時・雇用形態係数別</p></div>' +
     '</div>';
@@ -568,14 +612,17 @@ function renderResult(variantId) {
     '8.75': '8時間45分で止める（法定上限は無視）',
     'off': '判定しない（参考値のみ）',
   }[state.gate];
-  html += '<div class="card"><h2 class="card__title">1日の労働時間の上限（未確定事項2）</h2>' +
+  html += '<div class="card"><h2 class="card__title">1日の労働時間の上限（' + esc(state.selectedDay) + '）</h2>' +
     '<div class="note"><p style="margin:0 0 .4rem">' +
     'shiftai は意図的に複数の閾値を持ちます。' +
     '<strong>10.0時間</strong>が労働基準法32条・34条のハード制約（' +
     '<code>config.py:41</code>）、<strong>8.75時間</strong>が休憩45分を加えた' +
     '適合判定（<code>config.py:49</code>）、<strong>9.0時間</strong>はソルバ内部の' +
     'ペナルチ目安で判定には使いません（<code>config.py:54</code>）。' +
-    '<strong>8.75〜10時間の帯域をどうするか</strong>が未確定の要点です。</p></div>' +
+    '<strong>8.75〜10時間の帯域をどうするかが要点です。</strong>' +
+    '2026-10-03 の決定: 「10時間超＝BLOCKER、8時間45分超＝WARNING」としました。' +
+    '下の選択で比べられます。8時間45分を BLOCKER にすると正職員のほぼすべての日が確定できなくなります。' +
+    '選択を変えると BLOCKER/WARNING の数と確定可否が変わります。</p></div>' +
     '<label class="field field--inline" style="margin-top:.6rem">' +
     '<span class="field__label">この園で採用する上限</span>' +
     '<select id="gate-select">' +
@@ -585,7 +632,13 @@ function renderResult(variantId) {
     '</select></label>' +
     '<div class="summary" style="margin-top:.8rem">' +
     '<div class="stat"><p class="stat__label">採用した上限</p><p class="stat__value" style="font-size:1.1rem">' +
-    esc(gateLabel) + '</p><p class="stat__note">' + esc(state.selectedDay) + '</p></div>' +
+    esc(gateLabel) + '</p><p class="stat__note">' + esc(gateT.rule.label) + '</p></div>' +
+    '<div class="stat"><p class="stat__label">この上限でBLOCKERになる人</p>' +
+    '<p class="stat__value' + (monthBlockers ? ' stat__value--danger' : ' stat__value--ok') + '">' +
+    monthBlockers + '</p><p class="stat__note">BLOCKER があると確定できません</p></div>' +
+    '<div class="stat"><p class="stat__label">この上限でWARNINGになる人</p>' +
+    '<p class="stat__value' + (monthWarnings ? ' stat__value--warn' : ' stat__value--ok') + '">' +
+    monthWarnings + '</p><p class="stat__note">参考表示。確定は妨げません</p></div>' +
     '<div class="stat"><p class="stat__label">10時間を超える人</p>' +
     '<p class="stat__value' + (tally.over10.length ? ' stat__value--danger' : ' stat__value--ok') + '">' +
     tally.over10.length + '</p><p class="stat__note">ハード制約違反</p></div>' +
@@ -604,8 +657,10 @@ function renderResult(variantId) {
           return '<tr><td>' + esc(r.name) + '</td><td><strong>' + r.hours.toFixed(2) + 'h</strong></td>' +
             '<td>そのまま勤務できる</td><td style="color:var(--danger);font-weight:700">超過・配置し直しが必要</td></tr>';
         }).join('') + '</tbody></table></div>' +
-        '<p class="basis-text">上限を10時間にすると、この' + tally.band.length +
-        '名はそのまま勤務できます。8時間45分にすると配置し直しが必要です。</p></details>'
+        '<p class="basis-text">この' + tally.band.length +
+        '名は、上限を10時間にするとそのまま勤務できます（WARNING）。' +
+        '8時間45分にすると BLOCKER となり、この職員を含むシフトは確定できなくなります。' +
+        '2026-10-03 の決定は 10時間 を採用したものです。</p></details>'
       : '<p style="font-size:.82rem;color:var(--ink-2);margin-top:.6rem">' +
         'この日は帯域にいる職員がいません。上限の選択は結果に影響しません。</p>') +
     monthTallyHtml() +
@@ -692,6 +747,8 @@ function renderResult(variantId) {
 /* --- 月次の時間外労働日数（業務ルール 2026-10-03） --- */
 function monthTallyHtml() {
   const t = monthBandTally();
+  const g = gateSeverity(t, state.gate);
+  const gateDayLabel = { '10': '1日10時間超', '8.75': '1日8時間45分超', 'off': 'この上限で超える人' }[state.gate];
   return '<div class="card" id="month-tally"><h2 class="card__title">' +
     '月次の時間外労働日数（' + t.month + '）</h2>' +
     '<div class="note note--warn"><p style="margin:0 0 .4rem">' +
@@ -707,9 +764,12 @@ function monthTallyHtml() {
     '<p class="stat__value' + (t.overCap.length ? ' stat__value--warn' : ' stat__value--ok') + '">' +
     t.overCap.length + '</p><p class="stat__note">' + OVERTIME_MONTH_CAP + '日/月・' +
     OVERTIME_YEAR_CAP + '日/年（参考）</p></div>' +
-    '<div class="stat"><p class="stat__label">1日10時間超</p>' +
-    '<p class="stat__value' + (t.hardViolations.length ? ' stat__value--danger' : ' stat__value--ok') + '">' +
-    t.hardViolations.length + '</p><p class="stat__note">BLOCKER になる</p></div>' +
+    '<div class="stat"><p class="stat__label">' + esc(gateDayLabel) + '</p>' +
+    '<p class="stat__value' + (g.blockers.length ? ' stat__value--danger' : ' stat__value--ok') + '">' +
+    g.blockers.length + '</p><p class="stat__note">' + (state.gate === 'off' ? 'BLOCKER になりません' : 'BLOCKER になる') + '</p></div>' +
+    '<div class="stat"><p class="stat__label">この上限でWARNINGになる人</p>' +
+    '<p class="stat__value' + (g.warnings.length ? ' stat__value--warn' : ' stat__value--ok') + '">' +
+    g.warnings.length + '</p><p class="stat__note">確定は妨げません</p></div>' +
     '<div class="stat"><p class="stat__label">配置対象の職員</p><p class="stat__value">' + t.rows.length +
     '</p><p class="stat__note">日次判定は毎日実施</p></div>' +
     '</div>' +
@@ -727,7 +787,7 @@ function monthTallyHtml() {
     }).join('') + '</tbody></table></div>' +
     '<p class="basis-text">この前提は「時間外労働が毎日発生する」を仮定した{' +
     '想定値であって、実績ではありません。実際の出勤記録からの集計は次のフェーズで' +
-    '追加します。1日10時間超だけは確定を止めます（労働基準法32条違反）。</p></details>' +
+    '追加します。確定を止めるのは<strong>採用した上限（' + esc(g.rule.label) + '）</strong>だけです。</p></details>' +
     '</div>';
 }
 
@@ -759,6 +819,54 @@ function bind() {
     state.staff = staffVariant(state.mock.contracts);
     state.staffSaved = staffVariant(state.mock.contracts);
     renderCurrent();
+  });
+
+  /* arrival */
+  $('#arrival-day').addEventListener('change', function (e) {
+    state.arrivalDay = e.target.value || '2026-11-04';
+    renderArrivalSummary();
+    renderArrivalTable();
+  });
+  $('#arrival-filter').addEventListener('change', function (e) {
+    state.arrivalFilter = e.target.value;
+    renderArrivalTable();
+  });
+  $('#arrival-body').addEventListener('change', function (e) {
+    if (e.target.getAttribute('data-f') !== 'planned') { return; }
+    const id = e.target.closest('tr').getAttribute('data-child');
+    const c = state.children.filter(function (x) { return x.id === id; })[0];
+    if (!c) { return; }
+    c.planned = e.target.value;
+    c.needDefault = !!e.target.value;
+    renderArrival();
+  });
+  $('#arrival-save').addEventListener('click', function () {
+    const probs = state.children.reduce(function (n, c) { return n + childProblems(c).length; }, 0);
+    if (probs) {
+      $('#arrival-msg').innerHTML = '<p class="msg msg--danger"><strong>保存できません。</strong>' +
+        '不備のある園児が ' + probs + ' 件あります。</p>';
+      return;
+    }
+    state.childrenSaved = state.children.map(function (c) { return Object.assign({}, c); });
+    $('#arrival-msg').innerHTML =
+      '<p class="msg msg--ok">保存しました（このモックでは画面内のメモのみです）。</p>';
+  });
+  $('#arrival-reset').addEventListener('click', function () {
+    state.children = state.childrenSaved.map(function (c) { return Object.assign({}, c); });
+    renderArrival();
+  });
+  $('#override-body').addEventListener('click', function (e) {
+    const btn = e.target.closest('[data-remove-ov]');
+    if (!btn) { return; }
+    state.overrides.splice(parseInt(btn.getAttribute('data-remove-ov'), 10), 1);
+    renderArrival();
+  });
+  $('#override-add').addEventListener('click', function () {
+    const first = state.children[0];
+    state.overrides.push({
+      child: first.id, date: state.arrivalDay, planned: '09:00', reason: 'その他',
+    });
+    renderArrival();
   });
 
   /* facility */
@@ -916,9 +1024,138 @@ function form_reset(form) {
   $('#generate-standard').value = state.generate.staffing_standard_key || '';
 }
 
+/* ======================= 画面1 登園予定時刻 ======================= */
+function arrivalCtx() {
+  return {
+    overrides: state.overrides,
+    dayOpen: (state.facilitySaved && state.facilitySaved.day_open) || '07:30',
+    dayClose: (state.facilitySaved && state.facilitySaved.day_close) || '19:30',
+    today: '2026-10-03',
+  };
+}
+
+function childProblems(c) {
+  const ctx = arrivalCtx();
+  const p = [];
+  const t = c.planned;
+  if (t && !/^\d{2}:\d{2}$/.test(t)) {
+    p.push('既定の登園予定は「HH:MM」形式で入力してください（現在: ' + t + '）');
+  } else if (t && t >= ctx.dayClose) {
+    p.push('既定の登園予定が閉園時刻（' + ctx.dayClose + '）以降です');
+  } else if (t && t < ctx.dayOpen) {
+    p.push('既定の登園予定が開園時刻（' + ctx.dayOpen + '）より前です');
+  }
+  return p;
+}
+
+function overrideProblems() {
+  const ctx = arrivalCtx();
+  const out = [];
+  state.overrides.forEach(function (o) {
+    const when = o.date + ' ' + o.child;
+    if (!/^\d{2}:\d{2}$/.test(o.planned)) {
+      out.push(when + ' の登園予定は「HH:MM」形式ではありません（現在: ' + o.planned + '）');
+    } else if (o.planned >= ctx.dayClose) {
+      out.push(when + ' の登園予定が閉園時刻（' + ctx.dayClose + '）以降です');
+    }
+    if (o.date.slice(0, 7) !== TARGET_MONTH) {
+      out.push(when + ' は対象月（' + TARGET_MONTH + '）の外です');
+    }
+  });
+  return out;
+}
+
+function renderArrivalSummary() {
+  const ctx = arrivalCtx();
+  $('#arrival-day').value = state.arrivalDay;
+  const byLevel = {};
+  state.children.forEach(function (c) {
+    const r = resolveArrival(c, state.arrivalDay, ctx);
+    byLevel[r.level] = (byLevel[r.level] || 0) + 1;
+  });
+  const labels = { 1: '実績打刻', 2: 'その日の上書き', 3: '園児ごとの既定値', 4: '保育必要量区分', 5: '開園時刻' };
+  const notes = {
+    1: '対象日が今日より前',
+    2: '例外日で上書き',
+    3: '園児ごとに設定',
+    4: '既定値なし。区間の開始時刻に落ちています',
+    5: '区分もなし。開園時刻まで落ちています',
+  };
+  $('#arrival-summary').innerHTML = [1, 2, 3, 4, 5].map(function (lv) {
+    const n = byLevel[lv] || 0;
+    const cls = lv <= 3 ? 'stat__value--ok' : (lv === 4 ? 'stat__value--warn' : 'stat__value--danger');
+    return '<div class="stat"><p class="stat__label">' + labels[lv] + '</p>' +
+      '<p class="stat__value ' + cls + '">' + n + '名</p>' +
+      '<p class="stat__note">' + notes[lv] + '</p></div>';
+  }).join('') +
+    '<div class="stat"><p class="stat__label">確認する日</p>' +
+    '<p class="stat__value" style="font-size:1.1rem">' + esc(state.arrivalDay) + '</p>' +
+    '<p class="stat__note">この日换来ると補完元も変わります</p></div>';
+}
+
+function renderArrivalTable() {
+  const ctx = arrivalCtx();
+  const rows = state.children.filter(function (c) {
+    if (state.arrivalFilter === 'unset') { return !c.planned; }
+    if (state.arrivalFilter === 'set') { return !!c.planned; }
+    return true;
+  });
+  $('#arrival-count').textContent = rows.length + '名 / 全' + state.children.length + '名';
+  $('#arrival-body').innerHTML = rows.map(function (c) {
+    const r = resolveArrival(c, state.arrivalDay, ctx);
+    const p = childProblems(c);
+    const badge = r.level <= 3 ? 'badge--ok' : (r.level === 4 ? 'badge--warn' : 'badge--danger');
+    return '<tr class="' + (p.length ? 'is-missing' : '') + '" data-child="' + esc(c.id) + '">' +
+      '<td><strong>' + esc(c.name) + '</strong><br><span style="color:var(--muted);font-size:.78rem">' +
+      esc(c.id) + '</span></td>' +
+      '<td>' + esc(c.categoryName) + '</td>' +
+      '<td><input type="time" class="mock-input" data-f="planned" value="' + esc(c.planned) + '"></td>' +
+      '<td>' + esc(c.categoryStart) + '</td>' +
+      '<td>' + (p.length
+        ? '<span class="badge badge--danger">入力に不備あり</span><br>' +
+          '<span style="color:var(--danger);font-weight:700">' + esc(c.planned) + '</strong></span><br>' +
+          '<span style="color:var(--muted);font-size:.78rem">保存できません。' +
+          esc(p[0]) + '</span>'
+        : '<span class="badge ' + badge + '">' + esc(r.at) + '</span><br>' +
+          '<strong>' + esc(r.time) + '</strong><br>' +
+          '<span style="color:var(--muted);font-size:.78rem">' + esc(r.why) + '</span>') + '</td></tr>';
+  }).join('');
+}
+
+function renderOverrides() {
+  $('#override-body').innerHTML = state.overrides.length
+    ? state.overrides.map(function (o, i) {
+      const c = state.children.filter(function (x) { return x.id === o.child; })[0];
+      const bad = overrideProblems().some(function (m) { return m.indexOf(o.date + ' ' + o.child) >= 0; });
+      return '<tr class="' + (bad ? 'is-missing' : '') + '" data-ov="' + i + '">' +
+        '<td>' + esc(c ? c.name : o.child) + '</td>' +
+        '<td>' + esc(o.date) + '</td>' +
+        '<td><input type="time" class="mock-input" data-f="planned" value="' + esc(o.planned) + '"></td>' +
+        '<td>' + esc(o.reason) + '</td>' +
+        '<td><button type="button" class="btn btn--ghost" data-remove-ov="' + i + '">削除</button></td></tr>';
+    }).join('')
+    : '<tr><td colspan="5" style="color:var(--muted)">例外日の登録はありません。' +
+      '登録がない日は園児ごとの既定値を使います。</td></tr>';
+}
+
+function renderArrival() {
+  renderArrivalSummary();
+  renderArrivalTable();
+  renderOverrides();
+  const childMsgs = state.children.reduce(function (acc, c) {
+    return acc.concat(childProblems(c).map(function (m) { return c.name + ': ' + m; }));
+  }, []);
+  const probs = childMsgs.concat(overrideProblems());
+  $('#arrival-msg').innerHTML = probs.length
+    ? '<p class="msg msg--danger"><strong>保存できません。</strong><br>' +
+      probs.map(esc).join('<br>') + '</p>'
+    : '';
+}
+
 function renderCurrent() {
   const v = state.view;
   const m = state.mock[v];
+  if (v === 'arrival') { state.children = childVariant(m); state.overrides = overridesVariant(m); renderArrival(); return; }
   if (v === 'facility') { loadFacility(m); facilityAudit(); return; }
   if (v === 'contracts') { state.staff = staffVariant(m); renderContracts(); return; }
   if (v === 'generate') { loadGenerate(m); renderGenerateErrors(m); return; }

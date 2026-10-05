@@ -58,7 +58,7 @@ sidebar = sidebar.replace('ログイン中', 'モック用の表示')
 # --- insert the proposed entry into 基本業務, after 出欠確認 --------------------
 PROPOSED = (
     '\n              '
-    '<a href="#view-facility" data-nav="facility" '
+    '<a href="#view-arrival" data-nav="arrival" '
     'class="block rounded-xl px-3 py-2.5 text-sm font-medium bg-indigo-50 text-indigo-700">'
     '職員シフト'
     '</a>'

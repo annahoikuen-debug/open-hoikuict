@@ -219,6 +219,9 @@ body {
 .msg--danger { background: var(--danger-soft); border: 1px solid var(--danger-line); color: var(--danger); }
 .msg--warn { background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn); }
 
+/* Reason shown next to a disabled action, so the reviewer is not left guessing. */
+.mock-hint { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--danger); font-weight: 700; }
+
 /* ============================== チップ ============================== */
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip {

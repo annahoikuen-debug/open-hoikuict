@@ -314,6 +314,37 @@ function bandTally(day) {
   };
 }
 
+/* --- 未確定事項2: 採用する上限が承認判定にどう効くか --------------------
+ * 業務ルール 2026-10-03 の決定:
+ *   10時間超   = BLOCKER（労働基準法32条違反）
+ *   8時間45分超 = WARNING（時間外労働・1.25倍）
+ * 8時間45分を BLOCKER にすると正職員のほぼすべての日が確定できなくなるため採らない。
+ * 'off' は参考表示のみとし、この規則による BLOCKER も WARNING も作らない。
+ * 選択を変えるとBLOCKER/WARNING の数と確定可否が変わることを示すための表。
+ */
+const GATE_RULES = {
+  '10': { hard: 'BLOCKER', band: 'WARNING', label: '10時間超＝BLOCKER／8時間45分超＝WARNING' },
+  '8.75': { hard: 'BLOCKER', band: 'BLOCKER', label: '8時間45分超＝BLOCKER（法定上限10時間を無視）' },
+  'off': { hard: null, band: null, label: '判定しない（参考値のみ）' },
+};
+
+/* 月次の集計を、採用する上限に応じて BLOCKER / WARNING に振り分ける。
+ * gate は app.js の state.gate から渡す（このファイルは状態に依存しない）。 */
+function gateSeverity(tally, gate) {
+  const rule = GATE_RULES[gate] || GATE_RULES['10'];
+  const rows = tally.rows || [];
+  const blockers = [];
+  const warnings = [];
+  rows.forEach(function (r) {
+    if (rule.hard && r.over10 > 0) {
+      blockers.push({ staff: r, kind: 'over10', days: r.over10 });
+    } else if (rule.band && r.band > 0) {
+      (rule.band === 'BLOCKER' ? blockers : warnings).push({ staff: r, kind: 'band', days: r.band });
+    }
+  });
+  return { rule: rule, blockers: blockers, warnings: warnings };
+}
+
 /* --- 月次の時間外労働日数（業務ルール 2026-10-03） -----------------
  * 時間外労働は現時点で「案」の段階。計算上は**毎日発生する前提**で処理する。
  * そのcip的结果、勤務日数はすべて時間外労働日数として数える。
@@ -372,3 +403,110 @@ const VIOLATIONS_BLOCKER = [
   { severity: 'WARNING', code: 'PREF_MISS', day: '2026-11-06', slot: '', staff: 'S-12 水無月 慧太', message: '出勤希望日でしたが勤務が割り当てられませんでした' },
   { severity: 'INFO', code: 'FAIRNESS_SPREAD', day: '2026-11-04', slot: '', staff: '', message: '勤務時間の最大と最小の差が 12.5時間です（目安は 10時間以内）' },
 ];
+
+/* --- 園児と登園予定時刻（画面1） -----------------------------------------
+ * 登園時刻の優先順（提案 2.9.1）:
+ *   1 実績打刻 check_in_at（対象日が今日以前）
+ *   2 その日の上書き attendance_records.planned_check_in_time
+ *   3 園児ごとの既定値 child_planned_arrival_defaults
+ *   4 保育必要量区分の normal_start_time
+ *   5 開園時刻（shift_facility_settings.day_open）
+ * どの段階で補完したかを必ず画面に出す。
+ */
+/* 區分の開始時刻は施設の開園時刻（07:30）以上にする。開園前の登園は指定できない。 */
+const CARE_CATEGORIES = [
+  { key: 'standard', name: '標準（11時間）', start: '07:30', end: '18:15' },
+  { key: 'short', name: '短時間（8時間）', start: '08:30', end: '16:45' },
+  { key: 'long', name: '長期（12時間）', start: '07:30', end: '19:00' },
+];
+
+/* 架空の園児62名。実在する園児ではない。 */
+const CHILDREN_ALL = (function () {
+  const family = ['青柳', '石井', '井上', '遠藤', '大野', '岡田', '小川', '加藤', '木村', '工藤',
+    '小林', '斉藤', '坂本', '佐々木', '佐藤', '鈴木', '高橋', '田中', '谷口', '中島',
+    '中村', '西村', '橋本', '林', '原田', '藤田', '松本', '村上', '森', '山口',
+    '山田', '山本', '吉田', '渡辺', '渡部'];
+  const given = ['あかり', 'いずみ', 'うみの', 'えま', 'かける', 'くみ', 'けいすけ', 'こうた', 'さくら', 'しおん',
+    'すず', 'たいら', 'ちひろ', 'つばさ', 'てんま', 'なぎさ', 'はな', 'ひなた', 'ふうた', 'ほな',
+    'まひろ', 'みお', 'むすび', 'めい', 'やすひ', 'ゆい', 'りお', 'れお', 'わか', 'ゆき'];
+  const out = [];
+  for (let i = 0; i < 62; i += 1) {
+    const cat = i < 14 ? CARE_CATEGORIES[1]
+      : (i % 7 === 0 ? CARE_CATEGORIES[2] : CARE_CATEGORIES[0]);
+    /* i % 6 === 0 の園児は既定値未設定。保育必要量区分か開園時刻にフォールバックする。 */
+    const needDefault = i % 6 !== 0;
+    out.push({
+      id: 'C-' + pad2(i + 1),
+      name: family[i % family.length] + ' ' + given[i % given.length],
+      category: cat.key,
+      categoryName: cat.name,
+      categoryStart: cat.start,
+      needDefault: needDefault,
+      planned: needDefault ? (i % 3 === 0 ? '08:00' : '07:30') : '',
+      /* 対象日が今日より前の日では、実績打刻が優先される。 */
+      checkedInOn: i % 11 === 0,
+    });
+  }
+  return out;
+})();
+
+const ARRIVAL_OVERRIDE_REASONS = ['通院の予定', '園内の行事', '臨休の前日', '保護者への引き渡し', 'その他'];
+
+const ARRIVAL_OVERRIDES_DEFAULT = [
+  { child: 'C-02', date: '2026-11-10', planned: '09:30', reason: '通院の予定' },
+  { child: 'C-05', date: '2026-11-17', planned: '10:00', reason: '園内の行事' },
+  { child: 'C-09', date: '2026-11-24', planned: '08:30', reason: '臨休の前日' },
+];
+
+function childVariant(id) {
+  const base = {
+    default: CHILDREN_ALL,
+    empty: CHILDREN_ALL.map(function (c) {
+      return Object.assign({}, c, { needDefault: false, planned: '', checkedInOn: false });
+    }),
+    partial: CHILDREN_ALL.map(function (c, i) {
+      return Object.assign({}, c, {
+        needDefault: i < 5,
+        planned: i < 5 ? '07:30' : '',
+      });
+    }),
+    /* type="time" は 08:90 のような不正値を受け付けない。検証可能な誤りは
+   「閉園より後」と「開園より前」の2種類。時刻の書式そのものは入力欄が防ぐ。 */
+invalid: CHILDREN_ALL.map(function (c, i) {
+      return Object.assign({}, c, {
+        needDefault: true,
+        planned: i === 3 ? '19:45' : (i === 7 ? '07:00' : '07:30'),
+      });
+    }),
+  };
+  return (base[id] || base.default).map(function (c) { return Object.assign({}, c); });
+}
+
+function overridesVariant(id) {
+  const base = {
+    default: ARRIVAL_OVERRIDES_DEFAULT,
+    empty: [],
+    partial: ARRIVAL_OVERRIDES_DEFAULT.slice(0, 1),
+    invalid: ARRIVAL_OVERRIDES_DEFAULT.concat([
+      { child: 'C-01', date: '2026-10-01', planned: '09:00', reason: '対象月外の入力' },
+      { child: 'C-02', date: '2026-11-11', planned: '19:50', reason: '閉園時刻より後' },
+    ]),
+  };
+  return (base[id] || base.default).map(function (o) { return Object.assign({}, o); });
+}
+
+/* 優先順位を解決し、どの段階で補完したかを返す。 */
+function resolveArrival(child, date, ctx) {
+  if (child.checkedInOn && date < ctx.today) {
+    return { at: '実績打刻', level: 1, time: '08:12', why: '対象日が今日以前なので実績打刻が優先されます' };
+  }
+  const ov = ctx.overrides.filter(function (o) {
+    return o.child === child.id && o.date === date;
+  })[0];
+  if (ov) { return { at: 'その日の上書き', level: 2, time: ov.planned, why: '例外日として上書きされています' }; }
+  if (child.planned) { return { at: '園児ごとの既定値', level: 3, time: child.planned, why: '園児ごとに設定した既定値を使います' }; }
+  if (child.categoryStart) {
+    return { at: '保育必要量区分', level: 4, time: child.categoryStart, why: '既定値が未設定なので保育必要量区分の開始時刻まで下がります' };
+  }
+  return { at: '開園時刻', level: 5, time: ctx.dayOpen, why: '区分も未設定なので開園時刻まで遡ります' };
+}
