@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from sqlalchemy import case, or_
+from sqlalchemy import case, or_, text
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
@@ -33,6 +33,25 @@ from notice_content import (
 )
 from template_utils import create_templates
 from time_utils import ensure_utc_from_local, utc_now
+
+
+class ConcurrentUpdateError(RuntimeError):
+    """Raised when the optimistic lock version check fails."""
+
+
+def _claim_notice_lock(session: Session, notice_id: int, expected_lock_version: int) -> None:
+    """Atomically increment lock_version, or raise if it has changed."""
+    result = session.execute(
+        text(
+            "UPDATE notices SET lock_version = lock_version + 1, updated_at = :now "
+            "WHERE id = :id AND lock_version = :lock_version"
+        ),
+        {"now": utc_now(), "id": notice_id, "lock_version": expected_lock_version},
+    )
+    if result.rowcount != 1:
+        session.rollback()
+        raise ConcurrentUpdateError("他の職員が先に更新しました。画面を再読み込みしてください。")
+    session.expire_all()
 
 router = APIRouter(prefix="/notices", tags=["notices"])
 templates = create_templates()
@@ -110,56 +129,84 @@ def _target_label(notice: Notice, classrooms_by_id: dict[int, Classroom], childr
     return " / ".join(labels)
 
 
-def _upsert_targets(
+def _resolve_target_type(raw: str) -> NoticeTargetType:
+    try:
+        return NoticeTargetType(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="配信対象の種別が正しくありません。") from exc
+
+
+def _resolve_target_id(raw: Optional[str], *, label: str) -> Optional[int]:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"{label}の指定が正しくありません。") from exc
+
+
+def _resolve_target(
+    session: Session,
+    *,
+    target_type: str,
+    target_classroom_id: Optional[str],
+    target_child_id: Optional[str],
+) -> tuple[NoticeTargetType, Optional[int]]:
+    """Resolve the audience exactly as entered, or reject the request.
+
+    An unparsable or stale id must never widen the audience: falling back to
+    `all` would publish to every guardian instead of the selected classroom or
+    child. Unknown ids are rejected here rather than silently reaching nobody.
+    """
+    resolved_type = _resolve_target_type(target_type)
+
+    if resolved_type is NoticeTargetType.all:
+        return resolved_type, None
+
+    if resolved_type is NoticeTargetType.classroom:
+        classroom_id = _resolve_target_id(target_classroom_id, label="クラス")
+        if classroom_id is None:
+            raise HTTPException(status_code=422, detail="配信対象のクラスを選択してください。")
+        if session.exec(select(Classroom.id).where(Classroom.id == classroom_id)).first() is None:
+            raise HTTPException(
+                status_code=422,
+                detail="指定したクラスが見つかりません。配信対象を選び直してください。",
+            )
+        return resolved_type, classroom_id
+
+    child_id = _resolve_target_id(target_child_id, label="園児")
+    if child_id is None:
+        raise HTTPException(status_code=422, detail="配信対象の園児を選択してください。")
+    if session.exec(select(Child.id).where(Child.id == child_id)).first() is None:
+        raise HTTPException(
+            status_code=422,
+            detail="指定した園児が見つかりません。配信対象を選び直してください。",
+        )
+    return resolved_type, child_id
+
+
+def _replace_targets(
     session: Session,
     notice: Notice,
     target_type: NoticeTargetType,
-    target_classroom_id: Optional[str],
-    target_child_id: Optional[str],
+    target_id: Optional[int],
 ) -> None:
     for target in list(notice.targets):
         session.delete(target)
     session.flush()
 
-    if target_type == NoticeTargetType.all:
-        session.add(NoticeTarget(notice_id=notice.id, target_type=target_type))
+    if target_type is NoticeTargetType.all:
+        session.add(NoticeTarget(notice_id=notice.id, target_type=NoticeTargetType.all))
         return
 
-    if target_type == NoticeTargetType.classroom and (target_classroom_id or "").strip():
-        try:
-            classroom_id = int(target_classroom_id)
-        except (TypeError, ValueError):
-            classroom_id = None
-        if classroom_id is None:
-            session.add(NoticeTarget(notice_id=notice.id, target_type=NoticeTargetType.all))
-            return
-        session.add(
-            NoticeTarget(
-                notice_id=notice.id,
-                target_type=target_type,
-                target_value=str(classroom_id),
-            )
+    session.add(
+        NoticeTarget(
+            notice_id=notice.id,
+            target_type=target_type,
+            target_value=str(target_id),
         )
-        return
-
-    if target_type == NoticeTargetType.child and (target_child_id or "").strip():
-        try:
-            child_id = int(target_child_id)
-        except (TypeError, ValueError):
-            child_id = None
-        if child_id is None:
-            session.add(NoticeTarget(notice_id=notice.id, target_type=NoticeTargetType.all))
-            return
-        session.add(
-            NoticeTarget(
-                notice_id=notice.id,
-                target_type=target_type,
-                target_value=str(child_id),
-            )
-        )
-        return
-
-    session.add(NoticeTarget(notice_id=notice.id, target_type=NoticeTargetType.all))
+    )
 
 
 def _load_reference_data(session: Session) -> tuple[list[Classroom], list[Child]]:
@@ -348,10 +395,12 @@ def create_notice(
     except ValueError:
         normalized_priority = NoticePriority.normal
     _ = status
-    try:
-        normalized_target_type = NoticeTargetType(target_type)
-    except ValueError:
-        normalized_target_type = NoticeTargetType.all
+    resolved_target_type, resolved_target_id = _resolve_target(
+        session,
+        target_type=target_type,
+        target_classroom_id=target_classroom_id,
+        target_child_id=target_child_id,
+    )
     publish_start, publish_end = _parse_publish_window(publish_start_at, publish_end_at)
 
     sanitized_body_html = sanitize_notice_html(body_html)
@@ -376,7 +425,7 @@ def create_notice(
     session.add(notice)
     try:
         session.flush()
-        _upsert_targets(session, notice, normalized_target_type, target_classroom_id, target_child_id)
+        _replace_targets(session, notice, resolved_target_type, resolved_target_id)
         _add_stored_attachments(
             session,
             notice,
@@ -498,10 +547,12 @@ def update_notice(
     except ValueError:
         normalized_priority = NoticePriority.normal
     _ = status
-    try:
-        normalized_target_type = NoticeTargetType(target_type)
-    except ValueError:
-        normalized_target_type = NoticeTargetType.all
+    resolved_target_type, resolved_target_id = _resolve_target(
+        session,
+        target_type=target_type,
+        target_classroom_id=target_classroom_id,
+        target_child_id=target_child_id,
+    )
     publish_start, publish_end = _parse_publish_window(publish_start_at, publish_end_at)
 
     attachment_by_id = {
@@ -549,7 +600,7 @@ def update_notice(
             attachment = attachment_by_id[attachment_id]
             removed_storage_paths.append(attachment.storage_path)
             session.delete(attachment)
-        _upsert_targets(session, notice, normalized_target_type, target_classroom_id, target_child_id)
+        _replace_targets(session, notice, resolved_target_type, resolved_target_id)
         next_order = max(
             (
                 attachment.display_order
@@ -602,16 +653,20 @@ def submit_notice_for_approval(
 def approve_notice(
     notice_id: int,
     comment: str = Form(""),
+    lock_version: Optional[int] = Form(None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_admin(current_user)
+    if lock_version is None:
+        raise HTTPException(status_code=422, detail="版番号が送信されていません。画面を再読み込みしてください。")
     notice = _load_notice(session, notice_id)
     _require_notice_status(
         notice,
         NoticeStatus.pending_approval,
         "承認待ちのお知らせだけ承認できます。",
     )
+    _claim_notice_lock(session, notice_id, lock_version)
     notice.status = NoticeStatus.published
     notice.updated_at = utc_now()
     session.add(notice)
@@ -630,10 +685,13 @@ def approve_notice(
 def reject_notice(
     notice_id: int,
     reason: str = Form(""),
+    lock_version: Optional[int] = Form(None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_admin(current_user)
+    if lock_version is None:
+        raise HTTPException(status_code=422, detail="版番号が送信されていません。画面を再読み込みしてください。")
     normalized_reason = reason.strip()
     if not normalized_reason:
         raise HTTPException(status_code=400, detail="差戻し理由を入力してください。")
@@ -643,6 +701,7 @@ def reject_notice(
         NoticeStatus.pending_approval,
         "承認待ちのお知らせだけ差戻しできます。",
     )
+    _claim_notice_lock(session, notice_id, lock_version)
     notice.status = NoticeStatus.draft
     notice.updated_at = utc_now()
     session.add(notice)

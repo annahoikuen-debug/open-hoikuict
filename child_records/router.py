@@ -50,11 +50,11 @@ from .settings import (
     CATEGORY_OPTIONS,
     PERSPECTIVE_OPTIONS,
     PRESET_LABELS,
-    custom_field_key,
     default_config,
     effective_config,
     enabled_fields,
     field_map,
+    new_custom_field_key,
 )
 
 
@@ -203,7 +203,7 @@ async def save_child_record_settings(
         PROGRESS_VIEW_ASSIGNED_CLASS,
         PROGRESS_VIEW_ALL_STAFF,
     }:
-        progress_view_scope = PROGRESS_VIEW_ALL_STAFF
+        raise HTTPException(status_code=422, detail="閲覧範囲の指定が正しくありません。")
     config["access_policy"]["progress_record_view_scope"] = progress_view_scope
     enabled_keys = {str(value) for value in form.getlist("enabled_fields")}
     required_keys = {str(value) for value in form.getlist("required_fields")}
@@ -226,10 +226,15 @@ async def save_child_record_settings(
             custom_labels.append(label)
     if len(custom_labels) > 10:
         raise HTTPException(status_code=422, detail="園独自項目は10件以内にしてください")
+
+    existing_custom = {item["label"]: item["key"] for item in fields if item.get("custom")}
     for offset, label in enumerate(custom_labels, start=1):
+        key = existing_custom.get(label)
+        if key is None:
+            key = new_custom_field_key()
         fields.append(
             {
-                "key": custom_field_key(label),
+                "key": key,
                 "label": label,
                 "input_type": "long_text",
                 "description": "園独自の記録項目です。",
@@ -766,7 +771,10 @@ async def correct_child_record(
         reason = _clean_text(form.get("correction_reason"), max_length=500)
         if not reason:
             raise ValueError("訂正理由を入力してください")
-        if form.get("expected_updated_at") and form["expected_updated_at"] != log.updated_at.isoformat():
+        expected_updated_at = form.get("expected_updated_at")
+        if expected_updated_at is None:
+            raise ValueError("版番号が送信されていません。画面を再読み込みしてください。")
+        if expected_updated_at != log.updated_at.isoformat():
             raise ValueError("別の操作で更新されています。入力内容を控えて記録を開き直してください")
         values = _values_from_form(form, config, current_user, session, log)
         _validate_observation_period(child, values["observed_on"])

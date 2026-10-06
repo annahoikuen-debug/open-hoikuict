@@ -20,8 +20,6 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import (
-    bootstrap_health_records,
-    bootstrap_family_records,
     create_db_and_tables,
 )
 from routers.attendance import router as attendance_router
@@ -99,8 +97,6 @@ def initialize_application() -> None:
     ensure_runtime_files()
     create_db_and_tables()
     apply_parent_push_retention()
-    bootstrap_family_records()
-    bootstrap_health_records()
 
 
 @asynccontextmanager

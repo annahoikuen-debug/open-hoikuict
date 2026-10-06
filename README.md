@@ -80,19 +80,24 @@
 ### 2.4 未解決の技術的負債
 
 `docs/comprehensive-project-review-2026-09-05.md` の R01〜R09 のうち、コードに今も残っているものです。
+出典の行番号は **2026-10-05 にコードを再調査した結果**です。
 
-| # | 課題 | 影響 | 出典 |
+| # | 課題 | 影響 | 出典（2026-10-05 実測） |
 | --- | --- | --- | --- |
-| R01 | お知らせの承認が確認した版に結び付いていない | 古い画面からの承認で、変更後の本文が公開され得る | `routers/notices.py:602` |
-| R02 | お知らせの配信対象の不正入力が `all` に広がる | 限定した対象が、意図より広く公開され得る | `routers/notices.py:352,128` |
-| R06a | 観察訂正が古い画面の版を検査しない | 後から行った編集が消える | R06 の表 |
-| R06b | 不正な閲覧範囲を `all_staff` へ補正する | 不正値が広い閲覧権限として有効になる | `child_records/access.py` |
-| R06c | 独自項目の key が表示名に由来する | 名称変更を同一項目として追跡しにくい | `child_records/models.py:14` |
-| R06d | 確定処理の所有者が Router／Repository／service で異なる | 複数処理の取消境界が不明確 | R06 の表 |
-| R06e | 起動・初回参照で旧データを補正する | 通常利用とデータ移行の書き込み経路が混在する | `main.py:95` |
-| R07 | 仕様書の現況が古い | 設計判断の材料が誤る | `docs/specifications.md:31` |
+| R01 | お知らせの承認が確認した版に結び付いていない | 古い画面からの承認で、変更後の本文が公開され得る | `routers/notices.py:601`（`approve_notice` が状態しか見ない） |
+| R02 | お知らせの配信対象の不正入力が `all` に広がる | 限定した対象が、意図より広く公開され得る | `routers/notices.py:113-162`（`_upsert_targets`）、`:501-504` |
+| R06a | 観察訂正の版チェックが fail-open | フィールドを欠落させれば検査を迂回できる | `child_records/router.py:769` |
+| R06b | 不正な閲覧範囲を `all_staff` へ補正する | 不正値が広い閲覧権限として有効になる | `child_records/access.py:26-27`、`child_records/router.py:202-206` |
+| R06c | 独自項目の key が表示名に由来する | 名称変更を同一項目として追跡しにくい | `child_records/settings.py:206`（`custom_field_key`） |
+| R06d | 確定処理の所有者が Router／Repository／service で異なる | 複数処理の取消境界が不明確 | `child_records/router.py:786-791`（Router が直接更新）、`:136-159`（記録作成が設定版を書く） |
+| R06e | 起動・初回参照で旧データを補正する | 通常利用とデータ移行の書き込み経路が混在する | `main.py:102-103`、`database.py:1315-1325` |
+| R07 | 仕様書の現況が古い | 設計判断の材料が誤る | `docs/specifications.md:3`（現況確認 2026-09-17 のまま） |
 | R08 | main・公開デモ・カーネル仕様に3本の枝 | 3系統を長く育てる運用になる | R08 |
-| — | Ruff の未使用3件 | CI は `ruff check .` を含むためLintが通らない | `extended_care_billing_transfer_service.py:234` ほか |
+
+**解消済み（2026-10-05 実測）**: 「Ruff の未使用3件」は `1cc7dc8` で解消済みです。
+`ruff check .` は 351 ファイル対象で **All checks passed**（`extended_care_billing_transfer_service.py` と
+`routers/extended_care_fees.py` の未使用バインド3件を削除）。R01〜R08 の記載はコードを再調査した
+結果で更新しています。
 
 ---
 
@@ -147,12 +152,17 @@
 
 ### Phase 1：負債を片づける（最優先・即刻着手可能）
 
-R06／R07 と R01／R02 の **重要操作の契約** を先に揃えます。再利用できる実装は `plan_docs/store.py:299` の版付き更新と `institutional_record_service.py:384` の原子的更新です。
+R06／R07 と R01／R02 の **重要操作の契約** を先に揃えます。再利用できる実装は `plan_docs/store.py:574` の `_claim_lock`（原子的 UPDATE + rowcount 検査）と `institutional_record_service.py:384` の原子的更新です。
 
-1. **R06系**の修正（`all`・`all_staff` への補正、独自項目 key の安定ID化、古い版，检查）
-2. **R07** 仕様書の現況更新（古い「未実装」を現行コードに合わせる）
-3. **R08** ブランチの整理（main を正本として維持。公開デモ・一般修正は目的ごとに選び、試験を伴って戻す）
-4. **Ruff 3件**の解消（`ruff check .` を通す。構造課題と同一視しない）
+1. **Ruff 3件**の解消 — **完了（`1cc7dc8`）**。`ruff check .` は通る。構造課題と同一視しない
+2. **R02** お知らせの配信対象を fail-closed 化（不正入力を `all` に広げない）
+3. **R01** お知らせの承認・差戻しを確認した版に結び付ける（`Notice.lock_version`）
+4. **R06a** 観察訂正の版チェックを fail-closed 化（`expected_updated_at` 欠落で通過させない）
+5. **R06b** 児童記録の閲覧範囲を fail-closed 化（不正値を `all_staff` にしない）
+6. **R06c** 独自項目の key を表示名から独立した安定IDへ
+7. **R06d/e** 確定処理の所有者をそろえ、起動時の書き込みと移行の経路を分離
+8. **R07** 仕様書の現況更新（古い「未実装」を現行コードに合わせる）
+9. **R08** ブランチの整理（main を正本として維持。公開デモ・一般修正は目的ごとに選び、試験を伴って戻す）
 
 ### Phase 2：変更・更新サイクルを一巡させる（中核・最重要）
 

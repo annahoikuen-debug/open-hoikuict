@@ -169,6 +169,7 @@ class ChildRecordFeatureTests(unittest.TestCase):
         with Session(self.engine) as session:
             log = session.exec(select(ChildObservationLog)).one()
             log_id = int(log.id or 0)
+            expected_updated_at = log.updated_at.isoformat()
             self.assertEqual(log.categories, ["興味・遊び", "成長・変化"])
 
         timeline = self.client.get(f"/children/{self.child_id}/records")
@@ -187,6 +188,7 @@ class ChildRecordFeatureTests(unittest.TestCase):
                 "perspective_tags": ["人間関係"],
                 "sensitivity": "normal",
                 "correction_reason": "観察後の事実を追記するため",
+                "expected_updated_at": expected_updated_at,
             },
             follow_redirects=False,
         )

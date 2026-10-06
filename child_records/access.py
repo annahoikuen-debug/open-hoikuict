@@ -17,14 +17,12 @@ PROGRESS_VIEW_SCOPES = {
 
 
 def progress_record_view_scope(config: dict[str, Any]) -> str:
-    value = str(
-        config.get("access_policy", {}).get(
-            "progress_record_view_scope",
-            PROGRESS_VIEW_ALL_STAFF,
-        )
-    )
-    if value not in PROGRESS_VIEW_SCOPES:
+    access_policy = config.get("access_policy")
+    if access_policy is None:
         return PROGRESS_VIEW_ALL_STAFF
+    value = str(access_policy.get("progress_record_view_scope", PROGRESS_VIEW_ALL_STAFF))
+    if value not in PROGRESS_VIEW_SCOPES:
+        raise ValueError(f"不正な閲覧範囲の値です: {value}")
     return value
 
 

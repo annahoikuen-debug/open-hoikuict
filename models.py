@@ -1883,6 +1883,7 @@ class Notice(SQLModel, table=True):
     created_by: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    lock_version: int = Field(default=1)
 
     targets: List["NoticeTarget"] = Relationship(back_populates="notice")
     reads: List["NoticeRead"] = Relationship(back_populates="notice")

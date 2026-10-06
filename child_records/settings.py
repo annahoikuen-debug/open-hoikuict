@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import date
 from typing import Any
-from uuid import NAMESPACE_URL, uuid5
+from uuid import uuid4
 
 from sqlmodel import Session, select
 
@@ -203,5 +203,11 @@ def enabled_fields(config: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
 
-def custom_field_key(label: str) -> str:
-    return f"custom.{uuid5(NAMESPACE_URL, 'open-hoikuict:child-record:' + label.strip())}"
+def new_custom_field_key() -> str:
+    """Generate a stable UUID-based key for a custom field.
+
+    Unlike the old `custom_field_key(label)` which derived the key from the
+    display label, this returns a random UUID that persists across label
+    changes. The label is stored separately in the field definition.
+    """
+    return f"custom.{uuid4()}"

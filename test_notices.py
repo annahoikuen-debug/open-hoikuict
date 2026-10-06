@@ -309,9 +309,11 @@ class NoticeRouterTests(unittest.TestCase):
         with Session(self.engine) as session:
             notice = session.get(Notice, notice_id)
             self.assertEqual(notice.status, NoticeStatus.pending_approval)
+            notice_lock_version = notice.lock_version
 
         editor_approval = self.client.post(
             f"/notices/{notice_id}/approve",
+            data={"lock_version": notice_lock_version},
             follow_redirects=False,
         )
         editor_edit = self.client.get(f"/notices/{notice_id}/edit")
@@ -331,9 +333,12 @@ class NoticeRouterTests(unittest.TestCase):
         )
         admin_preview = self.client.get(f"/notices/{notice_id}/preview")
         self.assertIn("承認して公開", admin_preview.text)
+        with Session(self.engine) as session:
+            notice = session.get(Notice, notice_id)
+            admin_lock_version = notice.lock_version
         approved = self.client.post(
             f"/notices/{notice_id}/approve",
-            data={"comment": "内容を確認しました。"},
+            data={"comment": "内容を確認しました。", "lock_version": admin_lock_version},
             follow_redirects=False,
         )
         self.assertEqual(approved.status_code, 303, approved.text)
@@ -383,14 +388,18 @@ class NoticeRouterTests(unittest.TestCase):
         notice_id = int(created.headers["location"].split("/")[2])
         self.client.post(f"/notices/{notice_id}/submit", follow_redirects=False)
         authenticate_mock_staff(self.client, role=Role.ADMIN, name="主任")
+        with Session(self.engine) as session:
+            notice = session.get(Notice, notice_id)
+            lock_version = notice.lock_version
 
         missing_reason = self.client.post(
             f"/notices/{notice_id}/reject",
+            data={"lock_version": lock_version},
             follow_redirects=False,
         )
         rejected = self.client.post(
             f"/notices/{notice_id}/reject",
-            data={"reason": "公開対象クラスを確認してください。"},
+            data={"reason": "公開対象クラスを確認してください。", "lock_version": lock_version},
             follow_redirects=False,
         )
         self.assertEqual(missing_reason.status_code, 400)
@@ -409,6 +418,141 @@ class NoticeRouterTests(unittest.TestCase):
         self.assertEqual(rejection.comment, "公開対象クラスを確認してください。")
         preview = self.client.get(f"/notices/{notice_id}/preview")
         self.assertIn("公開対象クラスを確認してください。", preview.text)
+
+    def test_create_notice_invalid_target_type_rejected(self):
+        response = self.client.post(
+            "/notices/",
+            data={
+                "title": "配信先エラー",
+                "body": "本文",
+                "target_type": "invalid",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_notice_invalid_classroom_id_rejected(self):
+        response = self.client.post(
+            "/notices/",
+            data={
+                "title": "配信先エラー",
+                "body": "本文",
+                "target_type": "classroom",
+                "target_classroom_id": "not-a-number",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_notice_stale_classroom_id_rejected(self):
+        with Session(self.engine) as session:
+            classroom = Classroom(name="旧クラス", display_order=1)
+            session.add(classroom)
+            session.flush()
+            stale_id = str(classroom.id)
+        response = self.client.post(
+            "/notices/",
+            data={
+                "title": "配信先エラー",
+                "body": "本文",
+                "target_type": "classroom",
+                "target_classroom_id": stale_id,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_notice_invalid_child_id_rejected(self):
+        response = self.client.post(
+            "/notices/",
+            data={
+                "title": "配信先エラー",
+                "body": "本文",
+                "target_type": "child",
+                "target_child_id": "not-a-number",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_notice_stale_child_id_rejected(self):
+        with Session(self.engine) as session:
+            child = Child(
+                last_name="山田",
+                first_name="太郎",
+                last_name_kana="ヤマダ",
+                first_name_kana="タロウ",
+                birth_date=date(2021, 5, 5),
+                enrollment_date=date(2024, 4, 1),
+                status=ChildStatus.enrolled,
+            )
+            session.add(child)
+            session.flush()
+            stale_id = str(child.id)
+        response = self.client.post(
+            "/notices/",
+            data={
+                "title": "配信先エラー",
+                "body": "本文",
+                "target_type": "child",
+                "target_child_id": stale_id,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_notice_invalid_classroom_id_rejected(self):
+        created = self.client.post(
+            "/notices/",
+            data={"title": "元", "body": "本文"},
+            follow_redirects=False,
+        )
+        notice_id = int(created.headers["location"].split("/")[2])
+        response = self.client.post(
+            f"/notices/{notice_id}/edit",
+            data={
+                "title": "更新",
+                "body": "更新本文",
+                "target_type": "classroom",
+                "target_classroom_id": "not-a-number",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_notice_stale_classroom_id_rejected(self):
+        with Session(self.engine) as session:
+            classroom = Classroom(name="旧クラス", display_order=1)
+            session.add(classroom)
+            session.flush()
+            stale_id = str(classroom.id)
+        created = self.client.post(
+            "/notices/",
+            data={"title": "元", "body": "本文"},
+            follow_redirects=False,
+        )
+        notice_id = int(created.headers["location"].split("/")[2])
+        response = self.client.post(
+            f"/notices/{notice_id}/edit",
+            data={
+                "title": "更新",
+                "body": "更新本文",
+                "target_type": "classroom",
+                "target_classroom_id": stale_id,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_notice_lock_version_defaults_to_one(self):
+        with Session(self.engine) as session:
+            notice = Notice(title="テスト", body="本文")
+            session.add(notice)
+            session.flush()
+            self.assertEqual(notice.lock_version, 1)
+            session.commit()
+            loaded = session.get(Notice, notice.id)
+            self.assertEqual(loaded.lock_version, 1)
 
 
 if __name__ == "__main__":

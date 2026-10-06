@@ -92,6 +92,8 @@ def create_db_and_tables() -> None:
     _migrate_zengin_workflow()
     _migrate_care_certification_and_extended_care_columns()
     _migrate_extended_care_billing_transfer()
+    _migrate_family_bootstrap()
+    _migrate_sync_health_records_from_legacy()
     _validate_sqlite_foreign_keys()
 
 
@@ -446,6 +448,8 @@ def _migrate_notice_columns() -> None:
             columns = _table_columns("notices")
             if columns and "body_html" not in columns:
                 conn.execute(text("ALTER TABLE notices ADD COLUMN body_html VARCHAR"))
+            if columns and "lock_version" not in columns:
+                conn.execute(text("ALTER TABLE notices ADD COLUMN lock_version INTEGER DEFAULT 1"))
             conn.commit()
     except Exception as exc:
         _log_migration_skip("notice column", exc)
@@ -777,6 +781,36 @@ def _migrate_zengin_workflow() -> None:
             )
 
 
+def _migrate_family_bootstrap() -> None:
+    """One-time bootstrap: create family records from legacy data."""
+    try:
+        from models import Family
+        from family_support import bootstrap_family_data
+
+        with Session(engine) as session:
+            if session.exec(select(Family.id).limit(1)).first() is not None:
+                return
+            bootstrap_family_data(session)
+            session.commit()
+    except Exception as exc:
+        _log_migration_skip("family bootstrap", exc)
+
+
+def _migrate_sync_health_records_from_legacy() -> None:
+    """One-time sync: migrate legacy extra_data to health records."""
+    try:
+        from child_health_service import sync_health_records_from_legacy_extra_data
+        from models import Child
+
+        with Session(engine) as session:
+            children = session.exec(select(Child)).all()
+            for child in children:
+                sync_health_records_from_legacy_extra_data(session, child)
+            session.commit()
+    except Exception as exc:
+        _log_migration_skip("sync health records from legacy", exc)
+
+
 def _migrate_extended_care_billing_transfer() -> None:
     with engine.begin() as conn:
         charge_cols = _table_columns("extended_care_charges")
@@ -834,6 +868,112 @@ def _migrate_extended_care_billing_transfer() -> None:
 
 
 def _migrate_care_certification_and_extended_care_columns() -> None:
+    with engine.begin() as conn:
+        rule_cols = _table_columns("extended_care_fee_rules")
+        charge_cols = _table_columns("extended_care_charges")
+
+        rule_additions = {
+            "care_time_category": "VARCHAR(32)",
+            "normal_start_time": "VARCHAR",
+            "normal_end_time": "VARCHAR",
+            "morning_enabled": "BOOLEAN DEFAULT 0 NOT NULL",
+            "morning_grace_minutes": "INTEGER DEFAULT 0 NOT NULL",
+            "morning_rounding_minutes": "INTEGER DEFAULT 15 NOT NULL",
+            "morning_unit_price": "INTEGER DEFAULT 0 NOT NULL",
+            "evening_enabled": "BOOLEAN DEFAULT 1 NOT NULL",
+            "evening_grace_minutes": "INTEGER",
+            "evening_rounding_minutes": "INTEGER",
+            "evening_unit_price": "INTEGER",
+        }
+        for column_name, column_sql in rule_additions.items():
+            if rule_cols and column_name not in rule_cols:
+                conn.execute(text(f"ALTER TABLE extended_care_fee_rules ADD COLUMN {column_name} {column_sql}"))
+
+        charge_additions = {
+            "certification_id": "INTEGER REFERENCES child_care_certifications(id)",
+            "care_time_category_snapshot": "VARCHAR(32)",
+            "calculation_version": "VARCHAR(32) DEFAULT 'legacy_v1' NOT NULL",
+            "actual_check_in_at": "DATETIME",
+            "normal_start_at": "DATETIME",
+            "normal_end_at": "DATETIME",
+            "morning_extended_minutes": "INTEGER DEFAULT 0 NOT NULL",
+            "morning_billable_units": "INTEGER DEFAULT 0 NOT NULL",
+            "morning_amount": "INTEGER DEFAULT 0 NOT NULL",
+            "evening_extended_minutes": "INTEGER DEFAULT 0 NOT NULL",
+            "evening_billable_units": "INTEGER DEFAULT 0 NOT NULL",
+            "evening_amount": "INTEGER DEFAULT 0 NOT NULL",
+        }
+        for column_name, column_sql in charge_additions.items():
+            if charge_cols and column_name not in charge_cols:
+                conn.execute(text(f"ALTER TABLE extended_care_charges ADD COLUMN {column_name} {column_sql}"))
+
+        if rule_cols:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_extended_care_fee_rules_care_time_category "
+                    "ON extended_care_fee_rules (care_time_category)"
+                )
+            )
+        if charge_cols:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_extended_care_charges_certification_id "
+                    "ON extended_care_charges (certification_id)"
+                )
+            )
+    with engine.begin() as conn:
+        charge_cols = _table_columns("extended_care_charges")
+        line_cols = _table_columns("billing_charge_lines")
+
+        if charge_cols:
+            additions = {
+                "billing_charge_line_id": (
+                    "INTEGER REFERENCES billing_charge_lines(id)"
+                ),
+                "transferred_amount": "INTEGER",
+                "transferred_at": "DATETIME",
+                "transferred_by_user_id": "CHAR(32) REFERENCES users(id)",
+                "transferred_by_name": "VARCHAR(100)",
+            }
+            for column_name, column_sql in additions.items():
+                if column_name not in charge_cols:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE extended_care_charges "
+                            f"ADD COLUMN {column_name} {column_sql}"
+                        )
+                    )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS "
+                    "ix_extended_care_charges_billing_charge_line_id "
+                    "ON extended_care_charges (billing_charge_line_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS "
+                    "ix_extended_care_charges_transferred_by_user_id "
+                    "ON extended_care_charges (transferred_by_user_id)"
+                )
+            )
+
+        if line_cols and "source_reference" not in line_cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE billing_charge_lines "
+                    "ADD COLUMN source_reference VARCHAR(120)"
+                )
+            )
+        if line_cols:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "ux_billing_charge_lines_source_reference "
+                    "ON billing_charge_lines (source_reference) "
+                    "WHERE source_reference IS NOT NULL"
+                )
+            )
     with engine.begin() as conn:
         rule_cols = _table_columns("extended_care_fee_rules")
         charge_cols = _table_columns("extended_care_charges")
