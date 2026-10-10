@@ -3,11 +3,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from sqlalchemy import case, or_, text
+from sqlalchemy import case, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_admin, require_can_edit
+from common.optimistic_lock import claim_lock
 from database import get_session
 from models import (
     Child,
@@ -35,23 +36,18 @@ from template_utils import create_templates
 from time_utils import ensure_utc_from_local, utc_now
 
 
-class ConcurrentUpdateError(RuntimeError):
-    """Raised when the optimistic lock version check fails."""
-
-
 def _claim_notice_lock(session: Session, notice_id: int, expected_lock_version: int) -> None:
-    """Atomically increment lock_version, or raise if it has changed."""
-    result = session.execute(
-        text(
-            "UPDATE notices SET lock_version = lock_version + 1, updated_at = :now "
-            "WHERE id = :id AND lock_version = :lock_version"
-        ),
-        {"now": utc_now(), "id": notice_id, "lock_version": expected_lock_version},
+    """Atomically increment lock_version, or raise if it has changed.
+
+    Delegates to :func:`common.optimistic_lock.claim_lock`.
+    """
+    claim_lock(
+        session,
+        table_name="notices",
+        id_col="id",
+        id_val=notice_id,
+        expected_version=expected_lock_version,
     )
-    if result.rowcount != 1:
-        session.rollback()
-        raise ConcurrentUpdateError("他の職員が先に更新しました。画面を再読み込みしてください。")
-    session.expire_all()
 
 router = APIRouter(prefix="/notices", tags=["notices"])
 templates = create_templates()
@@ -746,16 +742,20 @@ def cancel_notice_submission(
 def unpublish_notice(
     notice_id: int,
     reason: str = Form(""),
+    lock_version: Optional[int] = Form(None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_admin(current_user)
+    if lock_version is None:
+        raise HTTPException(status_code=422, detail="版番号が送信されていません。画面を再読み込みしてください。")
     notice = _load_notice(session, notice_id)
     _require_notice_status(
         notice,
         NoticeStatus.published,
         "公開中のお知らせだけ下書きに戻せます。",
     )
+    _claim_notice_lock(session, notice_id, lock_version)
     notice.status = NoticeStatus.draft
     notice.updated_at = utc_now()
     session.add(notice)

@@ -88,6 +88,7 @@
     <h2 class="font-semibold text-gray-800">公開内容を修正する場合</h2>
     <p class="mt-1 text-sm text-gray-600">公開を停止して下書きに戻した後、修正・再申請してください。</p>
     <form method="post" action="/notices/{{ notice.id }}/unpublish" class="mt-3 flex flex-wrap gap-2">
+      <input type="hidden" name="lock_version" value="{{ notice.lock_version }}">
       <input name="reason" type="text" placeholder="公開停止理由（任意）" class="min-w-64 flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm">
       <button type="submit" class="rounded border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-700">公開を停止して下書きへ</button>
     </form>

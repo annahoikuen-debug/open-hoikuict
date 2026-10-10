@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>児童記録 独自項目設定 モック</title>
+  <style>
+    /* ---- 確認用パネル ---- */
+    #dev-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: #1a1a2e; color: #e2e8f0;
+      padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      font-family: monospace; font-size: 13px;
+    }
+    #dev-bar span { opacity: .6; }
+    #dev-bar button {
+      padding: 4px 10px; border: 1px solid #4a5568; border-radius: 4px;
+      background: #2d3748; color: #e2e8f0; cursor: pointer; font-size: 12px;
+    }
+    #dev-bar button.active { background: #4f46e5; border-color: #6366f1; }
+    #dev-bar button:hover { background: #3a3f5c; }
+    #dev-bar label { display: flex; align-items: center; gap: 4px; }
+
+    /* ---- レイアウト ---- */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; }
+    .layout { display: flex; min-height: calc(100vh - 36px); }
+    aside {
+      width: 220px; flex-shrink: 0;
+      background: #1e293b; color: #cbd5e1;
+      padding: 16px 0;
+    }
+    aside a {
+      display: block; padding: 10px 20px; color: #94a3b8;
+      text-decoration: none; font-size: 14px; transition: background .1s;
+    }
+    aside a:hover, aside a.active { background: #334155; color: #f1f5f9; }
+    aside .section-label {
+      padding: 16px 20px 4px; font-size: 11px; letter-spacing: .1em;
+      text-transform: uppercase; color: #64748b;
+    }
+    main { flex: 1; padding: 24px 32px; max-width: 900px; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+
+    /* ---- カード ---- */
+    .card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+      padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+
+    /* ---- フィールド一覧 ---- */
+    .field-list { list-style: none; margin: 0; padding: 0; }
+    .field-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+      margin-bottom: 8px; background: #fff; transition: box-shadow .15s;
+    }
+    .field-item.dragging { opacity: .5; }
+    .field-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .field-item.system { background: #f8fafc; }
+    .drag-handle {
+      cursor: grab; color: #94a3b8; font-size: 18px; user-select: none;
+      padding: 0 4px;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .field-label { flex: 1; font-size: 14px; font-weight: 500; }
+    .field-key {
+      font-family: monospace; font-size: 11px; color: #94a3b8;
+      background: #f1f5f9; padding: 2px 6px; border-radius: 4px;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .field-key.hidden { display: none; }
+    .badge-system {
+      font-size: 10px; background: #dbeafe; color: #1d4ed8;
+      padding: 2px 6px; border-radius: 9999px; white-space: nowrap;
+    }
+    .badge-custom {
+      font-size: 10px; background: #dcfce7; color: #166534;
+      padding: 2px 6px; border-radius: 9999px; white-space: nowrap;
+    }
+    .btn-sm {
+      padding: 4px 8px; border-radius: 6px; border: 1px solid #e2e8f0;
+      font-size: 12px; cursor: pointer; background: #fff; color: #475569;
+      transition: background .1s;
+    }
+    .btn-sm:hover { background: #f1f5f9; }
+    .btn-sm.danger { color: #dc2626; border-color: #fca5a5; }
+    .btn-sm.danger:hover { background: #fef2f2; }
+    .btn-order { padding: 2px 6px; font-size: 16px; }
+
+    /* ---- 追加フォーム ---- */
+    .add-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .add-form input[type=text] {
+      flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid #e2e8f0;
+      border-radius: 8px; font-size: 14px; outline: none;
+    }
+    .add-form input[type=text]:focus { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; }
+    .btn-primary {
+      padding: 8px 16px; background: #4f46e5; color: #fff; border: none;
+      border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background .1s;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* ---- インライン編集 ---- */
+    .edit-mode { display: flex; gap: 6px; align-items: center; flex: 1; }
+    .edit-mode input {
+      flex: 1; padding: 4px 8px; border: 1px solid #6366f1; border-radius: 6px;
+      font-size: 14px;
+    }
+
+    /* ---- 削除ダイアログ ---- */
+    .dialog-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.4); z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .dialog-backdrop.open { display: flex; }
+    .dialog {
+      background: #fff; border-radius: 12px; padding: 28px 32px;
+      max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .dialog h3 { margin: 0 0 12px; color: #dc2626; }
+    .dialog p { font-size: 14px; color: #475569; margin: 8px 0; }
+    .dialog .warning {
+      background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; color: #92400e; margin: 12px 0;
+    }
+    .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .btn-cancel {
+      padding: 8px 16px; border: 1px solid #e2e8f0; border-radius: 8px;
+      background: #fff; cursor: pointer; font-size: 14px;
+    }
+    .btn-delete {
+      padding: 8px 16px; background: #dc2626; color: #fff; border: none;
+      border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;
+    }
+
+    /* ---- 変更履歴 ---- */
+    .history-list { list-style: none; padding: 0; margin: 0; }
+    .history-item {
+      border-left: 3px solid #e2e8f0; padding: 8px 12px; margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .history-item .ts { color: #94a3b8; font-size: 11px; }
+    .history-item.added { border-color: #22c55e; }
+    .history-item.renamed { border-color: #3b82f6; }
+    .history-item.deleted { border-color: #ef4444; }
+    .history-item.reordered { border-color: #f59e0b; }
+
+    /* ---- バナー ---- */
+    .banner {
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+      padding: 12px 16px; font-size: 13px; color: #1d4ed8; margin-bottom: 16px;
+    }
+
+    /* ---- タブ ---- */
+    .tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+    .tab {
+      padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 500;
+      color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .1s;
+    }
+    .tab.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ---- トースト ---- */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 500;
+      background: #1e293b; color: #f1f5f9; padding: 12px 20px;
+      border-radius: 8px; font-size: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.3);
+      opacity: 0; transition: opacity .3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ---- 空状態 ---- */
+    .empty-state {
+      text-align: center; padding: 40px 0; color: #94a3b8;
+    }
+    .empty-state .icon { font-size: 48px; }
+    .empty-state p { margin: 8px 0 0; }
+  </style>
+</head>
+<body>
+
+<!-- ====== 確認用パネル ====== -->
+<div id="dev-bar">
+  <span>確認用モック</span>
+  <span>|</span>
+  <span>状態:</span>
+  <button onclick="setPreset('empty')">フィールドなし</button>
+  <button onclick="setPreset('initial')" class="active">標準3件</button>
+  <button onclick="setPreset('many')">多数8件</button>
+  <span>|</span>
+  <label>
+    <input type="checkbox" id="showKeys" onchange="toggleKeys()"> 内部キー表示
+  </label>
+  <span style="margin-left:auto;opacity:.4">本番画面には表示されない</span>
+</div>
+
+<!-- ====== サイドバー + メイン ====== -->
+<div class="layout">
+  <aside>
+    <div class="section-label">児童記録</div>
+    <a href="#" class="active">独自項目の設定</a>
+    <a href="#">記録テンプレート</a>
+    <a href="#">設定バージョン履歴</a>
+    <div class="section-label">施設管理</div>
+    <a href="#">お知らせ管理</a>
+    <a href="#">職員シフト</a>
+  </aside>
+
+  <main>
+    <h1>独自項目の設定</h1>
+    <p class="subtitle">観察記録に追加する独自フィールドを管理します。項目のラベルを変更しても、内部 ID（キー）は変わりません。</p>
+
+    <!-- タブ -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('list')">項目一覧・並び替え</div>
+      <div class="tab" onclick="switchTab('add')">追加・名称変更</div>
+      <div class="tab" onclick="switchTab('history')">変更履歴</div>
+    </div>
+
+    <!-- ====== 画面1: 一覧・並び替え ====== -->
+    <div id="panel-list" class="tab-panel active">
+      <div class="card">
+        <h2>独自フィールド一覧</h2>
+        <div class="banner" id="banner-empty" style="display:none">
+          独自フィールドはまだ追加されていません。「追加・名称変更」タブから追加できます。
+        </div>
+        <ul class="field-list" id="field-list">
+          <!-- JS で動的生成 -->
+        </ul>
+        <div class="empty-state" id="empty-state" style="display:none">
+          <div class="icon">📋</div>
+          <p>独自フィールドはまだありません</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>システムフィールド（変更不可）</h2>
+        <ul class="field-list" id="system-field-list">
+          <!-- JS で動的生成 -->
+        </ul>
+      </div>
+    </div>
+
+    <!-- ====== 画面2: 追加・名称変更 ====== -->
+    <div id="panel-add" class="tab-panel">
+      <div class="card">
+        <h2>独自フィールドを追加</h2>
+        <p style="font-size:14px;color:#64748b;margin-bottom:16px">
+          追加すると内部キー（<code>custom.UUID</code>）が自動生成されます。ラベルを後から変更しても、このキーは変わりません。
+        </p>
+        <div class="add-form">
+          <input type="text" id="new-label" placeholder="新しい項目名を入力…" maxlength="50"
+            oninput="updateAddBtn()" onkeydown="if(event.key==='Enter')addField()">
+          <button class="btn-primary" id="btn-add" onclick="addField()" disabled>追加する</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>独自フィールドのラベル変更</h2>
+        <p style="font-size:14px;color:#64748b;margin-bottom:16px">
+          ラベルを変更しても内部キーは変わらず、過去のレコードへの影響はありません。
+        </p>
+        <ul class="field-list" id="rename-list">
+          <!-- JS で動的生成 -->
+        </ul>
+        <div class="empty-state" id="rename-empty" style="display:none">
+          <div class="icon">✏️</div>
+          <p>変更できる独自フィールドがありません</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 画面3: 変更履歴 ====== -->
+    <div id="panel-history" class="tab-panel">
+      <div class="card">
+        <h2>変更履歴</h2>
+        <p style="font-size:14px;color:#64748b;margin-bottom:16px">
+          設定を保存するたびにバージョンが記録されます。過去の設定は「設定バージョン履歴」で確認できます。
+        </p>
+        <ul class="history-list" id="history-list">
+          <!-- JS で動的生成 -->
+        </ul>
+        <div class="empty-state" id="history-empty">
+          <div class="icon">🕒</div>
+          <p>まだ変更履歴がありません</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ====== 削除ダイアログ ====== -->
+<div class="dialog-backdrop" id="delete-dialog">
+  <div class="dialog">
+    <h3>⚠️ 独自フィールドの削除</h3>
+    <p>「<strong id="delete-label-name"></strong>」を削除します。</p>
+    <div class="warning">
+      <strong>注意：</strong>既存の観察記録に入力された値は引き続き JSON データとして保存されますが、
+      新規記録のフォームには表示されなくなります。削除したフィールドを復元することはできません。
+    </div>
+    <p style="font-size:13px;color:#94a3b8">
+      内部キー: <code id="delete-key-display"></code>
+    </p>
+    <div class="dialog-actions">
+      <button class="btn-cancel" onclick="closeDeleteDialog()">キャンセル</button>
+      <button class="btn-delete" onclick="confirmDelete()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== トースト ====== -->
+<div id="toast"></div>
+
+<script>
+// ====== データモデル ======
+const SYSTEM_FIELDS = [
+  { key: "observed_on",       label: "観察日・出来事の日",   input_type: "date" },
+  { key: "child_state",       label: "子どもの姿",           input_type: "long_text" },
+  { key: "caregiver_support", label: "保育者の関わり",       input_type: "long_text" },
+  { key: "reflection",        label: "気付き・振り返り",     input_type: "long_text" },
+  { key: "next_focus",        label: "次に意識したいこと",   input_type: "long_text" },
+  { key: "family_note",       label: "家庭との共有・連携",   input_type: "long_text" },
+  { key: "categories",        label: "記録区分",             input_type: "multi_select" },
+  { key: "perspective_tags",  label: "領域・視点",           input_type: "multi_select" },
+  { key: "sensitivity",       label: "取扱区分",             input_type: "single_select", system: true },
+];
+
+const PRESETS = {
+  empty: [],
+  initial: [
+    { key: "custom.a1b2c3d4-e5f6-7890-abcd-ef1234567890", label: "担当保育者の所感",   order: 10, enabled: true },
+    { key: "custom.b2c3d4e5-f6a7-8901-bcde-f12345678901", label: "発達支援メモ",       order: 20, enabled: true },
+    { key: "custom.c3d4e5f6-a7b8-9012-cdef-123456789012", label: "保護者への連絡事項", order: 30, enabled: true },
+  ],
+  many: [
+    { key: "custom.a1b2c3d4-e5f6-7890-abcd-ef1234567890", label: "担当保育者の所感",   order: 10, enabled: true },
+    { key: "custom.b2c3d4e5-f6a7-8901-bcde-f12345678901", label: "発達支援メモ",       order: 20, enabled: true },
+    { key: "custom.c3d4e5f6-a7b8-9012-cdef-123456789012", label: "保護者への連絡事項", order: 30, enabled: true },
+    { key: "custom.d4e5f6a7-b8c9-0123-defa-234567890123", label: "個別配慮事項",       order: 40, enabled: true },
+    { key: "custom.e5f6a7b8-c9d0-1234-efab-345678901234", label: "集団参加の様子",     order: 50, enabled: true },
+    { key: "custom.f6a7b8c9-d0e1-2345-fabc-456789012345", label: "言語・コミュニケーション", order: 60, enabled: true },
+    { key: "custom.a7b8c9d0-e1f2-3456-abcd-567890123456", label: "身辺自立の状況",     order: 70, enabled: true },
+    { key: "custom.b8c9d0e1-f2a3-4567-bcde-678901234567", label: "次回の目標",         order: 80, enabled: true },
+  ],
+};
+
+let customFields = JSON.parse(JSON.stringify(PRESETS.initial));
+let history = [];
+let deleteTarget = null;
+let showKeys = false;
+let dragSrc = null;
+
+// ====== 初期化 ======
+function init() {
+  renderAll();
+}
+
+function renderAll() {
+  renderFieldList();
+  renderSystemList();
+  renderRenameList();
+  renderHistory();
+}
+
+// ====== 一覧レンダリング ======
+function renderFieldList() {
+  const ul = document.getElementById('field-list');
+  const empty = document.getElementById('empty-state');
+  const banner = document.getElementById('banner-empty');
+  ul.innerHTML = '';
+  if (customFields.length === 0) {
+    empty.style.display = '';
+    banner.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  banner.style.display = 'none';
+  customFields.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.className = 'field-item';
+    li.draggable = true;
+    li.dataset.index = i;
+    li.innerHTML = `
+      <span class="drag-handle" title="ドラッグして並び替え">⠿</span>
+      <span class="field-label">${esc(f.label)}</span>
+      <span class="field-key${showKeys ? '' : ' hidden'}">${esc(f.key)}</span>
+      <span class="badge-custom">独自</span>
+      <button class="btn-sm btn-order" onclick="moveField(${i},-1)" ${i===0?'disabled':''}>↑</button>
+      <button class="btn-sm btn-order" onclick="moveField(${i},1)" ${i===customFields.length-1?'disabled':''}>↓</button>
+      <button class="btn-sm danger" onclick="openDeleteDialog(${i})">削除</button>
+    `;
+    // drag events
+    li.addEventListener('dragstart', (e) => { dragSrc = i; li.classList.add('dragging'); });
+    li.addEventListener('dragend', () => li.classList.remove('dragging'));
+    li.addEventListener('dragover', (e) => { e.preventDefault(); });
+    li.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (dragSrc !== null && dragSrc !== i) {
+        const moved = customFields.splice(dragSrc, 1)[0];
+        customFields.splice(i, 0, moved);
+        reorder();
+        addHistory('reordered', `「${moved.label}」を順序変更`);
+        renderAll();
+        showToast('順序を変更しました');
+      }
+      dragSrc = null;
+    });
+    ul.appendChild(li);
+  });
+}
+
+function renderSystemList() {
+  const ul = document.getElementById('system-field-list');
+  ul.innerHTML = '';
+  SYSTEM_FIELDS.forEach(f => {
+    const li = document.createElement('li');
+    li.className = 'field-item system';
+    li.innerHTML = `
+      <span class="drag-handle" style="color:#e2e8f0;cursor:default">⠿</span>
+      <span class="field-label">${esc(f.label)}</span>
+      <span class="field-key${showKeys ? '' : ' hidden'}">${esc(f.key)}</span>
+      <span class="badge-system">システム</span>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+function renderRenameList() {
+  const ul = document.getElementById('rename-list');
+  const empty = document.getElementById('rename-empty');
+  ul.innerHTML = '';
+  if (customFields.length === 0) {
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  customFields.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.className = 'field-item';
+    li.id = `rename-item-${i}`;
+    li.innerHTML = `
+      <div class="field-label" id="view-${i}">
+        <span>${esc(f.label)}</span>
+        <span class="field-key${showKeys ? '' : ' hidden'}" style="margin-left:8px">${esc(f.key)}</span>
+      </div>
+      <div class="edit-mode" id="edit-${i}" style="display:none">
+        <input type="text" id="edit-input-${i}" value="${esc(f.label)}" maxlength="50"
+          onkeydown="if(event.key==='Enter')saveRename(${i}); if(event.key==='Escape')cancelRename(${i})">
+        <button class="btn-sm btn-primary" style="padding:4px 10px" onclick="saveRename(${i})">保存</button>
+        <button class="btn-sm" onclick="cancelRename(${i})">キャンセル</button>
+      </div>
+      <button class="btn-sm" id="edit-btn-${i}" onclick="startRename(${i})">名称変更</button>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+function renderHistory() {
+  const ul = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  ul.innerHTML = '';
+  if (history.length === 0) {
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  [...history].reverse().forEach(h => {
+    const li = document.createElement('li');
+    li.className = `history-item ${h.type}`;
+    li.innerHTML = `
+      <strong>${h.label}</strong>
+      <span class="ts">${h.ts}</span>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+// ====== 操作 ======
+function moveField(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= customFields.length) return;
+  [customFields[i], customFields[j]] = [customFields[j], customFields[i]];
+  reorder();
+  addHistory('reordered', `「${customFields[j].label}」と「${customFields[i].label}」の順序を変更`);
+  renderAll();
+  showToast('順序を変更しました');
+}
+
+function reorder() {
+  customFields.forEach((f, i) => { f.order = (i + 1) * 10; });
+}
+
+function updateAddBtn() {
+  const v = document.getElementById('new-label').value.trim();
+  document.getElementById('btn-add').disabled = v.length === 0;
+}
+
+function addField() {
+  const label = document.getElementById('new-label').value.trim();
+  if (!label) return;
+  const key = `custom.${uuidv4()}`;
+  customFields.push({ key, label, order: (customFields.length + 1) * 10, enabled: true });
+  addHistory('added', `「${label}」を追加（キー: ${key.substring(0,16)}…）`);
+  document.getElementById('new-label').value = '';
+  document.getElementById('btn-add').disabled = true;
+  renderAll();
+  showToast(`「${label}」を追加しました`);
+  switchTab('list');
+}
+
+function startRename(i) {
+  document.getElementById(`view-${i}`).style.display = 'none';
+  document.getElementById(`edit-${i}`).style.display = '';
+  document.getElementById(`edit-btn-${i}`).style.display = 'none';
+  document.getElementById(`edit-input-${i}`).focus();
+  document.getElementById(`edit-input-${i}`).select();
+}
+
+function saveRename(i) {
+  const input = document.getElementById(`edit-input-${i}`);
+  const newLabel = input.value.trim();
+  if (!newLabel) return;
+  const old = customFields[i].label;
+  if (old !== newLabel) {
+    customFields[i].label = newLabel;
+    addHistory('renamed', `「${old}」→「${newLabel}」に名称変更（キー不変）`);
+    showToast(`名称を「${newLabel}」に変更しました`);
+  }
+  renderAll();
+}
+
+function cancelRename(i) {
+  renderAll();
+}
+
+function openDeleteDialog(i) {
+  deleteTarget = i;
+  document.getElementById('delete-label-name').textContent = customFields[i].label;
+  document.getElementById('delete-key-display').textContent = customFields[i].key;
+  document.getElementById('delete-dialog').classList.add('open');
+}
+
+function closeDeleteDialog() {
+  deleteTarget = null;
+  document.getElementById('delete-dialog').classList.remove('open');
+}
+
+function confirmDelete() {
+  if (deleteTarget === null) return;
+  const f = customFields[deleteTarget];
+  addHistory('deleted', `「${f.label}」を削除（キー: ${f.key.substring(0,16)}…）`);
+  customFields.splice(deleteTarget, 1);
+  reorder();
+  closeDeleteDialog();
+  renderAll();
+  showToast(`「${f.label}」を削除しました`);
+}
+
+// ====== タブ切り替え ======
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const panels = ['list', 'add', 'history'];
+    t.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+}
+
+// ====== プリセット ======
+function setPreset(key) {
+  customFields = JSON.parse(JSON.stringify(PRESETS[key]));
+  history = [];
+  document.querySelectorAll('#dev-bar button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderAll();
+  showToast(`プリセット「${key}」を適用しました`);
+}
+
+// ====== キー表示トグル ======
+function toggleKeys() {
+  showKeys = document.getElementById('showKeys').checked;
+  renderAll();
+}
+
+// ====== ユーティリティ ======
+function addHistory(type, label) {
+  const now = new Date();
+  const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} `
+           + `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  history.push({ type, label, ts });
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+
+// ====== 起動 ======
+init();
+</script>
+</body>
+</html>

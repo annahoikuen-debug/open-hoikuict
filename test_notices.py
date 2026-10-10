@@ -350,6 +350,7 @@ class NoticeRouterTests(unittest.TestCase):
                 .where(NoticeWorkflowAction.notice_id == notice_id)
                 .order_by(NoticeWorkflowAction.id)
             ).all()
+            published_lock_version = notice.lock_version
         self.assertEqual(notice.status, NoticeStatus.published)
         self.assertEqual([action.action for action in actions], ["submitted", "approved"])
         self.assertEqual(actions[0].actor_name, "テスト職員")
@@ -364,7 +365,7 @@ class NoticeRouterTests(unittest.TestCase):
 
         unpublished = self.client.post(
             f"/notices/{notice_id}/unpublish",
-            data={"reason": "内容を更新するため"},
+            data={"reason": "内容を更新するため", "lock_version": published_lock_version},
             follow_redirects=False,
         )
         self.assertEqual(unpublished.status_code, 303)

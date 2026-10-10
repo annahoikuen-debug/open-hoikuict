@@ -7,9 +7,10 @@ from threading import Lock
 from typing import Annotated, Mapping, Protocol
 
 from fastapi import Depends
-from sqlalchemy import func, update as sql_update
+from sqlalchemy import func
 from sqlmodel import Session, select
 
+from common.optimistic_lock import ConcurrentUpdateError, claim_lock_orm
 from database import get_session
 from time_utils import utc_now
 
@@ -36,9 +37,9 @@ from .services.review_notifications import (
     resolve_review_notifications,
 )
 
-
-class ConcurrentUpdateError(RuntimeError):
-    pass
+# Re-export for backward compatibility with plan_docs.routers that import
+# ConcurrentUpdateError from here.
+__all__ = ["ConcurrentUpdateError", "InvalidStatusTransitionError", "ExecutionChangeError"]
 
 
 class InvalidStatusTransitionError(RuntimeError):
@@ -572,19 +573,14 @@ class SqlModelDocumentRepository:
         return head
 
     def _claim_lock(self, document_id: int, expected_lock_version: int) -> None:
-        now = utc_now()
-        result = self.session.execute(
-            sql_update(PlanDocumentHeadRow)
-            .where(
-                PlanDocumentHeadRow.document_id == document_id,
-                PlanDocumentHeadRow.lock_version == expected_lock_version,
-            )
-            .values(lock_version=expected_lock_version + 1, updated_at=now)
+        """Delegates to :func:`common.optimistic_lock.claim_lock_orm`."""
+        claim_lock_orm(
+            self.session,
+            model_class=PlanDocumentHeadRow,
+            where_col="document_id",
+            id_val=document_id,
+            expected_version=expected_lock_version,
         )
-        if result.rowcount != 1:
-            self.session.rollback()
-            raise ConcurrentUpdateError("他の職員が先に更新しました。画面を再読み込みしてください")
-        self.session.expire_all()
 
     def _create_revision(
         self,
