@@ -47,7 +47,7 @@
     <p class="mt-1 text-sm text-indigo-700">本文・添付・配信日時を確認し、問題がなければ管理者へ承認申請してください。</p>
     <div class="mt-3 flex flex-wrap gap-2">
       <a href="/notices/{{ notice.id }}/edit" class="rounded border border-indigo-300 bg-white px-4 py-2 text-sm font-medium text-indigo-700">下書きを編集</a>
-      <form method="post" action="/notices/{{ notice.id }}/submit">
+      <form method="post" action="/notices/{{ notice.id }}/submit" class="needs-lock-version">
         <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">承認申請する</button>
       </form>
     </div>
@@ -55,7 +55,7 @@
   {% elif notice.status.value == 'pending_approval' %}
     {% if current_user.is_admin %}
     <section class="grid gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 lg:grid-cols-2">
-      <form method="post" action="/notices/{{ notice.id }}/approve" class="space-y-3">
+      <form method="post" action="/notices/{{ notice.id }}/approve" class="space-y-3 needs-lock-version">
         <input type="hidden" name="lock_version" value="{{ notice.lock_version }}">
         <div>
           <h2 class="font-semibold text-emerald-900">承認して公開</h2>
@@ -64,7 +64,7 @@
         <input name="comment" type="text" placeholder="承認コメント（任意）" class="w-full rounded border border-emerald-300 bg-white px-3 py-2 text-sm">
         <button type="submit" class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">承認して公開</button>
       </form>
-      <form method="post" action="/notices/{{ notice.id }}/reject" class="space-y-3">
+      <form method="post" action="/notices/{{ notice.id }}/reject" class="space-y-3 needs-lock-version">
         <input type="hidden" name="lock_version" value="{{ notice.lock_version }}">
         <div>
           <h2 class="font-semibold text-rose-900">下書きへ差戻し</h2>
@@ -87,7 +87,7 @@
   <section class="rounded-xl border border-gray-200 bg-gray-50 p-4">
     <h2 class="font-semibold text-gray-800">公開内容を修正する場合</h2>
     <p class="mt-1 text-sm text-gray-600">公開を停止して下書きに戻した後、修正・再申請してください。</p>
-    <form method="post" action="/notices/{{ notice.id }}/unpublish" class="mt-3 flex flex-wrap gap-2">
+    <form method="post" action="/notices/{{ notice.id }}/unpublish" class="mt-3 flex flex-wrap gap-2 needs-lock-version">
       <input type="hidden" name="lock_version" value="{{ notice.lock_version }}">
       <input name="reason" type="text" placeholder="公開停止理由（任意）" class="min-w-64 flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm">
       <button type="submit" class="rounded border border-gray-400 bg-white px-4 py-2 text-sm font-medium text-gray-700">公開を停止して下書きへ</button>
@@ -149,4 +149,66 @@
     {% endif %}
   </section>
 </div>
+{% endblock %}
+
+{% block body_end %}
+<script>
+  (() => {
+    const forms = document.querySelectorAll('form.needs-lock-version');
+    forms.forEach(form => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const action = form.action;
+        const submitter = form.querySelector('[type="submit"]');
+        if (submitter) {
+          formData.append(submitter.name, submitter.value);
+        }
+
+        try {
+          const response = await fetch(action, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            redirect: 'manual'
+          });
+
+          if (response.status === 409) {
+            // Concurrent update - show retry dialog
+            const confirmed = confirm(
+              '他の職員が先に更新しました。\n最新の状態を読み込んで再試行しますか？'
+            );
+            if (confirmed) {
+              window.location.reload();
+            }
+            return;
+          }
+
+          if (response.redirected) {
+            window.location.href = response.url;
+            return;
+          }
+
+          // Other errors - fall back to normal form submission
+          const hiddenForm = document.createElement('form');
+          hiddenForm.method = 'POST';
+          hiddenForm.action = action;
+          for (const [key, value] of formData.entries()) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            hiddenForm.appendChild(input);
+          }
+          document.body.appendChild(hiddenForm);
+          hiddenForm.submit();
+        } catch (err) {
+          console.error('Form submission error:', err);
+          // Fallback to normal submission
+          form.submit();
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
