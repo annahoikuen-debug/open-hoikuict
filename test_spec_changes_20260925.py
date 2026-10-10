@@ -89,7 +89,7 @@ def test_restricted_recipient_cannot_edit_or_reveal_to_other_staff(records):
 def test_private_history_does_not_become_shared_with_current_content(records):
     author = records.current_user
     log = create(records, child_state="非公開の変更前")
-    data = {"observed_on": date.today().isoformat(), "child_state": "公開する変更後", "visibility": "shared", "correction_reason": "個人の訂正理由"}
+    data = {"observed_on": date.today().isoformat(), "child_state": "公開する変更後", "visibility": "shared", "correction_reason": "個人の訂正理由", "expected_updated_at": log.updated_at.isoformat()}
     response = records.client.post(f"/children/{records.child_id}/records/{log.id}/correct", data=data, follow_redirects=False)
     assert response.status_code == 303
     with Session(records.engine) as session:

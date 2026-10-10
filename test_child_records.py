@@ -295,7 +295,9 @@ class ChildRecordFeatureTests(unittest.TestCase):
         )
         self.assertEqual(created_log.status_code, 303)
 
-        form = self.client.get(f"/children/{self.child_id}/progress-records/new")
+        form = self.client.get(
+            f"/children/{self.child_id}/progress-records/new?period_start=2026-07-01&period_end=2026-09-30"
+        )
         self.assertEqual(form.status_code, 200)
         self.assertIn("児童票を入力", form.text)
         self.assertIn("水を別の容器へ移し", form.text)
@@ -340,7 +342,11 @@ class ChildRecordFeatureTests(unittest.TestCase):
 
         record_list = self.client.get(f"/children/{self.child_id}/progress-records")
         self.assertEqual(record_list.status_code, 200)
-        self.assertIn("現在の児童票を開く", record_list.text)
+        # The created record belongs to a fixed past cycle, so assert the
+        # created document is listed in the history instead of relying on
+        # the date-dependent "current cycle" link.
+        self.assertIn("/plans/documents/", record_list.text)
+        self.assertIn("2026-07-01〜2026-09-30", record_list.text)
         dashboard = self.client.get("/child-records/progress")
         self.assertEqual(dashboard.status_code, 200)
         self.assertIn("児童票作成状況", dashboard.text)

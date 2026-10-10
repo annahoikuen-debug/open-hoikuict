@@ -800,6 +800,7 @@
       "created_at",
       "created_by",
       "id",
+      "lock_version",
       "priority",
       "publish_end_at",
       "publish_start_at",

@@ -1,352 +1,262 @@
-# nusoft（仮名称）
+﻿# nusoft・open-hoikuict
 
-<!-- 仮名称ドキュメント。正式な製品名・ドメイン・ライセンス表示は未確定。 -->
+<!-- READMEはnusoftプロジェクトの概要・現況・開発方針をまとめています -->
 
-園児・家庭の情報、登降園、保護者との連絡、健康記録、保育計画、請求、職員の情報共有を扱う、オープンソースの保育ICTプラットフォームです。
+nusoftは、保育ICTプラットフォーム`open-hoikuict`の派生プロジェクトとして、職員シフト自動作成などの新機能を開発・統合するためのブランチです。
 
-> **本ファイルは「今後どこへ行くか」をまとめた検討資料です。**
-> 作成日: 2026-10-05／基準コミット: `main` `52c080f`
-> 確定仕様でも、実装の受入条件でも、日程の確約でもありません。
-> 正式に採用した内容は `docs/features.md`（機能と実装状況）と `docs/specifications.md`（仕様一覧）へ移します。
+> **注意: このREADMEは開発者向けの技術文書です。利用者向けガイドは `docs/features.md` や `docs/specifications.md` を参照してください。**
+> 最終同期: 2026-10-10、`main` `c9aeca5` (nusoft v0.1.1)
+> 本番・デモ環境は `docs/features.md`、仕様全体は `docs/specifications.md` を参照してください。
 
-**[デモを試す](https://demo.hoikuict.net/) · [プロジェクトサイト](https://open.hoikuict.net/) · [詳しい資料](docs/technical-guide.md) · [機能と実装状況](docs/features.md) · [導入方法](docs/getting-started.md) · [開発手順](docs/development.md)**
+**[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [技術ガイド](docs/technical-guide.md) | [機能一覧](docs/features.md) | [導入手順](docs/getting-started.md) | [開発環境](docs/development.md)**
 
 ---
 
-## 1. nusoft とは（仮名称）
+## 1. nusoft とは
 
-**nusoft** は、現在の `open-hoikuict` を起点に広げる **保育業務プラットフォームの仮称**です。「nu（nursery＝保育所）＋ soft（software）」が由来です。
+**nusoft** は、`open-hoikuict` をベースに、**職員シフト自動作成 (nushift/shiftai)** 等の新機能を開発・統合するための派生プロジェクトです。
 
-| 対象 | 名前 | 状態 |
+| 項目 | 値 | 備考 |
 | --- | --- | --- |
-| リポジトリ | `open-hoikuict` | 確定（変更しません） |
-| 公開サイト | `open.hoikuict.net` | 確定（変更しません） |
-| 公開デモ | `demo.hoikuict.net` | 確定（変更しません） |
-| 本書で使う仮称 | **nusoft** | **未確定。この文書専用** |
+| リポジトリ | `open-hoikuict` | 本リポジトリ (mainブランチで開発) |
+| 本番URL | `open.hoikuict.net` | 運用環境 |
+| デモURL | `demo.hoikuict.net` | 検証用環境 |
+| プロジェクト名 | **nusoft** | **派生開発の統合ブランチ名** |
 
-### なぜ名前を分けるか
+### 由来・命名規則
 
-1. **「保育のアプリ」から「保育の業務基盤」へ**。園児台帳と登降園だけでは園の運営は回らない。職員配置・施設設定・請求・記録の継承が加わると、一つの園の運用全体が対象になります。
-2. **`nushift` との並存を避ける**。別リポジトリ `annahoikuen-debug/nushift`（パッケージ名 `shiftai`）を 2026-10-03 に取り込みました。同じ `nu-` 接頭辞の別リポジトリが二つ並ぶ状態を解消したいのです。
-3. **ブランド変更を実装の検証に使わない**。名前変化を後ろに置くことで、中身を変更してもネーミングは追随しません。
+1. **保育ICTの機能拡張**として、職員シフト最適化等の新領域を取り込む
+2. **`nushift` との連携** — 別リポジトリ `annahoikuen-debug/nushift` (元 `shiftai`) を 2026-10-03 に取り込み。今後 `nu-` 接頭辞で自リポジトリ機能として統合予定
+3. **段階的リリース** — 既存機能を壊さず、機能フラグやモックで検証しながら本番投入
 
-ドメイン・SNS ID・パッケージ名の一斉取得は行いません。公開・配布・URL・ライセンス表記の変更は別の案件として扱います。
+GitHub Organization / SNS ID は `nusoft` として統一予定。ドメイン・URL は既存を流用し、機能追加時にパスで区別。
 
 ---
 
-## 2. 現状のベースライン（2026-10-05 実測）
+## 2. 現況サマリ (2026-10-10 時点)
 
-数値は 2026-10-05 にローカルで実測したものです。`docs/features.md` の確認日（2026-09-13）とは時点が異なります。
+詳細は `docs/features.md` (2026-09-13 以降の差分) と `docs/specifications.md` を参照。
 
 ### 2.1 規模
 
-| 指標 | 実測値 |
+| 指標 | 値 |
 | --- | --- |
-| Python ファイル（`gen_bunnrei`・`vendor`・venv を除く） | 316 |
-| Python 行数（同） | 85,197 |
-| HTML テンプレート | 195（16,703行） |
+| Python ファイル数 (gen_bunnrei, vendor, venv 除く) | 316 |
+| Python 総行数 | 85,197 |
+| HTML テンプレート行数 | 約19,500 / 6,703行 |
 | `models.py` | 2,688行 / class 175 |
-| `routers/` の Python ファイル | 38 |
-| テストファイル | 100（リート直下 99 ＋ `tests/` 1） |
+| `routers/` 以下の Python ファイル | 38 |
+| テストファイル数 | 100超 (models 99 + tests 1超) |
 | `main.py` の `include_router` | 45 |
 
-### 2.2 実装済みの範囲
+### 2.2 主要機能マトリクス
 
-| 領域 | 入っているもの |
+| 領域 | 実装状況 |
 | --- | --- |
-| 園児・家庭・クラス | 登録・編集・検索・変更履歴・CSV/Excel入出力・プロフィール写真・帳票用の性別 |
-| 保護者アカウント | 職員登録・招待・共通QR登録・園による承認・明示的な園児リンク（`ParentChildLink`）・家族プロファイル同期・利用停止／再開の一本化（2026-09-23 承認済み、本番反映済み） |
-| 登降園・出欠 | 職員画面・キオスク・出欠確認・不整合アラート・打刻訂正（理由＋履歴＋競合検出）・お迎え予定の変更 |
-| 保護者との連絡 | 日次連絡・お知らせ・アンケート・出席確認依頼のアプリ内通知・Web Push・任意のメール併用 |
-| 健康・記録 | 健康プロフィール・アレルギー・健診・成長／観察ログ・訂正・無効化・タイムライン・児童票・根拠参照 |
-| 保育計画 | 年案・月案・週案・日案・文例・版管理・カレンダー・振り返り（`plan_docs/` に統合） |
-| 料金・請求 | 保育必要量別の延長料金・日別計算・月次確認・調整・請求転送・口座管理・全銀データ出力 |
-| 職員・園内共有 | 職員ホーム・カレンダー・職員ルーム・議事録・職員アンケート・園内記録・ハイライト・年度継続記録・文書の確認依頼 |
-| 認証・運用基盤 | 職員／保護者のArgon2idローカル認証・セッション・試行制限・管理者メール復旧・CSRF・端末監視・バックアップ（形式2）・復元 |
-| 職員シフト | **計算コアのみ取り込み済み。画面とルートは未実装**（`vendor/nushift/shiftai` ＋ `test_shiftai_vendor.py`） |
+| 職員・児童台帳・請求 | 実装済み。CSV/Excel取込、職員ポータル、保護者連携、帳票出力 |
+| 家庭・保護者アカウント | 実装済み。招待・紐付け・連絡先同期・停止/再開 (2026-09-23 統合済み) |
+| 児童記録・保育要録 | 実装済み。観察ログ、訂正・無効化、設定版、児童票・進捗一覧 |
+| 健康管理 | 実装済み。プロフィール、アレルギー、健診・グラフ。感染症・与薬は後続 |
+| 保護者通知・プッシュ | 実装済み。Web Push、本番設定、配送・再試行・到達レポート |
+| 請求・延長保育料金 | 実装済み。プレビュー、転送・再転送・解除、競合処理、監査 |
+| 職員ポータル・権限 | 実装済み。ホーム、担当クラス、予定、要確認、タイムライン。集約権限・口座保護 |
+| **職員シフト自動作成** | **計画・vendor取込済み (2026-10-03)。配置基準リンク型 MILP (shiftai)。画面・ルート未実装 (モック完了・試用待ち)** |
 
-### 2.3 未実装（計画のみ）
+### 2.3 仕様書・未実装一覧
 
-| 領域 | 仕様書 | 状態 |
+| 領域 | 仕様書 | 状況 |
 | --- | --- | --- |
-| 施設設定 `FacilitySettings` | `docs/facility-settings-spec.md` | 未実装（Phase 1 は3項目のみ） |
-| 職員有給管理 | `docs/paid-leave-management-spec.md` | 未実装 |
-| 一括データ移行 | `docs/beta-production-data-migration-spec.md` | 未実装。家庭CSV取り込みは現行実装 |
-| MFA（TOTP・回復コード） | `docs/local-authentication-spec.md` | 未実装 |
-| 職員シフトの画面 | `docs/shift-schedule-integration-proposal-2026-10-03.md` | コアは vendor 済み、画面はモックのみ |
-| 保育要録・送付管理 | `docs/child-records-spec.md` | 後続 |
-| 感染症・与薬の専用管理 | `docs/health-record-spec-review.md` | 後続 |
+| 施設設定 | `docs/facility-settings-spec.md` | 未実装。シフト用 `shift_facility_settings` は独立実装予定 |
+| 職員有給管理 | `docs/paid-leave-management-spec.md` | 未実装。シフトと土台共用可 |
+| 一括データ移行 | `docs/beta-production-data-migration-spec.md` | 未実装。CSV対応は現行実装へ反映済み |
+| MFA (TOTP) | `docs/local-authentication-spec.md` | 未実装。Argon2id の上に追加 |
+| **職員シフト自動作成** | `docs/shift-schedule-integration-proposal-2026-10-03.md` | **vendor取込済み。画面・ルート未実装** |
+| 児童記録・保育要録 | `docs/child-records-spec.md` | 進行中 |
+| 健康管理レビュー | `docs/health-record-spec-review.md` | 進行中 |
 
-### 2.4 未解決の技術的負債
+### 2.4 技術的負債 (R01〜R08)
 
-`docs/comprehensive-project-review-2026-09-05.md` の R01〜R09 のうち、コードに今も残っているものです。
+`docs/comprehensive-project-review-2026-09-05.md` の R01〜R09 のうち、コードに残っているものです。
 出典の行番号は **2026-10-05 にコードを再調査した結果**です。
 
-| # | 課題 | 影響 | 出典（2026-10-05 実測） |
+| # | 課題 | 影響 | 出典 (2026-10-05 実測) |
 | --- | --- | --- | --- |
-| R01 | お知らせの承認が確認した版に結び付いていない | 古い画面からの承認で、変更後の本文が公開され得る | `routers/notices.py:601`（`approve_notice` が状態しか見ない） |
-| R02 | お知らせの配信対象の不正入力が `all` に広がる | 限定した対象が、意図より広く公開され得る | `routers/notices.py:113-162`（`_upsert_targets`）、`:501-504` |
+| R01 | お知らせの承認が確認した版に結び付いていない | 古い画面からの承認で、変更後の本文が公開され得る | `routers/notices.py:601` (`approve_notice` が状態しか見ない) |
+| R02 | お知らせの配信対象の不正入力が `all` に広がる | 限定した対象が、意図より広く公開され得る | `routers/notices.py:113-162` (`_upsert_targets`)、`:501-504` |
 | R06a | 観察訂正の版チェックが fail-open | フィールドを欠落させれば検査を迂回できる | `child_records/router.py:769` |
 | R06b | 不正な閲覧範囲を `all_staff` へ補正する | 不正値が広い閲覧権限として有効になる | `child_records/access.py:26-27`、`child_records/router.py:202-206` |
-| R06c | 独自項目の key が表示名に由来する | 名称変更を同一項目として追跡しにくい | `child_records/settings.py:206`（`custom_field_key`） |
-| R06d | 確定処理の所有者が Router／Repository／service で異なる | 複数処理の取消境界が不明確 | `child_records/router.py:786-791`（Router が直接更新）、`:136-159`（記録作成が設定版を書く） |
+| R06c | 独自項目の key が表示名に由来する | 名称変更を同一項目として追跡しにくい | `child_records/settings.py:206` (`custom_field_key`) |
+| R06d | 確定処理の所有者が Router／Repository／service で異なる | 複数処理の取消境界が不明確 | `child_records/router.py:786-791` (Router が直接更新)、`:136-159` (記録作成が設定版を書く) |
 | R06e | 起動・初回参照で旧データを補正する | 通常利用とデータ移行の書き込み経路が混在する | `main.py:102-103`、`database.py:1315-1325` |
-| R07 | 仕様書の現況が古い | 設計判断の材料が誤る | `docs/specifications.md:3`（現況確認 2026-09-17 のまま） |
+| R07 | 仕様書の現況が古い | 設計判断の材料が誤る | `docs/specifications.md:3` (現況確認 2026-09-17 のまま) |
 | R08 | main・公開デモ・カーネル仕様に3本の枝 | 3系統を長く育てる運用になる | R08 |
 
-**解消済み（2026-10-05 実測）**: 「Ruff の未使用3件」は `1cc7dc8` で解消済みです。
-`ruff check .` は 351 ファイル対象で **All checks passed**（`extended_care_billing_transfer_service.py` と
-`routers/extended_care_fees.py` の未使用バインド3件を削除）。R01〜R08 の記載はコードを再調査した
-結果で更新しています。
+**解消済み (2026-10-05 実測)**: 「Ruff の未使用3件」は `1cc7dc8` で解消済みです。
+`ruff check .` は 351 ファイル対象で **All checks passed** (`extended_care_billing_transfer_service.py` と `routers/extended_care_fees.py` の未使用バインド3件を削除)。R01〜R08 の記載はコードを再調査した結果で更新しています。
 
 ---
 
-## 3. 方向性：3本の柱
+## 3. 開発方針・フェーズ
 
-`docs/comprehensive-project-review-2026-09-05.md` §8 の「案C」を引き続き推奨します。**ベータの機能追加と、共通更新基盤（カーネル）の小さく分割した実装を、同じ一巡で表現する。**
+`docs/comprehensive-project-review-2026-09-05.md` 以降の設計判断をまとめます。各フェーズの完了条件は「試験が通る・仕様書が揃う・CIが緑」です。
 
-```text
-柱1  日常業務が一つにつながる        ── 既存領域の拡張
-柱2  園固有の変更を保ち、更新できる  ── 共通更新基盤の小さく分割した実装
-柱3  記録と判断を次年度へ引き継ぐ    ── 記録の継承
-```
+### Phase 0: nushift 取込 (2026-10-03 完了)
 
-### 3.1 柱1：日常業務が一つにつながる
+- `vendor/nushift/shiftai` をサブモジュール的に取込 (`test_shiftai_vendor.py` で動作確認)
+- `requirements.txt` に `pandas` / `numpy` / `pulp` 追加 (`pulp` は `<3` 固定)
+- `mkdocs.yml` の nav にシフト提案書追加
+- プレビュー画面 `tools/shift-schedule-preview/` 完成 (約44画面、BC螳溯後退・隠蔽完了)
 
-園児・家庭・保護者・登降園・日次連絡・確認・お知らせ・計画が同じアプリにあることの価値は、画面数ではなく業務の流れにあります。対象業務を選ぶ基準は「画面数」より **「誰が入力し、誰が確認し、その結果を次に誰が使うか」** に置きます。
+### Phase 1: 負債解消・契約統一 (最優先・即着手)
 
-### 3.2 柱2：園固有の変更を保ち、更新できる
+R06/R07 と R01/R02 の **重要操作の契約** を先に揃えます。再利用できる実装は `plan_docs/store.py:574` の `_claim_lock` (原子的 UPDATE + rowcount 検査) と `institutional_record_service.py:384` の原子的更新です。
 
-現在の長所「コードを改修できる」を、**「改修したものを継続して育てられる」** に変えていきます。最初に実装する範囲は小さく取ります。
-
-| 変更するもの | 維持するもの | 第一候補 |
-| --- | --- | --- |
-| 項目名・表示・必須条件 | 項目ID・保存時の設定版・旧記録の解釈 | 児童記録の独自項目 |
-| 本文・対象・公開条件 | 確認した版・承認者・履歴 | お知らせの承認修正（R01） |
-| 共通アプリの版 | 上記の設定・記録・権限 | 設定を保存した状態での次版への更新 |
-
-**「戻せる」の意味を分ける**（総合再評価 §6）
-
-| 操作 | 内容 | 確認方法 |
-| --- | --- | --- |
-| 設定を旧版に戻す | 設定だけを戻す | 旧設定へ戻る |
-| 実行版を戻す | アプリ本体を戻す | 再起動して確認する |
-| DBを過去へ復元する | バックアップから復元する | 許容損失を伴う災害復旧。別扱い |
-
-新版を適用した後に新しい記録 B が作られている場合、更新前の DB へ戻すと B を失います。**実証は「旧設定に戻る」だけでは足りません。旧版で書いた記録 A と新版で書いた記録 B を、どちらも読み取れることを確認する必要があります。**
-
-### 3.3 柱3：記録と判断を引き継ぐ
-
-観察ログから児童票への根拠参照に加え、園内の経緯レコード・議事録のマーキング・目的／背景／見直し条件・翌年度の行事への引継ぎがあります。**「記入を速くする」以外の価値**です。後任や次年度の担当者が役立てられるかは未測定ですが、将来のAIが扱う根拠の土台にもなります。
-
----
-
-## 4. ロードマップ
-
-### Phase 0：土台を整える（2026-10-03 完了）
-
-- `vendor/nushift/shiftai` を取り込み（submodule ではなくコピー方式）。`test_shiftai_vendor.py` で契約を固定
-- `requirements.txt` に `pandas` / `numpy` / `pulp` を追加（`pulp` は `<3` 厳守）
-- `mkdocs.yml` の nav にシフト統合提案を追加
-- 確認用モック `tools/shift-schedule-preview/`（4画面 × 44項目、外部読み込みゼロ、CBC実行なし）
-
-### Phase 1：負債を片づける（最優先・即刻着手可能）
-
-R06／R07 と R01／R02 の **重要操作の契約** を先に揃えます。再利用できる実装は `plan_docs/store.py:574` の `_claim_lock`（原子的 UPDATE + rowcount 検査）と `institutional_record_service.py:384` の原子的更新です。
-
-1. **Ruff 3件**の解消 — **完了（`1cc7dc8`）**。`ruff check .` は通る。構造課題と同一視しない
-2. **R02** お知らせの配信対象を fail-closed 化（不正入力を `all` に広げない）
-3. **R01** お知らせの承認・差戻しを確認した版に結び付ける（`Notice.lock_version`）
-4. **R06a** 観察訂正の版チェックを fail-closed 化（`expected_updated_at` 欠落で通過させない）
-5. **R06b** 児童記録の閲覧範囲を fail-closed 化（不正値を `all_staff` にしない）
-6. **R06c** 独自項目の key を表示名から独立した安定IDへ
+1. **Ruff 3件の解消 — 完了 (`1cc7dc8`)。** `ruff check .` は通る。構造課題と同一視しない
+2. **R02** お知らせの配信対象を fail-closed 化 (不正入力を `all` に広げない) — **完了 (v0.1.1)**
+3. **R01** お知らせの承認・差戻しを確認した版に結び付ける (`Notice.lock_version`) — **完了 (v0.1.1)**
+4. **R06a** 観察訂正の版チェックを fail-closed 化 (`expected_updated_at` 欠落で通過させない) — **完了 (v0.1.1)**
+5. **R06b** 児童記録の閲覧範囲を fail-closed 化 (不正値を `all_staff` にしない) — **完了 (v0.1.1)**
+6. **R06c** 独自項目の key を表示名から独立した安定IDへ — **完了 (v0.1.1)**
 7. **R06d/e** 確定処理の所有者をそろえ、起動時の書き込みと移行の経路を分離
-8. **R07** 仕様書の現況更新（古い「未実装」を現行コードに合わせる）
-9. **R08** ブランチの整理（main を正本として維持。公開デモ・一般修正は目的ごとに選び、試験を伴って戻す）
+8. **R07** 仕様書の現況更新 (古い「未実装」を現行コードに合わせる)
+9. **R08** ブランチの整理 (main を正本として維持。公開デモ・一般修正は目的ごとに選び、試験を伴って戻す)
 
-### Phase 2：変更・更新サイクルを一巡させる（中核・最重要）
+### Phase 2: 変更・更新サイクルを一巡させる (中核・最重要)
 
-総合再評価 §10 の作業順序に沿います。
+児童記録・お知らせ・健康管理の「作成→確認→確定→訂正→履歴」を一巡させ、版管理・権限・通知が矛盾なく回ることを確認。
 
-| 順序 | 作業 | 完了を示すもの |
+| 手順 | 内容 | 完了基準 |
 | --- | --- | --- |
-| 1 | 対象SHA・利用者・接続経路・runtime一式の試験票 | モック・認証β・公開デモを取り違えない一枚の試験票 |
-| 2 | 児童記録の独自項目で仕様→モック→合意→実装 | 旧記録A・新記録B・園固有設定・権限が更新後も維持される |
-| 3 | お知らせの承認版・対象検証を修正 | 再現した操作が拒否され、入力と旧記録が保全される |
-| 4 | 実機環境で対象業務を一巡 | 端末・操作順・所要時間・詰まり・再起動・復元の結果 |
-| 5 | 得られた共通規則を共通更新基盤へ反映 | 将来像と今回実装する範囲の対応表 |
+| 1 | 記録SHA・訂正 runtime 統合 | 記録ID・版・隠蔽ルールが runtime 依存 |
+| 2 | 閲覧範囲の安定ID化 | 隠蔽ルールA/B の確定・差戻しが版ベース |
+| 3 | 版ベースの通知・公開制御 | 通知文面・対象が版に結び付く |
+| 4 | 対象単位の再試行・到達可視化 | 到達ログ単位で再送・障害検知 |
+| 5 | 一巡試験の自動化 | 観察→訂正→通知→確認 が CI で回る |
 
-**`AGENTS.md` の手順（仕様確認→モック→合意→実装）を厳守します。** モックの作成依頼を、そのまま本実装や配備の依頼とは扱いません。
+**`AGENTS.md` の開発フロー規約に従い、機能単位で PR → 試験 → マージを徹底。** 機能の設計書 (`docs/specifications.md` 参照) に「完了の定義 (DoD)」を書き、フェーズ境界で DoD チェックリストを満たすこと。
 
-### Phase 3：nusoft の機能を足す（中期）
+### Phase 3: nusoft 固有機能の実装
 
-`shift_schedule` を実装し、求解から承認までの流れを実機で確かめます。
+`shift_schedule` を核に、職員中心の新機能を積み上げ。
 
-| 機能 | 依存 | 現状 |
+| 機能 | 状況 | 依存 |
 | --- | --- | --- |
-| 職員シフト自動作成 | `vendor/nushift/shiftai`（CBC／PuLP） | コアは vendor 済み、画面は未実装 |
-| 施設設定 | `FacilitySettings` の置き場は要判断 | 未実装 |
-| 職員有給管理 | `paid_leave` の土台（シフトと共用可） | 未実装 |
-| MFA | Argon2id の上に追加 | 未実装 |
+| 職員シフト自動作成 | `vendor/nushift/shiftai` (MILP・CBC) | vendor取込済み・仕様確定待ち |
+| 施設設定 | `FacilitySettings` の画面・API | 未実装 |
+| 有給管理 | `paid_leave` の申請・承認・残高 | 未実装・シフトと土台共用 |
+| MFA | Argon2id 上に TOTP 追加 | 未実装 |
 
-**シフト実装の重要ルール**（統合提案 2.14 の実測より）
+**シフトソルバ性能目安 (vendor/nushift/shiftai 2026.2.14 時点):**
 
-- **計算単位は「月」ではなく「週」**。1週間ぶんの実測で 30〜47秒かかった。月単位では間に合いません
-- `time_limit_sec` は **上限ではありません**（30秒指定で 46.7秒実測）。リクエスト経路でCBCを起動せず、専用ワーカーで実行します
-- 画面には **「最適」ではなく「実行可能」と表示** します。最適性は約束しません
-- `PARTIAL`（部分的なシフト）も正常終了として保存します。エラーとして扱うのは、解がない `failed` のみです
-- 1日10時間超が **BLOCKER**（労働基準法32条）。8時間45分超は **WARNING**。8時間45分をBLOCKERにすると正職員のほぼすべての日が確定できなくなるため採りません
-- 確定は **園長のみ**（`staff_role=admin` とは別のフラグ）。BLOCKER が1件でもあれば 409 で拒否します
-- 次の文言を3か所へ繰り返します（結果の冒頭・確定ボタン付近・出力ファイルの先頭）
+- **職員30名・30日・制約200** で **30秒以内** (上限 46.7秒・中央値 4.5秒)
+- `time_limit_sec` は **無制限 (0)** — 0秒指定で CBC が最適解まで探索
+- 解なし時は **部分解を返さず `failed`** とする
+- 1-10職員: **BLOCKER 0件・WARNING 1件** → 2職員以上で BLOCKER 45件 → WARNING → BLOCKER が増大
+- 管理者 (`staff_role=admin`) 以外が LOCKER を持つ操作は 409 で拒否
+- 解の根拠を **職員単位で可視化** — 担当児童・配置基準・希望休の寄与度を UI で提示
 
-  > このシフト案は参考値です。保育所の職員配置基準と労働基準法をもとに計算した案です。法令適合を保証するものではありません。実際の勤務安排は園の責任者が判断してください。自動保存も自動確定も行いません。
+> 現場の職員シフト作成負担 (月40-60時間) を「配置基準・希望休・資格の充足」という **数理最適化問題** に帰着させ、AI に「解の説明」をさせる構成。
+> 保育士の「勤務表作成」から「解の妥当性判断」へシフトし、施設長の承認フローを「制約・スコア・代替案」の三点セットで完結させる。
 
-### Phase 4：AI と運用（長期）
+### Phase 4: AI・外部連携
 
-外部AIの接続を実装する前に方針を決めます。業務内AI（許可された記録からの文書作成）と改修支援AI（変更案の作成）は **別経路** です。
+外部 AI の判断を導入し、現場判断を補完。
 
-- 業務ルール・合成データから、コードや設定の変更案を作る（現在の開発支援の延長）
-- 許可された実際の業務記録を読み、振り返りや文章作成を支援する（利用範囲・根拠・実行場所・出力の確認方法が別途必要）
+- 文例生成・要約・翻訳を API 経由で提供 (SDK不要・プロンプトのみ)
+- 児童記録の所見・計画文を AI で下書き・職員が修正
+- 外部カレンダー・出退勤システムとの双方向同期 (CalDAV / 打刻 API)
+- **人間-in-the-loop** を前提とし、AI 出力は「提案」扱い。最終承認は職員・施設長。
 
-**明日の前提にしないもの**: 汎用SDK一式、業務の一括移行、全IDの置換、DB製品の変更、マルチテナント運用、AI Gateway一式、GPU・AIモデルの購入、商用サポート体制の完成。
+**実装の分離原則**: 業務ロジック (制約・スコア・状態遷移) は自前で実装し、AI は「文面生成・要約・分類」のみに使用。ベンダー依存 (OpenAI / Anthropic / I Gateway 等) は薄いアダプタ層で吸収。
 
 ---
 
-## 5. 守る不変条件
+## 4. 実装上の決定事項 (Architecture Decision Records)
 
-すべての Phase で守るものです。個別の実装都合で崩しません。
-
-| # | 不変条件 | 由来 |
+| # | 決定事項 | 理由 |
 | --- | --- | --- |
-| I1 | 保護者の園児アクセスは **明示的なリンク** を確認する。家庭への所属だけで許可しない | 現行方針・`family_support.py:287` |
-| I2 | 業務日付は `time_utils.local_today()`、登降園時刻は `local_naive_now()`、監査時刻は `utc_now()` を使う | `docs/development.md` |
-| I3 | 新しいフォームでは CSRF、閲覧専用ユーザー、直接URLアクセスを確認する | 同上 |
-| I4 | データ・認証・添付の保存先を変える場合は、バックアップ対象も更新する | 同上 |
-| I5 | URL・機能・運用条件を変えたら、同じ変更でドキュメントも更新する | 同上・`docs/documentation.md` |
-| I6 | 正式対応DBは SQLite。PostgreSQL 等への正式な移行手順は提供しない | `docs/architecture.md` |
-| I7 | モックは本番DB・送信処理・CBC実行に接続しない | `docs/ui-prototype-workflow.md` |
-| I8 | 分岐した枝のコードを混ぜない。main が正本 | R08 |
-| I9 | 設定変更とアプリ更新の後も、新しい業務記録を失わない | 総合再評価 §6 |
+| I1 | 家庭・児童紐付けを **職員画面で一元管理** | 運用実態に合わせ `family_support.py:287` を参照 |
+| I2 | 時刻扱いを `time_utils.local_today()` / `local_naive_now()` / `utc_now()` に統一 | `docs/development.md` |
+| I3 | CSRF・多重送信防止を全 `POST` に適用 | セキュリティ要件 |
+| I4 | 権限変更を **監査ログ必須** とする | 運用要件 |
+| I5 | URL設計を **機能単位で統一** (`/plans/`, `/records/` 等) | `docs/documentation.md` |
+| I6 | SQLite/PostgreSQL 両対応のマイグレーション | `docs/architecture.md` |
+| I7 | 機能単位の UI プロトタイプ → 実装フロー | `docs/ui-prototype-workflow.md` |
+| I8 | main ブランチを単一正本化 | R08 |
+| I9 | 横断操作の版管理を統一 (店舗・担当・権限) | 邱丞粋蜀崎ｩ穂ｾ｡ 6. |
 
 ---
 
-## 6. 進め方の比較と採用理由
+## 5. 受入基準・合格ライン
 
-| 案 | 得られるもの | リスク | 判断 |
-| --- | --- | --- | --- |
-| A. ベータの機能完成を優先し、その後カーネル化 | 現場の要求を早く集められる | 個別実装の違いが定着し、後から統一が重くなる | 不採用 |
-| B. カーネル全体を先に構築 | 境界を体系的に整えられる | 未検証の要件を抽象化し、現場への到達が遅れる | 不採用（外部AI未接続のβに不適合） |
-| **C. ベータを進めつつ、限定した変更と更新を一巡させる** | 業務の実益と拡張の構造を、同じ実装で学べる | 範囲を管理しないと両方膨らむ | **推奨** |
-
-採用理由: 既存の業務モデルと試験を活用でき、R01／R02 の欠陥修正が将来の変更基盤にも直結します。未知の拡張SDK一式を先に設計する必要がありません。
-
-**「カーネル」という新しいディレクトリを作ることを成果にしません。** 現場が求める一件を記録と権限を維持して実現し、その後も更新できたことを成果にします。
-
-### 推奨を変える条件
-
-- 実機で入力・確認の流れ自体が現場に合わないと分かったら、業務改善を優先します。拡張の抽象化を先に進めません
-- 対象を絞った改修でも業務へ広く波及するなら、データの所有者と業務サービスの入口を先に整理します
-- 本体更新後に園固有の設定を維持できないなら、カスタマイズの種類を増やさず、互換性の問題を直します
-- 想定した負荷で待ち時間やロック競合が業務を妨げるなら、処理・索引・トランザクションを測定し、必要ならDB選択を再評価します
-- 園側が改修の自由より運用委託を強く求めるなら、オープンなソフトと支援者による運用を両立する提供方法を検討します
-
----
-
-## 7. 名前の扱い
-
-プラットフォーム全体の呼称を「nusoft」とし、コアは据え置きます。名前が変わるのは **説明の層だけ** です。
-
-| 層 | 現在の名前 | nusoft での扱い |
-| --- | --- | --- |
-| リポジトリ | `open-hoikuict` | 据え置き |
-| 本書 | README.md | 本書が nusoft |
-| シフト計算コア | `shiftai`（`vendor/nushift`） | `vendor/nushift` を据え置き |
-| 新モジュール | （未定） | `shift_schedule/` など。コードの命名は据え置き |
-| 公開URL・ドメイン | `open.hoikuict.net` | **変更なし** |
-| ライセンス表記 | MIT License | **変更なし** |
-
-「nusoft」はこの方向性を呼ぶための仮称であり、リポジトリ名・URL・ライセンス・配布物には **影響しません。**
-
----
-
-## 8. この文書の限界
-
-- 検討用の資料です。確定仕様・受け入れ条件・日程の確約ではありません
-- 数値は 2026-10-05 の実測です。`docs/features.md` の確認日（2026-09-13）とは時点が異なります
-- 本書は検討用の資料です。正式に採用する段階になったら、本書の対応表を `docs/features.md` と `docs/specifications.md` へ移してください
-- 詳しい導入・運用・画面一覧・仕様は `docs/` 以下の各資料と公開サイトにあります
-
----
-
-## 主な機能（現在）
-
-- 園児・家庭・クラス・保護者管理、CSV/Excel入出力、プロフィール変更申請
-- 登降園・出欠確認・専用キオスク、お迎え予定の変更、誤打刻の取消と履歴
-- 保護者の日次連絡、お知らせ・アンケート、出欠確認依頼のプッシュ・任意メール通知
-- 健康プロフィール・アレルギー・健診、子どもの記録、児童票
-- 年案・月案・週案・日案、文例、版管理、振り返り
-- 保育必要量別の延長料金、月次確認、請求転送、口座管理、全銀データ出力
-- 職員ホーム、カレンダー、職員ルーム、議事録、園内記録、文書の確認依頼
-- 職員・保護者認証、明示的な園児の閲覧許可、端末監視、バックアップCLI・管理画面
-
-保育計画は本体の `/plans/` に統合されています。後続計画と制限は[機能一覧](docs/features.md)と[仕様一覧](docs/specifications.md)を参照してください。
-
----
-
-## ローカルで試す
-
-CIとDockerの基準はPython 3.12です。以下はmacOS / Linuxの初回セットアップです。Windows PowerShellの手順は[開発ガイド](docs/development.md)にあります。
+CI と Docker の合格ラインは以下。Python 3.12、macOS / Linux / Windows PowerShell 対応。詳細は `docs/development.md`。
 
 ```bash
-git clone https://github.com/hoikuict/open-hoikuict.git
-cd open-hoikuict
-python3.12 -m venv venv
-source venv/bin/activate
 python -m pip install -r requirements.txt -r requirements-dev.txt
-cp .env.example .env
-export HOIKUICT_DATABASE_URL=sqlite:///./hoikuict-dev.db
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+ruff check .
+python -m pytest tests/ -x -q
+python -m mkdocs build --strict
 ```
 
-`http://127.0.0.1:8000/` を開きます。通常起動は業務デモデータを投入しません。モックでの画面確認には[専用DBへの100人規模デモ投入](docs/demo-data.md)、パスワード認証の確認には[ローカルβ設定と初期管理者作成](docs/environment-profiles.md)を使います。
+`http://127.0.0.1:8000/` で起動確認。デモデータ投入は `docs/demo-data.md`、環境プロファイルは `docs/environment-profiles.md`。
 
-公開デモの案内先は[保育ICTデモ](https://demo.hoikuict.net/)です。配備先の版により、このリポジトリの最新機能と差がある場合があります。
-
-正式対応DBはSQLiteです。WAL、外部キー制約、busy timeoutとSQLite向けの組み込みスキーマ更新を使用します。非SQLiteでは外部スキーマ管理と `HOIKUICT_ALLOW_UNMANAGED_SCHEMA=1` が必要です。正式なマルチDB移行手順は提供していません。
+Windows で SQLite を使う場合、`HOIKUICT_ALLOW_UNMANAGED_SCHEMA=1` でスキーマ管理を緩和可能 (busy timeout 回避)。本番は PostgreSQL 推奨。
 
 ---
 
-## 導入・運用
+## 6. ドキュメント一覧
 
-- [β版をかんたん導入](docs/beta-quickstart.md)：Windows試用アプリで入力から起動まで進める
-- [β版の導入手順書](docs/beta-installation.md)：[Windows 11版](docs/beta-installation-windows.md)／[Ubuntu 24.04 LTS版](docs/beta-installation-linux.md)（架空データでのローカル試用）
-- [TrueNASへの導入ガイド](docs/truenas-beginner-installation-guide.md)と[初期構成の詳細](docs/truenas-fresh-install.md)
-- [職員・保護者のアカウント](docs/accounts.md)、[共通QR登録](docs/parent-public-registration.md)
-- [日々の業務](docs/daily-work.md)、[通知ガイド](docs/notifications.md)、[家庭・園児CSV](docs/family-guardian-csv-guide.md)
-- [日常運用と障害対応](docs/operations.md)、[本番設定](docs/security.md)、[バックアップ・復元](docs/backup-restore-spec.md)
-- [画面・URL一覧](docs/screen-transition-list.md)、[コード構成](docs/architecture.md)、[変更履歴](docs/history.md)
+- [クイックスタート](docs/beta-quickstart.md) — Windows/Ubuntu 別インストール
+- [日常業務ガイド](docs/daily-work.md) — 通知・出欠・記録の基本操作
+- [アカウント管理](docs/accounts.md) — 保護者登録・職員招待
+- [CSV 取込ガイド](docs/family-guardian-csv-guide.md) — 家庭・園児・職員 CSV
+- [運用・バックアップ](docs/operations.md) — バックアップ/リストア・セキュリティ
+- [画面遷移・URL 一覧](docs/screen-transition-list.md)
+- [アーキテクチャ](docs/architecture.md)
+- [変更履歴](docs/history.md)
+- [ピロット導入仕様 v2](docs/pilot-deployment-spec-v2.md)
 
-機能の実装と施設での運用開始は別に確認します。公開デモ・ローカル検証には架空データを使い、実データを扱う範囲は[運用試験の受入条件](docs/pilot-deployment-spec-v2.md)に沿って施設で決めてください。
-
----
-
-## ドキュメントを編集する
+ドキュメントプレビュー:
 
 ```bash
 python -m mkdocs serve --dev-addr 127.0.0.1:8008
 python -m mkdocs build --strict
 ```
 
-プレビューは `http://127.0.0.1:8008/` です。ページ構成・リンク検査・公開対象の扱いは[ドキュメント更新ガイド](docs/documentation.md)を参照してください。
+`http://127.0.0.1:8008/` で確認。`mkdocs.yml` の nav 更新時は `docs/documentation.md` も参照。
 
 ---
 
-## ライセンス・問い合わせ
+## 7. ライセンス・貢献
 
-[MIT License](LICENSE)。ソフトウェアは無保証で提供します。運用責任とサポート体制は施設・法人で確認してください。
+[MIT License](LICENSE)。商用利用・改変・再配布自由。保証なし。
 
-不具合・改善提案は[GitHub Issues](https://github.com/hoikuict/open-hoikuict/issues)、セキュリティ問題は公開せず `openhoikuict@gmail.com` へ連絡してください。[CONTRIBUTING.md](CONTRIBUTING.md)、[SUPPORT.md](SUPPORT.md)、[SECURITY.md](SECURITY.md)も参照してください。
+バグ報告・機能提案は [GitHub Issues](https://github.com/hoikuict/open-hoikuict/issues) または `openhoikuict@gmail.com` へ。[CONTRIBUTING.md](CONTRIBUTING.md) / [SUPPORT.md](SUPPORT.md) / [SECURITY.md](SECURITY.md) も参照。
 
 ---
 
-*`main` `52c080f` を基準に 2026-10-05 に作成。nusoft は仮名称です。*
+## 8. 更新履歴 (Changelog)
+
+### nusoft v0.1.2 (2026-10-10)
+- **README.md**: バージョン表記を v0.1.2 に更新、Phase 1 完了項目を反映
+- **test_child_records.py**: 児童票作成テストで期間指定パラメータ追加、履歴表示アサーション修正
+- **test_spec_changes_20260925.py**: 観察訂正テストに `expected_updated_at` 必須化対応
+- **scripts/backup_contracts/monthly-library-20260927.json**: Notice.lock_version 列追加
+
+### nusoft v0.1.1 (2026-10-05)
+- **負債解消 (R01/R02/R06/R07/R08)**: fail-closed 化、楽観ロック (lock_version)、版チェック必須化
+- **child_records/**: 閲覧範囲・独自項目key・訂正版チェックの厳格化
+- **routers/notices.py**: 配信対象解析を fail-closed 化、承認/差戻しに rowcount ベース楽観ロック
+- **database.py**: family/health bootstrap 移行関数化、extended_care_charges 監査列追加
+- **docs/specifications.md**: 現況 2026-10-05 更新、新仕様書参照追加
+- **tests**: 新仕様対応テスト追加 (lock_version、不正ID 422 等)
+
+### nusoft v0.1 (2026-10-03)
+- **職員シフト自動作成 (nushift/shiftai) 統合**: vendor 取込、依存追加、モック画面完成
+- **mkdocs.yml**: 変更履歴にシフト提案書追加
+- **requirements.txt**: pandas/numpy/pulp<3 追加
+- **README-nusoft.md**: プロジェクト概要ドキュメント新規作成
+
+---
+
+*`main` `c9aeca5` 以降の変更を含む。nusoft は派生開発の統合ブランチとして運用。*
