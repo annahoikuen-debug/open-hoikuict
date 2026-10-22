@@ -23,6 +23,7 @@ from models import (
     LoginThrottle,
     PasswordCredential,
     StaffCredentialProvisioningAudit,
+    StaffMfaPending,
     StaffSessionTimeout,
     User,
     USER_SOURCE_MANUAL,
@@ -41,6 +42,9 @@ ACTION_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 ACTION_CODE_LENGTH = 6
 ACTION_CODE_TTL_MINUTES = 30
 ACTION_CODE_TTL = timedelta(minutes=ACTION_CODE_TTL_MINUTES)
+MFA_CODE_TTL_MINUTES = 5
+MFA_CODE_TTL = timedelta(minutes=MFA_CODE_TTL_MINUTES)
+MFA_MAX_ATTEMPTS = 5
 LOGIN_FAILURE_MESSAGE = "ログインIDまたはパスワードを確認してください"
 ACTIVATION_FAILURE_MESSAGE = "有効化コードを確認してください"
 RESET_FAILURE_MESSAGE = "再設定コードを確認してください"
@@ -611,13 +615,14 @@ def reset_staff_password(
     return user
 
 
-def authenticate_staff(
+def _verify_staff_password(
     session: Session,
     *,
     login_id: str,
     password: str,
     request: Request | None = None,
-) -> StaffLoginResult:
+) -> tuple[PasswordCredential, User]:
+    """パスワードのみを検証し、(credential, user) を返す。セッションは作成しない。"""
     now = utc_now()
     normalized_login_id = normalize_login_id(login_id)
     network = _request_network(request)
@@ -680,6 +685,32 @@ def authenticate_staff(
     if throttle is not None:
         session.delete(throttle)
 
+    _add_event(
+        session,
+        event_type="login",
+        result="success",
+        reason_code="password_verified",
+        credential=credential,
+        staff_user_id=user.id,
+        network_bucket_hash=network_bucket,
+        request=request,
+    )
+    session.commit()
+    session.refresh(user)
+    return credential, user
+
+
+def authenticate_staff(
+    session: Session,
+    *,
+    login_id: str,
+    password: str,
+    request: Request | None = None,
+) -> StaffLoginResult:
+    credential, user = _verify_staff_password(
+        session, login_id=login_id, password=password, request=request
+    )
+    now = utc_now()
     raw_session_token = secrets.token_urlsafe(32)
     from staff_session_settings import get_staff_session_policy
 
@@ -708,10 +739,9 @@ def authenticate_staff(
         session,
         event_type="login",
         result="success",
-        reason_code="password_verified",
+        reason_code="mfa_pending",
         credential=credential,
         staff_user_id=user.id,
-        network_bucket_hash=network_bucket,
         request=request,
     )
     session.commit()
@@ -720,6 +750,61 @@ def authenticate_staff(
         user=user, credential=credential, session_token=raw_session_token,
         cookie_max_age=policy.absolute_hours * 3600,
     )
+
+
+def verify_mfa_code(
+    session: Session,
+    *,
+    pending_reference: str,
+    code: str,
+) -> tuple[User, PasswordCredential] | None:
+    """MFA ワンタイムコードを検証し、(user, credential) を返す。
+
+    不正なコードや期限切れの場合は None を返す。
+    """
+    now = utc_now()
+    pending = session.exec(
+        select(StaffMfaPending).where(
+            StaffMfaPending.pending_reference == pending_reference,
+        )
+    ).first()
+    if pending is None:
+        return None
+    if pending.attempt_count >= MFA_MAX_ATTEMPTS:
+        return None
+    if _as_utc(pending.expires_at) <= now:
+        return None
+
+    code_hash = _token_hash(code.strip())
+    if code_hash != pending.code_hash:
+        pending.attempt_count += 1
+        session.add(pending)
+        session.commit()
+        return None
+
+    credential = session.get(PasswordCredential, pending.credential_id)
+    user = session.get(User, pending.staff_user_id) if credential else None
+    if (
+        credential is None
+        or credential.principal_type != PRINCIPAL_STAFF
+        or credential.disabled_at is not None
+        or user is None
+        or not user.is_active
+        or credential.credential_version != (
+            session.exec(
+                select(PasswordCredential.credential_version).where(
+                    PasswordCredential.id == pending.credential_id
+                )
+            ).first()
+        )
+    ):
+        return None
+
+    # 使用済みにする
+    session.delete(pending)
+    session.commit()
+    session.refresh(user)
+    return user, credential
 
 
 def resolve_staff_session(session: Session, raw_token: str) -> User | None:

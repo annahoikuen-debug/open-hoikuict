@@ -1,4 +1,5 @@
-from datetime import date
+import secrets
+from datetime import date, timedelta
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -17,7 +18,32 @@ from auth import (
     set_local_staff_session_cookie,
     set_staff_cookies,
 )
+from auth_mail import send_auth_mail
 from database import get_session
+from local_auth import (
+    ACTION_CODE_TTL_MINUTES,
+    ACTIVATION_FAILURE_MESSAGE,
+    LOGIN_FAILURE_MESSAGE,
+    PRINCIPAL_STAFF,
+    RESET_FAILURE_MESSAGE,
+    _add_event,
+    _token_hash,
+    AuthenticationFailed,
+    LoginThrottled,
+    MFA_CODE_TTL,
+    MFA_CODE_TTL_MINUTES,
+    PasswordPolicyError,
+    activate_staff_password,
+    authenticate_staff,
+    disable_staff_authentication,
+    get_staff_activation_details,
+    issue_credential_action_token,
+    issue_existing_staff_activation,
+    issue_staff_password_reset,
+    reset_staff_password,
+    revoke_session_token,
+    verify_mfa_code,
+)
 from models import (
     USER_SOURCE_EXTERNAL,
     USER_SOURCE_IMPORT,
@@ -29,25 +55,13 @@ from models import (
     PasswordCredential,
     StaffClassroomAssignment,
     StaffClassroomAssignmentRole,
+    StaffMfaPending,
     StaffPermissionChangeLog,
+    StaffSessionTimeout,
     User,
+    AuthSession,
 )
-from local_auth import (
-    ACTION_CODE_TTL_MINUTES,
-    ACTIVATION_FAILURE_MESSAGE,
-    LOGIN_FAILURE_MESSAGE,
-    RESET_FAILURE_MESSAGE,
-    AuthenticationFailed,
-    LoginThrottled,
-    PasswordPolicyError,
-    activate_staff_password,
-    authenticate_staff,
-    disable_staff_authentication,
-    get_staff_activation_details,
-    issue_existing_staff_activation,
-    issue_staff_password_reset,
-    reset_staff_password,
-)
+from security_config import secure_cookie_enabled
 from staff_permissions import (
     STAFF_PERMISSION_DEFINITIONS,
     add_permission_change_logs,
@@ -308,9 +322,172 @@ def local_staff_login(
         )
         return _no_store(response)
 
-    target = _login_redirect_for_user(result.user, target)
+    # パスワード検証済み。セッションはまだ発行せず、MFA コードをメール送信する。
+    # authenticate_staff で作成済みのセッションは無効化する。
+    revoke_session_token(session, result.session_token)
+
+    # MFA ワンタイムコードを発行（既存の issue_credential_action_token を流用）
+    raw_code = issue_credential_action_token(
+        session,
+        credential=result.credential,
+        action="mfa_verify",
+        expires_in=MFA_CODE_TTL,
+        created_by_user_id=result.user.id,
+    )
+
+    # 保留レコードを作成
+    pending_reference = secrets.token_urlsafe(32)
+    mfa_pending = StaffMfaPending(
+        staff_user_id=result.user.id,
+        credential_id=result.credential.id,
+        pending_reference=pending_reference,
+        code_hash=_token_hash(raw_code),
+        expires_at=utc_now() + MFA_CODE_TTL,
+    )
+    session.add(mfa_pending)
+    session.commit()
+
+    # メールでコードを送信（既存の auth_mail.send_auth_mail を流用）
+    send_auth_mail(
+        recipient=result.user.email,
+        subject="open-hoikuict 多要素認証コード",
+        body=(
+            f"ログイン認証コード: {raw_code}\n"
+            f"このコードは {MFA_CODE_TTL_MINUTES} 分間有効です。\n"
+            "ご自身でログインした覚えがない場合は、このメールを無視してください。\n"
+        ),
+    )
+
+    # MFA 検証画面へリダイレクト（pending_reference をクッキーで渡す）
+    response = RedirectResponse(url="/staff/mfa/verify", status_code=303)
+    response.set_cookie(
+        "mfa_pending",
+        pending_reference,
+        max_age=int(MFA_CODE_TTL.total_seconds()),
+        httponly=True,
+        secure=secure_cookie_enabled(),
+        samesite="lax",
+        path="/",
+    )
+    return _no_store(response)
+
+
+@local_login_router.get(
+    "/mfa/verify",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_local_staff_auth)],
+)
+def staff_mfa_verify_page(
+    request: Request,
+    redirect_to: str = DEFAULT_STAFF_REDIRECT,
+) -> HTMLResponse:
+    """MFA ワンタイムコード入力画面。"""
+    target = safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT)
+    return _no_store(
+        templates.TemplateResponse(
+            request,
+            "staff_auth/mfa_verify.html",
+            {
+                "request": request,
+                "redirect_to": target,
+                "form_error": "",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+        )
+    )
+
+
+@local_login_router.post(
+    "/mfa/verify",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_local_staff_auth)],
+)
+def staff_mfa_verify_submit(
+    request: Request,
+    code: str = Form(""),
+    redirect_to: str = Form(DEFAULT_STAFF_REDIRECT),
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """MFA ワンタイムコードを検証し、セッションを発行する。"""
+    target = safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT)
+    pending_reference = request.cookies.get("mfa_pending")
+    if not pending_reference:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/mfa_verify.html",
+            {
+                "request": request,
+                "form_error": "認証セッションが失効しました。再度ログインしてください。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=400,
+        )
+        return _no_store(response)
+
+    result = verify_mfa_code(
+        session,
+        pending_reference=pending_reference,
+        code=code,
+    )
+    if result is None:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/mfa_verify.html",
+            {
+                "request": request,
+                "form_error": "認証コードが正しくありません。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=400,
+        )
+        return _no_store(response)
+
+    user, credential = result
+
+    # セッションを発行
+    now = utc_now()
+    raw_session_token = secrets.token_urlsafe(32)
+    from staff_session_settings import get_staff_session_policy
+
+    policy = get_staff_session_policy(session)
+    absolute_expires_at = now + timedelta(hours=policy.absolute_hours)
+    auth_session = AuthSession(
+        token_hash=_token_hash(raw_session_token),
+        principal_type=PRINCIPAL_STAFF,
+        credential_id=credential.id,
+        staff_user_id=user.id,
+        credential_version=credential.credential_version,
+        created_at=now,
+        last_seen_at=now,
+        idle_expires_at=min(
+            now + timedelta(minutes=policy.idle_minutes),
+            absolute_expires_at,
+        ),
+        absolute_expires_at=absolute_expires_at,
+        mfa_satisfied_at=now,
+    )
+    session.add(auth_session)
+    session.flush()
+    session.add(StaffSessionTimeout(
+        token_hash=auth_session.token_hash, idle_minutes=policy.idle_minutes,
+    ))
+    _add_event(
+        session,
+        event_type="login",
+        result="success",
+        reason_code="mfa_verified",
+        credential=credential,
+        staff_user_id=user.id,
+        request=request,
+    )
+    session.commit()
+
     response = RedirectResponse(url=target, status_code=303)
-    set_local_staff_session_cookie(response, result.session_token, max_age=result.cookie_max_age)
+    set_local_staff_session_cookie(
+        response, raw_session_token, max_age=policy.absolute_hours * 3600
+    )
+    # MFA 保留クッキーを削除
+    response.delete_cookie("mfa_pending", path="/")
     return _no_store(response)
 
 

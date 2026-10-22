@@ -2893,6 +2893,26 @@ class AuthSession(SQLModel, table=True):
     revoke_reason: Optional[str] = Field(default=None, max_length=64)
 
 
+class StaffMfaPending(SQLModel, table=True):
+    """パスワード認証済み・MFA未完了の保留状態。
+
+    パスワード検証後、メールOTP検証前に一時的な保留レコードを作成する。
+    pending_reference はクッキー経由でクライアントに渡され、OTP 検証時に
+    照合してセッションを発行する。
+    """
+
+    __tablename__ = "staff_mfa_pending"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    staff_user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    credential_id: uuid.UUID = Field(foreign_key="password_credentials.id", index=True)
+    pending_reference: str = Field(index=True, max_length=64)
+    code_hash: str = Field(max_length=64)
+    expires_at: datetime = Field(index=True)
+    attempt_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class StaffSessionTimeout(SQLModel, table=True):
     """Only new staff sessions get a timeout snapshot; legacy sessions use the environment."""
     __tablename__ = "staff_session_timeouts"
