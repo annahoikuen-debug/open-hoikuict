@@ -40,7 +40,7 @@ _cbc_available: bool | None = None  # 起動時セルフチェック結果
 
 
 def cbc_available() -> bool:
-    """PULP_CBC_CMD が利用可能か。起動時に1回だけチェック。"""
+    """PULP_CBC_CMD が利用可能か。起動時または初回呼び出し時にチェック。"""
     global _cbc_available
     if _cbc_available is None:
         try:
@@ -49,6 +49,17 @@ def cbc_available() -> bool:
         except Exception:
             _cbc_available = False
     return _cbc_available
+
+
+def get_cbc_solver(time_limit_sec: int | None = None) -> PULP_CBC_CMD:
+    """利用可能な CBC ソルバーインスタンスを生成する。利用不可の場合は RuntimeError。"""
+    solver = PULP_CBC_CMD(timeLimit=time_limit_sec, msg=False)
+    if not solver.available():
+        raise RuntimeError(
+            "CBCソルバー (PULP_CBC_CMD) がシステムで見つかりません。"
+            "Linux環境では `apt-get install coinor-cbc`、Windows環境では pulp の同梱バイナリを確認してください。"
+        )
+    return solver
 
 
 def _run_solve_sync(

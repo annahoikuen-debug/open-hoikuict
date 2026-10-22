@@ -116,6 +116,14 @@ def plans_solve(
 
         raise HTTPException(status_code=409, detail="Approved plan cannot be re-solved")
 
+    if not cbc_available():
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400,
+            detail="シフト最適化ソルバー (CBC) がサーバー上で利用できません。管理者に環境設定を確認してください。",
+        )
+
     schedule_solve(
         plan_id=plan_id,
         target_month=plan.target_month,
