@@ -14,25 +14,55 @@
       {% if plan.status != "approved" and cbc_available %}
       <form method="post" action="/shifts/plans/{{ plan.id }}/solve" class="mt-0">
         <input type="hidden" name="time_limit_sec" value="30">
-        <button type="submit" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">シフトを生成</button>
+        <button type="submit" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">シフトを再生成</button>
       </form>
       {% elif not cbc_available %}
       <button class="rounded-xl bg-slate-400 px-4 py-2 text-sm font-medium text-white" disabled>CBC 未検出</button>
       {% endif %}
-      <a href="/" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">一覧へ戻る</a>
+
+      {% if plan.status != "approved" and cells %}
+      <form method="post" action="/shifts/plans/{{ plan.id }}/approve" class="mt-0" onsubmit="return confirm('シフトを承認・確定しますか？（承認後は編集・再求解できません）');">
+        <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">シフトを承認・確定</button>
+      </form>
+      {% endif %}
+      <a href="/shifts/plans" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">一覧へ戻る</a>
     </div>
   </div>
+
+  <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+    <p class="font-semibold">【免責事項】</p>
+    <p class="mt-0.5">本シフト作成案は法令（労働基準法等）および認可・配置基準を満たすための下書きです。急な登降園予定の変更や現場状況に応じた最終確認および配置責任は施設長にあります。</p>
+  </div>
+
+  {% if gap_warnings %}
+  <section class="rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-sm">
+    <div class="flex items-center justify-between">
+      <h2 class="font-bold text-rose-900 flex items-center gap-1.5">
+        <span>⚠️</span> 園児予定変更による配置割れ警告 ({{ gap_warnings|length }}件)
+      </h2>
+      <span class="text-xs bg-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-semibold">再計算・調整推奨</span>
+    </div>
+    <p class="mt-1 text-xs text-rose-700">園児の登降園予定変更に伴い、配置基準を満たせない時間帯が検出されました。</p>
+    <div class="mt-3 space-y-1.5">
+      {% for gw in gap_warnings %}
+      <div class="text-xs text-rose-800 bg-white/70 border border-rose-200 rounded px-2.5 py-1.5">
+        {{ gw.message }}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   {% if violations %}
   <section class="rounded-xl border border-rose-200 bg-rose-50 p-4">
     <h2 class="font-semibold text-rose-900">検出違反 ({{ violations|length }})</h2>
-    <div class="mt-3 grid gap-2 sm:grid-cols-3">
+    <div class="mt-3 grid gap-2 sm:grid-cols-2">
       {% for v in violations %}
       <span class="text-xs px-2 py-1 rounded border
-        {% if v.severity == 'BLOCKER' %}border-rose-500 bg-rose-50 text-rose-700
-        {% elif v.severity == 'WARNING' %}border-amber-500 bg-amber-50 text-amber-700
+        {% if v.severity == 'BLOCKER' %}border-rose-500 bg-rose-100 text-rose-800 font-semibold
+        {% elif v.severity == 'WARNING' %}border-amber-500 bg-amber-100 text-amber-800
         {% else %}border-slate-300 bg-slate-100 text-slate-600{% endif %}
-      ">{{ v.code }}: {{ v.message }}</span>
+      ">[{{ v.severity }}] {{ v.code }}: {{ v.message }}</span>
       {% endfor %}
     </div>
   </section>
@@ -40,24 +70,56 @@
 
   {% if cells %}
   <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-slate-900">シフトセル ({{ cells|length }})</h2>
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-slate-900">シフトセル ({{ cells|length }})</h2>
+      <span class="text-xs text-slate-500">※ セルを変更すると即時保存されます</span>
+    </div>
     <div class="mt-4 overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th class="px-3 py-3">職員ID</th>
             <th class="px-3 py-3">日付</th>
-            <th class="px-3 py-3">スロット</th>
+            <th class="px-3 py-3">スロット枠</th>
             <th class="px-3 py-3">状態</th>
+            <th class="px-3 py-3">変更</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for cell in cells %}
           <tr>
-            <td class="px-3 py-3">{{ cell.staff_user_id }}</td>
+            <td class="px-3 py-3 font-medium">{{ cell.staff_user_id }}</td>
             <td class="px-3 py-3">{{ cell.target_date }}</td>
-            <td class="px-3 py-3">{{ cell.slot_label }}</td>
-            <td class="px-3 py-3">{{ cell.cell_state }}</td>
+            <td class="px-3 py-3">
+              <span class="inline-flex rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{{ cell.slot_label }}</span>
+            </td>
+            <td class="px-3 py-3">
+              <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium {% if cell.cell_state == 'pinned' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-700{% endif %}">
+                {{ cell.cell_state }}
+              </span>
+            </td>
+            <td class="px-3 py-3">
+              {% if plan.status != "approved" %}
+              <form method="post" action="/shifts/plans/{{ plan.id }}/cells" class="flex items-center gap-1.5 m-0">
+                <input type="hidden" name="staff_user_id" value="{{ cell.staff_user_id }}">
+                <input type="hidden" name="target_date" value="{{ cell.target_date }}">
+                <select name="slot_label" class="rounded border border-slate-300 py-0.5 px-2 text-xs">
+                  <option value="{{ cell.slot_label }}">{{ cell.slot_label }} (現在)</option>
+                  <option value="EARLY">早番 (EARLY)</option>
+                  <option value="NORMAL">日勤 (NORMAL)</option>
+                  <option value="LATE">遅番 (LATE)</option>
+                  <option value="OFF">公休 (OFF)</option>
+                </select>
+                <select name="cell_state" class="rounded border border-slate-300 py-0.5 px-2 text-xs">
+                  <option value="specified" {% if cell.cell_state == 'specified' %}selected{% endif %}>指定</option>
+                  <option value="pinned" {% if cell.cell_state == 'pinned' %}selected{% endif %}>固定(ピン)</option>
+                </select>
+                <button type="submit" class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">更新</button>
+              </form>
+              {% else %}
+              <span class="text-xs text-slate-400">確定済み</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>

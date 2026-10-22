@@ -120,6 +120,13 @@ def _run_solve_sync(
         all_violations: list[ShiftViolations] = []
         fixed_assignments: dict[tuple[str, str], str] = {}  # (staff_id, date) -> slot_label
 
+        # 既存の手動固定（ピン留め）セルを取得し、求解の固定条件に加える
+        existing_cells = repo.list_plan_cells(plan_id)
+        for ec in existing_cells:
+            if ec.cell_state == "pinned":
+                fixed_assignments[(str(ec.staff_user_id), ec.target_date.isoformat())] = ec.slot_label
+                all_cells.append(ec)
+
         current = start_date
         while current <= end_date:
             week_end = min(current + timedelta(days=WEEK_DAYS - 1), end_date)
@@ -214,9 +221,18 @@ def _run_solve_sync(
 
             current = week_end + timedelta(days=1)
 
-        # セルを保存
+        # 既存の未固定セル・違反をクリアし、新結果を保存
+        for ec in existing_cells:
+            if ec.cell_state != "pinned":
+                session.delete(ec)
+        for old_v in repo.list_violations(plan_id):
+            session.delete(old_v)
+        session.commit()
+
+        # セルを保存（ピン留めセルは既存のままなので新規生成セルのみ追加）
         for cell in all_cells:
-            repo.create_plan_cell(cell)
+            if cell.id is None:
+                repo.create_plan_cell(cell)
         for v in all_violations:
             repo.create_violation(v)
 

@@ -5,7 +5,7 @@
 nusoftは、保育ICTプラットフォーム`open-hoikuict`をベースに、職員シフト自動作成・MFA・版管理の厳格化などの新機能を開発・統合するプロジェクトです。
 
 > **注意: このREADMEは開発者向けの技術文書です。利用者向けガイドは `docs/features.md` や `docs/specifications.md` を参照してください。**
-> 最終同期: 2026-10-22、`main` `6a31e88` (Phase 3.4 MFA 完了)
+> 最終同期: 2026-10-22、`main` `d1e6bac` (Phase 3 シフト・MFA 実装完了)
 > 本番・デモ環境は `docs/features.md`、仕様全体は `docs/specifications.md` を参照してください。
 
 **[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [技術ガイド](docs/technical-guide.md) | [機能一覧](docs/features.md) | [導入手順](docs/getting-started.md) | [開発環境](docs/development.md)**
@@ -22,7 +22,7 @@ nusoftは、保育ICTプラットフォーム`open-hoikuict`をベースに、�
 | 本番URL | `open.hoikuict.net` | 運用環境 |
 | デモURL | `demo.hoikuict.net` | 検証用環境 |
 | プロジェクト名 | **nusoft** | 派生開発の統合名 |
-| 最新コミット | `6a31e88` | Phase 3.4: MFA メールOTP 完了 |
+| 最新コミット | `d1e6bac` | Phase 3: シフト自動作成・MFA メールOTP 実装完了 |
 
 ### 由来・命名規則
 
@@ -60,8 +60,8 @@ GitHub Organization / SNS ID は `nusoft` として統一予定。ドメイン�
 | 保護者通知・プッシュ | 実装済み。Web Push、本番設定、配送・再試行・到達レポート |
 | 請求・延長保育料金 | 実装済み。プレビュー、転送・再転送・解除、競合処理、監査 |
 | 職員ポータル・権限 | 実装済み。ホーム、担当クラス、予定、要確認、タイムライン。集約権限・口座保護 |
-| **職員シフト自動作成** | **基盤実装済み (Phase 3.1)。vendor/nushift/shiftai 取込・DBテーブル作成済み。UIルートは順次実装** |
-| **多要素認証 (MFA)** | **実装済み (Phase 3.4)。メールOTP 対応** |
+| **職員シフト自動作成** | **基盤実装済み (Phase 3.1)。vendor/nushift/shiftai 取込・12 DBテーブル作成済み。プラン作成・求解ジョブ（CBCワーカー）・セル編集・ピン留め・承認ゲート（BLOCKER違反で承認ブロック）・配置割れギャップ検査・ステータスAPI 実装済み** |
+| **多要素認証 (MFA)** | **実装済み (Phase 3.4)。メールOTP 対応。パスワード認証後、登録メールアドレスへ6桁コードを送信・検証してセッション発行。TOTPアプリ不要・DB変更最小限** |
 
 ### 2.3 仕様書・未実装一覧
 
@@ -70,8 +70,8 @@ GitHub Organization / SNS ID は `nusoft` として統一予定。ドメイン�
 | 施設設定 | `docs/facility-settings-spec.md` | 未実装。シフト用 `shift_facility_settings` は独立実装予定 |
 | 職員有給管理 | `docs/paid-leave-management-spec.md` | 未実装。シフトと土台共用可 |
 | 一括データ移行 | `docs/beta-production-data-migration-spec.md` | 未実装。CSV対応は現行実装へ反映済み |
-| 職員シフト自動作成 | `docs/shift-schedule-integration-proposal-2026-10-03.md` | 基盤実装済み。UIルート・ワーカーは順次実装 |
-| MFA | `docs/local-authentication-spec.md` | 実装済み (Phase 3.4) |
+| 職員シフト自動作成 | `docs/shift-schedule-integration-proposal-2026-10-03.md` | 基盤実装済み。12テーブル・求解ワーカー・セル編集・承認ゲート・配置割れギャップ検査実装済み |
+| MFA | `docs/local-authentication-spec.md` | 実装済み (Phase 3.4、メールOTP) |
 | 児童記録・保育要録 | `docs/child-records-spec.md` | 進行中 |
 | 健康管理レビュー | `docs/health-record-spec-review.md` | 進行中 |
 
@@ -130,10 +130,17 @@ R06/R07 と R01/R02 の重要操作の契約を先に揃え、共通楽観ロッ
 
 | 機能 | 状況 | 依存 |
 | --- | --- | --- |
-| 職員シフト自動作成 | 基盤実装済み (Phase 3.1) | vendor取込済み・DBテーブル作成済み |
+| 職員シフト自動作成 | 基盤実装済み (Phase 3.1) | vendor取込済み・12 DBテーブル・求解ワーカー・セル編集・承認ゲート・ギャップ検査 |
 | 施設設定 | 未実装 | `FacilitySettings` の画面・API |
 | 有給管理 | 未実装 | `paid_leave` の申請・承認・残高・シフトと土台共用 |
 | MFA (メールOTP) | 実装済み (Phase 3.4) | Argon2id 上に追加 |
+
+**シフト実装の詳細（Phase 3.1）:**
+- **DBテーブル 12 件**: `shift_facility_settings`, `shift_facility_closed_days`, `staff_qualifications`, `staff_contracts`, `staff_shift_preferences`, `staff_shift_unavailability`, `child_planned_arrival_defaults`, `shift_plans`, `shift_plan_cells`, `shift_solve_jobs`, `shift_violations`, `shift_planning_audits`
+- **ルート**: `GET/POST /shifts/plans` (一覧・作成), `GET /shifts/plans/{id}` (詳細＋ギャップ警告), `POST /shifts/plans/{id}/solve` (求解ジョブ発行), `GET /shifts/plans/{id}/status` (求解状態API), `POST /shifts/plans/{id}/approve` (承認ゲート, BLOCKER違反で409), `POST /shifts/plans/{id}/cells` (セル編集・ピン留め)
+- **求解ワーカー**: `ThreadPoolExecutor(max_workers=1)` で CBC を非同期実行。リクエスト経路では CBC 起動しない
+- **承認ゲート**: BLOCKER 違反（1日10h超など）がある場合、承認を 409 でブロック
+- **配置割れギャップ検査**: プラン詳細画面で最大 3 日分の配置割れをプレビュー表示
 
 **シフトソルバ性能目安:**
 - 計算単位は **週 (7日固定)**。月単位は不可
@@ -223,11 +230,13 @@ python -m mkdocs build --strict
 
 ## 8. 更新履歴 (Changelog)
 
-### 未リリース (2026-10-22, `main` `6a31e88`)
+### 未リリース (2026-10-22, `main` `d1e6bac`)
+- **Phase 3.1**: 職員シフト自動作成基盤実装 (12 DBテーブル・求解ワーカー・セル編集・承認ゲート・配置割れギャップ検査・ステータスAPI)
 - **Phase 3.4**: MFA メールOTP (多要素認証) 実装
-- **README.md**: バージョン・フェーズ状況を Phase 3.4 まで反映、技術的負債 R01-R08 を解消済みに更新
-- **docs/features.md**: 今後の方針は README を参照する旨と、仮名称である点を明記
-- **docs/history.md**: 2026-10-05 の README 全面改訂を記録
+- **README.md**: バージョン・フェーズ状況を Phase 3 まで反映、技術的負債 R01-R08 を解消済みに更新
+- **docs/features.md**: シフト・MFA の実装状況を更新、未実装リストから削除
+- **docs/specifications.md**: シフト・MFA の状況を「実装済み」に更新
+- **docs/faq.md**: シフト・MFA に関する Q&A を追加
 
 ### nusoft v0.1.2 (2026-10-10)
 - **README.md**: バージョン表記を v0.1.2 に更新、Phase 1 完了項目を反映
@@ -251,4 +260,4 @@ python -m mkdocs build --strict
 
 ---
 
-*`main` `6a31e88` を基準に 2026-10-22 に更新。nusoft は派生開発の統合名です。*
+*`main` `d1e6bac` を基準に 2026-10-22 に更新。nusoft は派生開発の統合名です。*

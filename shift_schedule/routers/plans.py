@@ -80,6 +80,15 @@ def plans_detail(
         select(ShiftSolveJobs).where(ShiftSolveJobs.plan_id == plan_id).order_by(ShiftSolveJobs.requested_at.desc())
     ).all()
 
+    # 配置割れギャップ検査（今日以降またはプラン月最初の日のギャップチェック）
+    gap_warnings = []
+    if cells:
+        from .services.gap_detector import detect_day_gap
+
+        target_dates = sorted({c.target_date for c in cells})
+        for td in target_dates[:3]:  # 最大3日分プレビュー
+            gap_warnings.extend(detect_day_gap(repo.session, plan_id, td))
+
     from template_utils import create_templates
 
     templates = create_templates()
@@ -93,6 +102,7 @@ def plans_detail(
             "violations": violations,
             "audits": audits,
             "jobs": jobs,
+            "gap_warnings": gap_warnings,
             "cbc_available": cbc_available(),
         },
     )
@@ -131,4 +141,54 @@ def plans_solve(
         requested_by_user_id=None,  # TODO: 認証ユーザーID
         time_limit_sec=time_limit_sec,
     )
+    return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)
+
+
+@router.get("/plans/{plan_id}/status")
+def plans_status(
+    plan_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    plan = repo.get_plan(plan_id)
+    if plan is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    latest_job = repo.session.exec(
+        select(ShiftSolveJobs).where(ShiftSolveJobs.plan_id == plan_id).order_by(ShiftSolveJobs.requested_at.desc())
+    ).first()
+
+    return {
+        "plan_id": plan_id,
+        "status": plan.status,
+        "job_status": latest_job.status if latest_job else None,
+        "error_message": latest_job.error_message if latest_job else None,
+        "finished_at": latest_job.finished_at.isoformat() if latest_job and latest_job.finished_at else None,
+    }
+
+
+@router.post("/plans/{plan_id}/approve")
+def plans_approve(
+    plan_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+) -> RedirectResponse:
+    plan = repo.get_plan(plan_id)
+    if plan is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    violations = repo.list_violations(plan_id)
+    blockers = [v for v in violations if v.severity == "BLOCKER"]
+    if blockers:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=409,
+            detail=f"BLOCKER 違反が {len(blockers)} 件残っているため承認できません。労基法・配置基準違反を解消してください。",
+        )
+
+    plan.status = PlanStatus.APPROVED
+    repo.save_plan(plan)
     return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)

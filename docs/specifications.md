@@ -45,7 +45,7 @@
 | [延長料金・請求転送](extended-care-billing-transfer-spec.md) | 実装あり | プレビュー、転送・再転送・解除、競合処理、監査 |
 | [職員ポータル](staff-personal-portal-spec.md) | 実装あり | ホーム、担当クラス、予定、要確認、タイムライン。追加変更は9月11日記録も参照 |
 | [職員権限・請求口座](staff-permissions-and-billing-accounts-spec.md) | 実装あり | 集約権限設定、園児台帳・請求口座の専用権限、口座情報保護、監査 |
-| [職員シフト自動作成](shift-schedule-integration-proposal-2026-10-03.md) | 計画 | 配置基準リンク型 MILP ソルバ（shiftai）を vendor 取り込み済み。画面・ルートは未実装（モック完了・試用待ち） |
+| [職員シフト自動作成](shift-schedule-integration-proposal-2026-10-03.md) | 基盤実装済み | 12テーブル・求解ワーカー（CBC）・セル編集・承認ゲート（BLOCKER違反で409）・配置割れギャップ検査・ステータスAPI。画面・ルート実装済み |
 | [9月10日の画面改善](spec-improvements-2026-09-10.md) | 実装あり・履歴 | お迎え予定変更、料金表示・区分別設定、キオスク、日別予定 |
 | [9月11日の機能追加](spec-improvements-2026-09-11.md) | 実装あり・履歴 | 打刻取消、文書確認、端末監視、メール通知、家族検索・きょうだい選択など |
 
@@ -54,7 +54,7 @@
 | 文書 | 状況 | 現在の範囲・残件 |
 | --- | --- | --- |
 | [アカウントガイド](accounts.md) | 現行 | 職員・保護者の初期設定、登録経路、復旧、閲覧対象 |
-| [ローカル認証設計](local-authentication-spec.md) | 一部実装 | 職員・保護者のArgon2id認証、セッション、試行制限、コード、監査、管理者メール復旧。職員の通常パスワード変更・MFA等は後続 |
+| [ローカル認証設計](local-authentication-spec.md) | 一部実装 | 職員・保護者のArgon2id認証、セッション、試行制限、コード、監査、管理者メール復旧。多要素認証 (メールOTP) は Phase 3.4 で実装済み。職員の通常パスワード変更は後続 |
 | [保護者認証設計](parent-local-authentication-spec.md) | 一部実装・設計履歴 | ログイン、招待・承認、本人パスワード変更、園による再設定、明示的な園児認可は実装あり |
 | [共通QR登録](parent-public-registration.md) | 現行 | 受付切替、メール確認、初回申請、承認先選択、利用開始 |
 | [プッシュ通知仕様](parent-push-notification-spec.md) | 実装あり・受入継続 | 購読、Service Worker、Web Push、本番設定、配送・再試行・報告。OS別実機受入は別途記録 |
@@ -80,7 +80,6 @@
 | [施設設定](facility-settings-spec.md) | `FacilitySettings`・`/settings/facility` は未実装。シフト用 `shift_facility_settings` は独立実装予定 |
 | [職員有給管理](paid-leave-management-spec.md) | 台帳・申請・承認ルートは未実装。シフトと土台共用可 |
 | [一括データ移行](beta-production-data-migration-spec.md) | 移行元ID・マニフェスト・CSV一式の一括確定は未実装。明示的な園児リンクと家庭CSVの対応は現行実装へ反映済み |
-| [MFA (TOTP)](local-authentication-spec.md) | Argon2id の上に追加。未実装 |
 
 ## 運用・開発の参照先
 

@@ -143,7 +143,7 @@ class ShiftPlanCells(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     plan_id: int = Field(foreign_key="shift_plans.id", index=True)
-    staff_user_id: int = Field(foreign_key="users.id", index=True)
+    staff_user_id: str = Field(foreign_key="users.id", index=True, max_length=36)
     target_date: date = Field(index=True)
     slot_label: str = Field(max_length=32)
     cell_state: str = Field(default="unspecified", max_length=32)  # specified / pinned / unspecified

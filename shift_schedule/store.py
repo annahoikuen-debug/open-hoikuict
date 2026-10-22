@@ -6,7 +6,8 @@ plus optimistic-lock helpers shared with the routers and services.
 
 from __future__ import annotations
 
-from typing import Annotated, Protocol
+from datetime import date
+from typing import Annotated, Any, Protocol
 
 from fastapi import Depends
 from sqlmodel import Session, select
@@ -35,6 +36,7 @@ class ShiftRepository(Protocol):
     def save_plan(self, plan: ShiftPlans) -> None: ...
 
     def create_plan_cell(self, cell: ShiftPlanCells) -> ShiftPlanCells: ...
+    def get_plan_cell(self, plan_id: int, staff_user_id: Any, target_date: date) -> ShiftPlanCells | None: ...
     def list_plan_cells(self, plan_id: int) -> list[ShiftPlanCells]: ...
     def save_plan_cell(self, cell: ShiftPlanCells) -> None: ...
 
@@ -97,6 +99,15 @@ class SqlModelShiftRepository:
         self.session.commit()
         self.session.refresh(cell)
         return cell
+
+    def get_plan_cell(self, plan_id: int, staff_user_id: Any, target_date: date) -> ShiftPlanCells | None:
+        return self.session.exec(
+            select(ShiftPlanCells).where(
+                ShiftPlanCells.plan_id == plan_id,
+                ShiftPlanCells.staff_user_id == staff_user_id,
+                ShiftPlanCells.target_date == target_date,
+            )
+        ).first()
 
     def list_plan_cells(self, plan_id: int) -> list[ShiftPlanCells]:
         return self.session.exec(
