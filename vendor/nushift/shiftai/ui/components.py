@@ -161,7 +161,7 @@ def cell_legend() -> None:
         f'<span class="shiftai-chip" style="background:{COLOR_WORK};color:#ffffff">'
         f"<b>{CellState.WORK.value}</b>（保育・延長保育）</span>"
         f'<span class="shiftai-chip" style="background:{COLOR_BREAK}">'
-        f"<b>{CellState.BREAK.value}</b>（労働基準法第9条の休憩）</span>"
+        f"<b>{CellState.BREAK.value}</b>（労働基準法第34条の休憩）</span>"
         f'<span class="shiftai-chip" style="background:{COLOR_OFF};color:#424242">'
         f"<b>{CellState.OFF.value}</b>（非勤務）</span>"
         f'<span class="shiftai-chip" style="background:#ffffff;color:{COLOR_FIXED}">'
@@ -334,24 +334,29 @@ def style_live_grid(
     error_cols = report.error_columns()
     warning_cols = report.warning_columns()
 
-    def paint(key: tuple[str, str], value: Any) -> str:
-        text = str(value)
-        base = _cell_style(value)
-        if error_cols or warning_cols:
-            column = key[1]
+    def paint(row: pd.Series) -> list[str]:
+        # 行ごとに CSS を列の順に伦べる
+        # ``axis`` を受け取らないため、行単位の ``apply(axis=1)`` を使う）
+        sid = labels.get(str(row.name), "")
+        out: list[str] = []
+        for column, value in row.items():
+            base = _cell_style(value)
             if column in error_cols:
-                return base + "; border-bottom: 3px solid #C62828;"
+                out.append(base + "; border-bottom: 3px solid #C62828;")
+                continue
             if column in warning_cols:
-                return base + "; border-bottom: 3px solid #EF6C00;"
-        sid = labels.get(str(key[0]), "")
-        if (sid, str(key[1])) in error_cells:
-            return base + "; box-shadow: inset 0 0 0 2px #C62828;"
-        if (sid, str(key[1])) in warning_cells:
-            return base + "; box-shadow: inset 0 0 0 2px #EF6C00;"
-        _ = text
-        return base
+                out.append(base + "; border-bottom: 3px solid #EF6C00;")
+                continue
+            key = (sid, str(column))
+            if key in error_cells:
+                out.append(base + "; box-shadow: inset 0 0 0 2px #C62828;")
+            elif key in warning_cells:
+                out.append(base + "; box-shadow: inset 0 0 0 2px #EF6C00;")
+            else:
+                out.append(base)
+        return out
 
-    return frame.style.map(paint, axis=None).set_table_styles(
+    return frame.style.apply(paint, axis=1).set_table_styles(
         [
             {
                 "selector": "th",
@@ -631,10 +636,10 @@ def _stat_display(value: object) -> str:
     """
     if value is None:
         return "—"
-    if isinstance(value, (set, frozenset)):
+    if isinstance(value, set | frozenset):
         # ``set`` の反復順は乱数依存なので、表示が実行ごとに変わらないよう並べる
         value = sorted(value, key=str)
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, list | tuple | set | frozenset):
         items = [str(v) for v in value]
         return "、".join(items) if items else "（なし）"
     if isinstance(value, bool):
@@ -810,6 +815,108 @@ def violation_dataframe(violations: Sequence[Violation]) -> pd.DataFrame:
             for v in violations
         ]
     )
+
+
+def violation_targets(
+    violations: Sequence[Violation], *, limit: int = 20
+) -> list[tuple[str, tuple[str, str, str]]]:
+    """修正できる違反を ``(説明文, 修正対象)`` の並びにする。
+
+    修正対象は ``(日付の ISO 文字列, 職員ID, 時間帯ラベル)``。
+    日付・職員ID・時間帯のどれかが欠けるものは除く（どこを直せばよいか
+    特定できないため）。上位 ``limit`` 件だけ返す。
+    """
+    targets: list[tuple[str, tuple[str, str, str]]] = []
+    for v in violations:
+        if v.day is None or v.slot is None or not v.staff_id:
+            continue
+        target = (v.day.isoformat(), v.staff_id, v.slot.label)
+        label = f"{v.day.isoformat()} {v.staff_id} {v.slot.label}"
+        targets.append((label, target))
+        if len(targets) >= limit:
+            break
+    return targets
+
+
+def unfixable_violations(violations: Sequence[Violation]) -> list[Violation]:
+    """セルを 1 つ指定して直せない違反を返す。
+
+    日付・時間帯・職員ID のどれかが欠けるものは、どのセルを変えればよいか
+    特定できないため修正ボタンを持たせられない。放置すると
+    「ダウンロードできない」のまま出口がなくなるので、これらの件数と
+    内容を明示する必要がある。
+    """
+    return [v for v in violations if v.day is None or v.slot is None or not v.staff_id]
+
+
+def render_violation_actions(violations: Sequence[Violation], *, key_prefix: str) -> None:
+    """違反一覧の下に修正ボタンを並べる。
+
+    押されたボタンに対応する ``state.set_fix_target()`` を呼び、
+    **シフト表のタブへ自動で移動する**（移動しないと「押しても何も起こらない」
+    導線になる）。
+    修正対象のセルが 1 つもなくても、セルでは直せない違反の件数は出す。
+    """
+    from shiftai.ui import state
+
+    targets = violation_targets(violations)
+    unfixable = unfixable_violations(violations)
+    if not violations:
+        return
+
+    def _jump(target: tuple[str, str, str]) -> None:
+        """修正対象を予約し、シフト表のタブを開く。"""
+        state.set_fix_target(target)
+        st.session_state[state.KEY_FIX_REQUESTED] = True
+        theme.goto_tab("shift")
+
+    st.markdown("#### 🛠 この違反を修正する")
+    st.caption(
+        f"ボタンを押すと、{theme.tab_ref_for('shift')} が開き、"
+        "該当の日付・職員・時間帯が選択された状態になります。"
+        "セルの値を「勤務」「休憩」「オフ」に変えて「✅ 変更を確定して再最適化する」を押すと、"
+        "違反が解消されます。"
+    )
+    if targets:
+        shown = targets[:8]
+        for start in range(0, len(shown), 2):
+            pair = shown[start : start + 2]
+            columns = st.columns(len(pair))
+            for offset, (label, target) in enumerate(pair):
+                index = start + offset
+                with columns[offset]:
+                    st.button(
+                        f"修正 {label}",
+                        key=f"{key_prefix}_fix_{index}",
+                        width="stretch",
+                        help=theme.tab_ref_for("shift") + " を開いて該当セルを編集します。",
+                        on_click=_jump,
+                        args=(target,),
+                    )
+        if len(targets) > len(shown):
+            st.caption(
+                f"ほか {len(targets) - len(shown)} 件。"
+                "下の違反一覧（深刻度別）から日付・職員・時間帯を確認してください。"
+            )
+    else:
+        st.warning(
+            "この違反は 1 つのセルに特定できないため、修正ボタンを出せません。"
+            "下の違反一覧の内容を確認し、園の条件や職員データを見直してください。"
+        )
+    if unfixable:
+        with st.expander(f"ℹ️ セルでは直せない違反（{len(unfixable)} 件）", expanded=True):
+            st.dataframe(
+                violation_dataframe(unfixable),
+                width="stretch",
+                hide_index=True,
+                key=f"{key_prefix}_unfixable",
+            )
+            st.caption(
+                "「—」は日付・時間帯・職員が特定できないことを表します。"
+                "過不足や労働時間など期間全体の問題は、"
+                f"{theme.tab_ref_for('data')} の入力や {theme.tab_ref_for('solve')} "
+                "の再計算で解消します。"
+            )
 
 
 def render_violations(violations: Sequence[Violation]) -> None:

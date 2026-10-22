@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 取り込み元 | `E:\nushift\nushift\src\shiftai` |
-| 基準コミット | `c5c86f3`（`master`、**38ファイルが未コミット**） |
-| 取り込み日 | 2026-10-03 |
-| ファイル数 | 66（`ui/` 539KB を含む） |
+| 基準コミット | `54dde2b`（`master`） |
+| 取り込み日 | 2026-10-22 |
+| ファイル数 | 66（`ui/` を含む） |
 | 実装方針 | `docs/shift-schedule-integration-proposal-2026-10-03.md` の 3.0a |
 
 ## submodule ではなくコピーにした理由

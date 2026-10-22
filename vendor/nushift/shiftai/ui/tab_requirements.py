@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import Any
 
@@ -57,6 +58,20 @@ def compute_requirements() -> None:
     state.reset(state.KEY_VIOLATIONS)
 
 
+def _ratio_label(ratio: float) -> str:
+    """必要／供給比の表示。
+
+    ``state.supply_demand_ratio`` は供給 0・需要 >0 のとき ``inf`` を返す。
+    ``"%.2f" % inf`` は ``"inf"`` になるため、そのまま整形すると
+    ``!inf`` という無意味なカード、および「``!`` が tone 判定に使われる」
+    ``components.metric_html`` の挙動を招く（``theme.format_ratio`` は
+    ``inf`` / ``nan`` を明示的に扱うので、この呼び出しだけが漏れていた）。
+    """
+    if math.isinf(ratio) or math.isnan(ratio):
+        return "充足不能"
+    return ("!%.2f" if ratio > 1.0 else "~%.2f") % ratio
+
+
 def _render_kpis(table: Any) -> None:
     """KPI カード（ピーク必要人員・総必要人時・園児数・職員数）。"""
     standard = state.current_standard()
@@ -86,7 +101,7 @@ def _render_kpis(table: Any) -> None:
             ),
             (
                 "必要／供給 比",
-                ("!%.2f" if ratio > 1.0 else "~%.2f") % ratio,
+                _ratio_label(ratio),
                 "1.00 を超えると構造的に基準を満たせません",
             ),
         ]
@@ -216,8 +231,13 @@ def _render_gap_preview(table: Any) -> None:
     """タブ3 の実行結果があれば過不足ヒートマップも表示する。"""
     result = state.get(state.KEY_SOLVE_RESULT)
     if result is None or not result.shift_days:
-        with st.expander("⚖️ 過不足ヒートマップ（タブ3 の実行後に表示）", expanded=False):
-            st.info("まだシフトを作成していません。タブ3「シフト作成」で最適化を実行してください。")
+        with st.expander(
+            f"⚖️ 過不足ヒートマップ（{theme.tab_ref(2)} の実行後に表示）", expanded=False
+        ):
+            st.info(
+                f"まだシフトを作成していません。{theme.tab_ref(2)}（シフト作成）で"
+                "最適化を実行してください。"
+            )
         return
     st.markdown("#### ⚖️ 過不足（必要人員 − 配置人員）")
     frame = gap_analysis.gap_matrix(table, result)
@@ -228,14 +248,11 @@ def _render_gap_preview(table: Any) -> None:
         frame, scale="shortfall", vmin=-3.0, vmax=3.0, subset=list(frame.columns[1:])
     )
     st.dataframe(styled, width="stretch", key="gap_matrix")
-    st.caption("赤＝不足（負）、緑＝充足（正）。この行列はタブ3 の最適化結果から計算しています。")
+    st.caption(
+        f"赤＝不足（負）、緑＝充足（正）。"
+        f"この行列は{theme.tab_ref(2)}の最適化結果から計算しています。"
+    )
 
-
-def _ratio_text(ratio: float) -> str:
-    """必要／供給比を表示用文字列にする（``inf`` は「∞」表記）。"""
-    if ratio == float("inf"):
-        return "∞"
-    return f"{ratio:.2f}"
 
 
 def _render_supply_warning(table: Any) -> float:
@@ -243,7 +260,7 @@ def _render_supply_warning(table: Any) -> float:
     required = standards.total_required_hours(table)
     supply = state.contract_hours()
     ratio = state.supply_demand_ratio(required)
-    shown = _ratio_text(ratio)
+    shown = theme.format_ratio(ratio)
     with st.expander("✅ 必要人員の計算結果（内訳）", expanded=False):
         st.markdown(f"- 総必要人時: **{required:,.1f} h**（{len(table.all_days())} 日）")
         st.markdown(f"- 供給可能人時（契約時間ベース）: **{supply:,.1f} h**")
@@ -439,13 +456,18 @@ def _render_compliance(standard: Any) -> None:
 def render() -> None:
     """タブ2 の本体。"""
     theme.step_indicator(1)
-    st.markdown("### 2. 必要人員")
+    theme.heading(1)
     if not state.data_ready():
         theme.empty_state()
+        if state.staff_missing():
+            theme.stuck_hint(1, "職員データが 0 名です。")
+        else:
+            theme.stuck_hint(1, "園児データが 0 名です。")
         return
     days = state.current_days()
     if not days:
-        st.warning("サイドバーで計画期間を設定してください。")
+        st.warning(theme.where_is_period())
+        theme.stuck_hint(1, "計画期間が設定されていません。")
         return
 
     left, right = st.columns([1, 2])
@@ -471,6 +493,7 @@ def render() -> None:
     table = state.get(state.KEY_REQUIREMENTS)
     if table is None:
         st.info("「必要人員を再計算」を押してください。")
+        theme.stuck_hint(1, "必要人員がまだ計算されていません。")
         return
     if not table.notes:
         pass

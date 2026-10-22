@@ -58,6 +58,22 @@ def _reset_ratio_widgets() -> None:
         st.session_state.pop(f"ratio_{age_class.value}", None)
 
 
+def _invalidate_if_changed(previous: Any, current: Any, reason: str) -> None:
+    """入力が実際に変わっていないなら何もしない。変わっていれば無効化する。
+
+    Streamlit は毎フレームサイドバーを描き直すため、値が変わっていないのに
+    毎回最適化結果を破棄すると結果が消えてしまう。だから実際の差分を見る。
+
+    **初回描画（指紋が空）は無効化しない。** それなら読み込み直後の
+    計算結果まで消えてしまう。
+    """
+    if not state.get(state.KEY_INPUT_FINGERPRINT):
+        return
+    if previous == current:
+        return
+    state.mark_inputs_changed(reason)
+
+
 def _render_facility(*, times: bool = True) -> None:
     """園設定（園名・開所・閉所・粒度・休業日）。
 
@@ -131,6 +147,7 @@ def _render_facility(*, times: bool = True) -> None:
         step=100.0,
         key="labor_cost_per_hour",
     )
+    previous = state.get(state.KEY_SETTINGS)
     state.set(
         state.KEY_SETTINGS,
         FacilitySettings(
@@ -145,6 +162,7 @@ def _render_facility(*, times: bool = True) -> None:
     )
     state.reset(state.KEY_SLOTS)
     state.current_slots()
+    _invalidate_if_changed(previous, state.get(state.KEY_SETTINGS), "園設定を変更しました")
     # 以前は current_slots() が ValueError を握り潰していたため、
     # この except 節は到達不能で「開所・閉所時刻の設定が不正です」が
     # 結局一周もしていなかった。current_slots_error() で理由を読む。
@@ -178,7 +196,7 @@ def _render_standard() -> None:
         _reset_ratio_widgets()
         state.set(state.KEY_STANDARD_KEY, new_key)
         state.set(state.KEY_STANDARD, local_rules.get_standard(new_key))
-        state.invalidate_pipeline()
+        state.mark_inputs_changed("自治体プリセットを変更しました")
     st.caption(f"出典: {record.get('source', '—')}")
     _render_overrides(local_rules.get_standard(state.get(state.KEY_STANDARD_KEY)))
     effective = state.current_standard()
@@ -242,9 +260,15 @@ def _render_overrides(preset: Any) -> None:
             "ratios": ratios,
         }
         effective = local_rules.build_standard(state.get(state.KEY_STANDARD_KEY), overrides)
+        previous_effective = state.get(state.KEY_STANDARD)
         state.set(state.KEY_STANDARD_OVERRIDES, overrides)
         state.set(state.KEY_STANDARD, effective)
         state.set(state.KEY_ENFORCE_MIN_TWO, bool(enforce))
+        _invalidate_if_changed(
+            previous_effective,
+            effective,
+            "配置基準の上乗せを変更しました",
+        )
         st.caption(
             f"適用中: {effective.name} ／ 休憩 {effective.break_minutes}分 ／ "
             f"保育標準時間 {effective.standard_time[0].strftime('%H:%M')}-"
@@ -281,6 +305,7 @@ def _render_period() -> None:
                 key="range_days",
             )
         )
+    previous_days = list(state.get(state.KEY_DAYS) or [])
     days = state.refresh_days(start, count)
     closed = state.get(state.KEY_SETTINGS).closed_days
     open_days = [d for d in days if d not in closed]
@@ -288,6 +313,8 @@ def _render_period() -> None:
         f"{len(days)} 日（{theme.format_day(days[0])} 〜 {theme.format_day(days[-1])}）"
         f"／ 開園 {len(open_days)} 日"
     )
+    if days != previous_days and state.get(state.KEY_INPUT_FINGERPRINT):
+        state.mark_inputs_changed("計画期間を変更しました")
 
 
 def _render_weights() -> None:
@@ -404,7 +431,7 @@ def _push_tables() -> None:
 def _render_patterns() -> None:
     """勤務パターン（早番・日勤・遅番）の定義（優先2）。
 
-    有効にすると、勤務ブロックの開始・終了時刻を aquí の境界へ引き寄せる。
+    有効にすると、勤務ブロックの開始・終了時刻をパターンの境界へ引き寄せる。
     """
     st.markdown("#### ⏰ 勤務パターン（早番・日勤・遅番）")
     settings = state.current_settings()
@@ -578,9 +605,7 @@ def render(*, simple: bool = False, period: bool = True, times: bool = True) -> 
         theme.tip(
             "ℹ️ 労働基準の取り扱いについて",
             f"<p>本アプリが使う週の内部目安は <b>{STATUTORY_WEEKLY_WORK_HOURS} 時間</b>です。</p>"
-            "<p>労働基準法の枠組みは月45時間・年360時間で、旧来の週44時間は"
-            "2019年の改正で法定の上限ではなくなっています。厳しい方に"
-            "合わせているため法令違反は生じません。</p>"
-            "<p>最適解は法令・基準への適合を優先しますが、"
-            "最終判断は園長・設置責任者の確認を推奨します。</p>",
+            "<p>労働基準法の枠組みは月45時間・年360時間が原則ですが、2024-04-01 改正後は従業者数規模別に上限が異なります（中規模は2027年4月から月30時間、小規模は2029年4月から月40時間など）。</p>"
+            "<p>本定数は厳しい方（古い方）を使うため法令違反を生じませんが、UI で「法定の週労働時間」と断定して表示してはなりません。</p>"
+            "<p>最適解は法令・基準への適合を優先しますが、最終判断は園長・設置責任者の確認を推奨します。</p>",
         )

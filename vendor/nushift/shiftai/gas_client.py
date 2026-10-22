@@ -65,7 +65,7 @@ def _streamlit_secrets() -> dict[str, str]:
         for key, value in items:
             if key in out or value is None:
                 continue
-            if isinstance(value, (dict, list, tuple, bool)):
+            if isinstance(value, dict | list | tuple | bool):
                 # ネストしたセクションは設定値ではないので拾わない。
                 continue
             # TOML では timeout_sec = 25 は int になる。数値も文字列化して読む。
@@ -79,6 +79,7 @@ def _streamlit_secret(key: str) -> str | None:
     """``secrets.toml`` から対応する設定値を読む。読めなければ ``None``。"""
     values = _streamlit_secrets()
     return values.get(SECRET_ALIASES.get(key, key)) or values.get(key)
+
 
 SHEET_ALIASES: dict[str, str] = {
     "children": "attendance",

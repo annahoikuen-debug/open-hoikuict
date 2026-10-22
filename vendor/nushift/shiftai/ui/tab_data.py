@@ -107,7 +107,12 @@ def coerce_frame(kind: str, frame: pd.DataFrame) -> pd.DataFrame:
             continue
         series = result[column]
         if column_kind == "date":
-            result[column] = pd.to_datetime(series, errors="coerce")
+            # pandas の `to_datetime` は**最初の値の書式**で推測を固定する。
+            # その結果 `2026-10-01` と `2026/10/02` が混在する列では
+            # 後者以降が全て `NaT` になり、園児が黙って名簿から消える
+            # （`load_bundle` は「登園日を解釈できません」として行を落とすだけ）。
+            # `format="mixed"` で要素ごとに解釈し直す。
+            result[column] = pd.to_datetime(series, errors="coerce", format="mixed")
         elif column_kind == "time":
             result[column] = series.map(data_loader.parse_time)
         elif column_kind in ("number", "int"):
@@ -590,6 +595,8 @@ def apply_load_result(result: Any) -> None:
         state.set(state.KEY_STAFF, result.staff)
         state.set(state.KEY_PREFERENCES, result.preferences)
         state.invalidate_pipeline()
+        # ここから先の入力変更を検知するため、基準の指紋を記録する。
+        state.mark_inputs_baseline()
 
 
 def render_result_panel() -> None:
@@ -652,14 +659,32 @@ def render_validation_summary(report: ValidationReport) -> None:
     )
 
 
-def reset_inputs() -> None:
-    """3 表ぶんの入力を破棄して既定状態に戻す。"""
+def reset_tables() -> None:
+    """3 表（園児・職員・希望休）と編集履歴だけを初期化する。
+
+    園設定・配置基準・計画期間・最適化オプションは**保持**する。
+    ラベルが表す範囲と実際に消える範囲を一致させるために、
+    全消去版の :func:`reset_everything` と分けてある。
+    """
     for kind, _t, _l, _d in TABLE_KINDS:
         st.session_state.pop(f"frame_{kind}", None)
         st.session_state.pop(f"editor_{kind}", None)
         st.session_state.pop(f"upload_{kind}", None)
     state.reset_edit_histories()
+
+
+def reset_everything() -> None:
+    """セッション全体を初期化する（3 表・園設定・基準・計算結果すべて）。
+
+    ``state.reset_all()`` を呼ぶ。ウィザードのステップも 0 に戻す。
+
+    文字列リテラル ``"wizard_step"`` を使うのは、``wizard.py`` が
+    ``tab_data`` を import しているのでここで ``wizard`` を import すると
+    循環するため。キーの一致は ``tests/test_ui_wizard.py`` が固定する。
+    """
+    reset_tables()
     state.reset_all()
+    st.session_state.pop("wizard_step", None)
 
 
 def render_apply_block() -> None:
@@ -688,14 +713,34 @@ def render_apply_block() -> None:
             ),
         )
     with right:
-        if st.button("🗑 すべてクリア", width="stretch", key="clear_all"):
-            reset_inputs()
+        if st.button("🧹 3 表だけをクリア", width="stretch", key="clear_tables"):
+            reset_tables()
             st.rerun()
+        if st.button(
+            "🔄 入力と計算結果をすべて初期化",
+            width="stretch",
+            key="clear_all",
+            help="3 表・園設定・配置基準・計画期間・計算結果をすべて消します。取り消せません。",
+        ):
+            st.session_state["_confirm_reset_all"] = True
+            st.rerun()
+    if st.session_state.get("_confirm_reset_all"):
+        st.warning("3 表・園設定・配置基準・計画期間・計算結果をすべて消します。")
+        confirm_col, cancel_col = st.columns(2)
+        with confirm_col:
+            if st.button("⚠️ 本当にすべて初期化する", key="clear_all_confirm"):
+                st.session_state["_confirm_reset_all"] = False
+                reset_everything()
+                st.rerun()
+        with cancel_col:
+            if st.button("↩︎ やめる", key="clear_all_cancel"):
+                st.session_state["_confirm_reset_all"] = False
+                st.rerun()
     if apply_clicked:
         try:
             with st.spinner("設定を読み込んでいます…"):
                 apply_load_result(build_load_result())
-            st.success("読み込みました。上のタブ「2️⃣ シフト作成」で自動作成できます。")
+            st.success(f"読み込みました。{theme.tab_ref(2)}（シフト作成）で自動作成できます。")
         except Exception as exc:  # noqa: BLE001 - 読み込み失敗で画面を落とさない
             st.error(f"読み込みに失敗しました: {exc}")
 
@@ -714,7 +759,7 @@ def render_sample_tip(seed: int) -> None:
 def render() -> None:
     """タブ1 の本体（まとめて入力する画面）。"""
     theme.step_indicator(0)
-    st.markdown("### 1. データ投入")
+    theme.heading(0)
     settings = state.current_settings()
     st.caption(
         f"現在の園設定: {settings.facility_name} ／ "
@@ -739,7 +784,8 @@ def render() -> None:
     sync_seed_inputs(int(seed))
     days = state.current_days()
     if not days:
-        st.warning("サイドバーで計画期間を設定してください。")
+        st.warning(theme.where_is_period())
+        theme.stuck_hint(0, "計画期間が設定されていません。")
         return
 
     for kind, title, label, detail in TABLE_KINDS:
