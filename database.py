@@ -51,6 +51,7 @@ def create_db_and_tables() -> None:
     import models  # noqa: F401
     import child_records.models  # noqa: F401
     import plan_docs.db_models  # noqa: F401
+    import shift_schedule.db_models  # noqa: F401
 
     if engine.dialect.name != "sqlite":
         if os.getenv("HOIKUICT_ALLOW_UNMANAGED_SCHEMA") != "1":
@@ -94,6 +95,7 @@ def create_db_and_tables() -> None:
     _migrate_extended_care_billing_transfer()
     _migrate_family_bootstrap()
     _migrate_sync_health_records_from_legacy()
+    _migrate_shift_schedule_tables()
     _validate_sqlite_foreign_keys()
 
 
@@ -1775,3 +1777,30 @@ def seed_staff_classroom_assignments() -> None:
             changed = True
         if changed:
             session.commit()
+
+
+def _migrate_shift_schedule_tables() -> None:
+    """Add columns needed by the shift schedule feature to existing tables."""
+    try:
+        with engine.connect() as conn:
+            # attendance_records: 登園予定時刻（シフト生成用の上書き列）
+            att_cols = _table_columns("attendance_records")
+            if att_cols and "planned_check_in_time" not in att_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE attendance_records "
+                        "ADD COLUMN planned_check_in_time VARCHAR(5)"
+                    )
+                )
+            # users: シフト管理権限フラグ
+            user_cols = _table_columns("users")
+            if user_cols and "can_manage_shifts" not in user_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE users "
+                        "ADD COLUMN can_manage_shifts BOOLEAN DEFAULT 0 NOT NULL"
+                    )
+                )
+            conn.commit()
+    except Exception as exc:
+        _log_migration_skip("shift schedule tables", exc)

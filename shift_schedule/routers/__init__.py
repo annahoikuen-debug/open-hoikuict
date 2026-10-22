@@ -1,0 +1,1 @@
+"""Shift schedule routers (FastAPI)."""

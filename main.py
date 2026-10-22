@@ -74,6 +74,13 @@ from plan_docs.routers.documents import router as plan_docs_documents_router
 from plan_docs.routers.home import router as plan_docs_home_router
 from plan_docs.routers.plans import router as plan_docs_plans_router
 from plan_docs.routers.monthly_library import router as monthly_library_router
+from shift_schedule.routers.contracts import router as shift_contracts_router
+from shift_schedule.routers.exports import router as shift_exports_router
+from shift_schedule.routers.facility import router as shift_facility_router
+from shift_schedule.routers.home import router as shift_home_router
+from shift_schedule.routers.plans import router as shift_plans_router
+from shift_schedule.routers.plans_edit import router as shift_plans_edit_router
+from shift_schedule.services.solve_jobs import cbc_available as cbc_available_check, solve_worker_loop
 from parent_push_runtime import parent_push_worker_enabled, parent_push_worker_loop
 from parent_push_operations import apply_parent_push_retention
 from parent_auth import parent_mail_worker_loop
@@ -110,6 +117,8 @@ async def lifespan(app: FastAPI):
         background_tasks.append(asyncio.create_task(_after_restore_release(parent_mail_worker_loop)))
     if not restore_probe and staff_auth_mode() == "local_password":
         background_tasks.append(asyncio.create_task(_after_restore_release(staff_mail_worker_loop)))
+    if cbc_available_check():
+        background_tasks.append(asyncio.create_task(_after_restore_release(solve_worker_loop)))
     try:
         yield
     finally:
@@ -198,6 +207,12 @@ app.include_router(plan_docs_plans_router, prefix="/plans")
 app.include_router(plan_docs_documents_router, prefix="/plans")
 app.include_router(plan_docs_bunrei_router, prefix="/plans")
 app.include_router(monthly_library_router, prefix="/plans")
+app.include_router(shift_home_router)
+app.include_router(shift_facility_router)
+app.include_router(shift_contracts_router)
+app.include_router(shift_plans_router)
+app.include_router(shift_plans_edit_router)
+app.include_router(shift_exports_router)
 
 @app.get("/switch-role", dependencies=[Depends(require_mock_staff_auth)])
 def switch_role(redirect: str = "/"):
