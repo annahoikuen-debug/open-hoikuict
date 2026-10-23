@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 取り込み元 | `E:\nushift\nushift\src\shiftai` |
-| 基準コミット | `54dde2b`（`master`） |
+| 基準コミット | `db043db`（`master`） |
 | 取り込み日 | 2026-10-22 |
 | ファイル数 | 66（`ui/` を含む） |
 | 実装方針 | `docs/shift-schedule-integration-proposal-2026-10-03.md` の 3.0a |
