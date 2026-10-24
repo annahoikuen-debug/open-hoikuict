@@ -72,6 +72,11 @@ test_uploads/
 # Local preview dependencies and generated verification files
 node_modules/
 .pytest_cache/
+.coverage*
+htmlcov/
+cov_results.txt
+coverage_output.txt
+coverage_baseline.log
 /output/pdf/monthly-plan-preview.pdf
 /outputs/monthly-print-export-20260927/
 /tools/parent-notice-order-preview/preview.png

@@ -5,7 +5,7 @@
 nusoftは、保育ICTプラットフォーム`open-hoikuict`をベースに、職員シフト自動作成・MFA・版管理の厳格化などの新機能を開発・統合するプロジェクトです。
 
 > **注意: このREADMEは開発者向けの技術文書です。利用者向けガイドは `docs/features.md` や `docs/specifications.md` を参照してください。**
-> 最終同期: 2026-10-22、`main` `d1e6bac` (Phase 3 シフト・MFA 実装完了)
+> 最終同期: 2026-10-24、バージョン: `v0.4.0` (Phase 3 シフト求解不具合解消・MFA・セキュリティ基盤強化 完了)
 > 本番・デモ環境は `docs/features.md`、仕様全体は `docs/specifications.md` を参照してください。
 
 **[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [技術ガイド](docs/technical-guide.md) | [機能一覧](docs/features.md) | [導入手順](docs/getting-started.md) | [開発環境](docs/development.md)**
@@ -14,7 +14,7 @@ nusoftは、保育ICTプラットフォーム`open-hoikuict`をベースに、�
 
 ## 1. nusoft とは
 
-**nusoft** は、`open-hoikuict` をベースに、**職員シフト自動作成 (nushift/shiftai)** や **多要素認証 (MFA)** 等の新機能を開発・統合するプロジェクトです。
+**nusoft** は、`open-hoikuict` をベースに、**職員シフト自動作成 (nushift/shiftai)** や **多要素認証 (MFA)**、**エンタープライズ・セキュリティ基盤** 等の新機能を開発・統合するプロジェクトです。
 
 | 項目 | 値 | 備考 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ nusoftは、保育ICTプラットフォーム`open-hoikuict`をベースに、�
 | 本番URL | `open.hoikuict.net` | 運用環境 |
 | デモURL | `demo.hoikuict.net` | 検証用環境 |
 | プロジェクト名 | **nusoft** | 派生開発の統合名 |
-| 最新コミット | `d1e6bac` | Phase 3: シフト自動作成・MFA メールOTP 実装完了 |
+| 最新バージョン | **v0.4.0** | シフト自動作成・MFA・セキュリティヘッダー・監査ログ完了 |
 
 ### 由来・命名規則
 

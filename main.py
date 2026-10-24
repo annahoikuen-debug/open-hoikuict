@@ -148,9 +148,11 @@ async def _preview_cleanup_loop() -> None:
         await asyncio.to_thread(_cleanup_stale_previews)
 
 
+from version import __version__
+
 app = FastAPI(
     title="open-hoikuict",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
     dependencies=[Depends(verify_csrf)],
 )
@@ -230,4 +232,4 @@ def switch_role(redirect: str = "/"):
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    return {"status": "ok", "version": __version__}
