@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from sqlmodel import Session, select
 
+from time_utils import utc_now
 from .models import ChildRecordSettingVersion
 
 
@@ -206,8 +207,78 @@ def enabled_fields(config: dict[str, Any]) -> list[dict[str, Any]]:
 def new_custom_field_key() -> str:
     """Generate a stable UUID-based key for a custom field.
 
-    Unlike the old `custom_field_key(label)` which derived the key from the
-    display label, this returns a random UUID that persists across label
-    changes. The label is stored separately in the field definition.
+    Returns a key formatted as `cf_<uuid4>` that persists across label changes.
     """
-    return f"custom.{uuid4()}"
+    return f"cf_{uuid4()}"
+
+
+def update_custom_field_definitions(
+    existing_fields: list[dict[str, Any]],
+    new_definitions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Update custom field definitions while preserving existing UUID4 keys.
+
+    If an incoming field already has a valid key matching an existing field,
+    its key is maintained even when its label or order changes.
+    If the key is missing or new, a new `cf_<uuid4>` key is assigned.
+    """
+    existing_by_key = {item["key"]: item for item in existing_fields if item.get("key")}
+    updated: list[dict[str, Any]] = []
+    for item in new_definitions:
+        entry = deepcopy(item)
+        key = entry.get("key")
+        if not key or key not in existing_by_key:
+            # Check if key starts with cf_, otherwise generate
+            if not (key and key.startswith("cf_")):
+                key = new_custom_field_key()
+            entry["key"] = key
+        entry.setdefault("custom", True)
+        updated.append(entry)
+    return updated
+
+
+def save_child_record_settings_version(
+    session: Session,
+    new_config: dict[str, Any],
+    actor_id: str | None = None,
+    effective_from: date | None = None,
+    preset_key: str | None = None,
+) -> ChildRecordSettingVersion:
+    """Save a new version of child record settings.
+
+    Automatically increments version_no and commits the record.
+    """
+    latest_setting = session.exec(
+        select(ChildRecordSettingVersion)
+        .order_by(ChildRecordSettingVersion.version_no.desc())
+    ).first()
+    version_no = (latest_setting.version_no + 1) if latest_setting else 1
+    next_lock_version = (latest_setting.lock_version + 1) if latest_setting else 1
+    target_date = effective_from or date.today()
+
+    # Retire same date active versions if needed
+    same_date_rows = session.exec(
+        select(ChildRecordSettingVersion).where(
+            ChildRecordSettingVersion.status == "active",
+            ChildRecordSettingVersion.effective_from == target_date,
+        )
+    ).all()
+    for row in same_date_rows:
+        row.status = "retired"
+        session.add(row)
+
+    setting = ChildRecordSettingVersion(
+        version_no=version_no,
+        status="active",
+        preset_key=preset_key or new_config.get("preset_key", "standard"),
+        effective_from=target_date,
+        config=new_config,
+        created_by=str(actor_id) if actor_id else None,
+        activated_by=str(actor_id) if actor_id else None,
+        activated_at=utc_now(),
+        lock_version=next_lock_version,
+    )
+    session.add(setting)
+    session.commit()
+    session.refresh(setting)
+    return setting

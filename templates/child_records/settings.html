@@ -114,9 +114,9 @@
           </tbody>
         </table>
       </div>
-      <div class="mt-6">
+      <div class="mt-6" id="custom-fields-container" data-test="custom_fields">
         <label class="block text-sm font-medium text-slate-700">園独自項目（1行に1項目、最大10件）
-          <textarea name="custom_field_labels" rows="4" class="mt-2 block w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="例：園で大切にしている視点&#10;例：行事への関わり">{% for item in field_map.values() if item.custom %}{{ item.label }}{% if not loop.last %}
+          <textarea id="custom_fields" name="custom_field_labels" rows="4" class="mt-2 block w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="例：園で大切にしている視点&#10;例：行事への関わり">{% for item in field_map.values() if item.custom %}{{ item.label }}{% if not loop.last %}
 {% endif %}{% endfor %}</textarea>
         </label>
       </div>

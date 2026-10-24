@@ -25,6 +25,8 @@ class ChildRecordSettingVersion(SQLModel, table=True):
     config: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_by: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    lock_version: int = Field(default=1, nullable=False)
     activated_by: Optional[str] = None
     activated_at: Optional[datetime] = None
 

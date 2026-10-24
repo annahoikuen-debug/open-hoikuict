@@ -20,6 +20,19 @@
       {% for definition in section_definitions %}
       <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><label class="block text-sm font-semibold text-slate-800">{{ definition.title }}{% if definition.key == 'progress_children_overview' %} <span class="text-rose-600">*</span>{% endif %}<textarea name="body_{{ definition.key }}" rows="{% if definition.key == 'progress_children_overview' %}7{% else %}5{% endif %}" maxlength="5000" {% if definition.key == 'progress_children_overview' %}required{% endif %} class="mt-2 block w-full rounded-xl border border-slate-300 px-3 py-2 leading-7" placeholder="{{ definition.purpose }}">{{ values.get(definition.key, '') }}</textarea></label></section>
       {% endfor %}
+      {% if custom_fields %}
+      <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h2 class="font-semibold text-slate-900">園独自項目</h2>
+        {% for field in custom_fields %}
+        <div>
+          <label class="block text-sm font-semibold text-slate-800">
+            {{ field.label }}{% if field.required %} <span class="text-rose-600">*</span>{% endif %}
+            <textarea name="cf_{{ field.key|replace('cf_', '') }}" rows="4" maxlength="5000" {% if field.required %}required{% endif %} class="mt-2 block w-full rounded-xl border border-slate-300 px-3 py-2 leading-7" placeholder="{{ field.description or '園独自の記録内容を入力します' }}">{{ values.get('cf_' ~ (field.key|replace('cf_', '')), '') }}</textarea>
+          </label>
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
       <div class="flex justify-end"><button type="submit" {% if existing_document_id %}disabled{% endif %} class="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300">下書きを作成</button></div>
     </div>
 

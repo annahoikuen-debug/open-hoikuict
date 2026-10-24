@@ -32,6 +32,8 @@ from plan_docs.db_models import PlanDocumentRow
 from plan_docs.models import PlanDocument, SectionBlock
 from plan_docs.store import SqlModelDocumentRepository
 
+from common.optimistic_lock import claim_lock, ConcurrentUpdateError
+
 from .models import (
     ChildObservationLog,
     ChildObservationLogRevision,
@@ -55,6 +57,7 @@ from .settings import (
     enabled_fields,
     field_map,
     new_custom_field_key,
+    save_child_record_settings_version,
 )
 
 
@@ -258,29 +261,39 @@ async def save_child_record_settings(
     effective_from = _parse_date(
         str(form.get("effective_from") or ""), field_label="適用開始日"
     )
-    same_date_rows = session.exec(
-        select(ChildRecordSettingVersion).where(
-            ChildRecordSettingVersion.status == "active",
-            ChildRecordSettingVersion.effective_from == effective_from,
-        )
-    ).all()
-    for row in same_date_rows:
-        row.status = "retired"
-        session.add(row)
-    latest_version = session.exec(select(func.max(ChildRecordSettingVersion.version_no))).one()
-    version_no = int(latest_version or 0) + 1
-    setting = ChildRecordSettingVersion(
-        version_no=version_no,
-        status="active",
-        preset_key=preset_key if preset_key in PRESET_LABELS else "standard",
+
+    expected_version = form.get("expected_version")
+    if expected_version is not None:
+        try:
+            exp_ver = int(expected_version)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="無効なバージョン番号です") from exc
+        latest_setting = session.exec(
+            select(ChildRecordSettingVersion)
+            .order_by(ChildRecordSettingVersion.version_no.desc())
+        ).first()
+        if latest_setting is not None:
+            try:
+                claim_lock(
+                    session,
+                    table_name="child_record_setting_versions",
+                    id_col="id",
+                    id_val=latest_setting.id,
+                    expected_version=exp_ver,
+                )
+            except ConcurrentUpdateError as err:
+                raise HTTPException(
+                    status_code=409,
+                    detail="他の職員が先に設定を更新しました。画面を再読み込みしてください。",
+                ) from err
+
+    save_child_record_settings_version(
+        session=session,
+        new_config=config,
+        actor_id=_actor_id(current_user),
         effective_from=effective_from,
-        config=config,
-        created_by=_actor_id(current_user),
-        activated_by=_actor_id(current_user),
-        activated_at=utc_now(),
+        preset_key=preset_key if preset_key in PRESET_LABELS else "standard",
     )
-    session.add(setting)
-    session.commit()
     return RedirectResponse(url="/settings/child-records?saved=1", status_code=303)
 
 
@@ -442,7 +455,7 @@ def child_record_timeline(
         custom_labels_by_log_id[log.id] = {
             key: str(item.get("label") or key)
             for key, item in field_map(log_config).items()
-            if key.startswith("custom.")
+            if key.startswith("custom.") or key.startswith("cf_")
         }
     return templates.TemplateResponse(
         request,
@@ -522,9 +535,11 @@ def _values_from_form(form: Any, config: dict[str, Any], user: StaffUser, sessio
     custom_values: dict[str, str] = {}
     for item in enabled_fields(config):
         key = str(item.get("key") or "")
-        if not key.startswith("custom."):
+        if not (key.startswith("custom.") or key.startswith("cf_")):
             continue
-        value = _clean_text(form.get(f"custom_{key.removeprefix('custom.')}"))
+        # Support both custom_<id> and cf_<id>
+        field_form_name = f"custom_{key.removeprefix('custom.')}" if key.startswith("custom.") else f"cf_{key.removeprefix('cf_')}"
+        value = _clean_text(form.get(field_form_name) or form.get(key))
         if item.get("required") and not value:
             raise ValueError(f"{item.get('label', '園独自項目')}を入力してください")
         if value:
@@ -568,7 +583,7 @@ def _values_from_form(form: Any, config: dict[str, Any], user: StaffUser, sessio
     for key, item in configured_fields.items():
         if not item.get("enabled") or not item.get("required") or key in {"observed_on", "child_state"}:
             continue
-        value = custom_values.get(key) if key.startswith("custom.") else values.get(key)
+        value = custom_values.get(key) if (key.startswith("custom.") or key.startswith("cf_")) else values.get(key)
         if value is None or value == "" or value == []:
             raise ValueError(f"{item.get('label', '必須項目')}を入力してください")
     return values
@@ -843,6 +858,7 @@ def _progress_form_context(
     values: dict[str, str] | None = None,
     error: str = "",
     existing_document_id: int | None = None,
+    custom_fields: list[dict[str, Any]] | None = None,
 ):
     return templates.TemplateResponse(
         request,
@@ -856,6 +872,7 @@ def _progress_form_context(
             "cycle_key": cycle_key,
             "logs": logs,
             "section_definitions": section_definitions(DocumentType.CHILD_PROGRESS_RECORD),
+            "custom_fields": custom_fields or [],
             "values": values or {},
             "error": error,
             "existing_document_id": existing_document_id,
@@ -969,6 +986,11 @@ def new_child_progress_record_form(
         period_end=selected_end,
         current_user=current_user,
     )
+    custom_fields = [
+        item
+        for item in config.get("record_types", {}).get("observation_log", {}).get("fields", [])
+        if item.get("custom") and item.get("enabled", True)
+    ]
     return _progress_form_context(
         request,
         child=child,
@@ -978,6 +1000,7 @@ def new_child_progress_record_form(
         cycle_key=selected_cycle_key,
         logs=logs,
         existing_document_id=existing.id if existing is not None else None,
+        custom_fields=custom_fields,
     )
 
 
