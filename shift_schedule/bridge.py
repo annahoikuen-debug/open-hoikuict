@@ -89,10 +89,10 @@ def build_child_plan(
         return None  # 園児単位でエラー行として収集
 
     # is_short_time（短時間保育）
-    is_short_time = bool(child.care_time_category == "short")
+    is_short_time = bool(getattr(child, "care_time_category", None) == "short")
 
     # absent（未登園予定）
-    absent = bool(attendance_record is not None and attendance_record.is_absent)
+    absent = bool(attendance_record is not None and getattr(attendance_record, "is_absent", False))
 
     return ChildPlan(
         child_id=str(child.id),
@@ -207,11 +207,13 @@ def build_facility_settings(
     """DB 行から shiftai FacilitySettings を構築。"""
     if settings is None:
         return None
+
+    open_t = time.fromisoformat(settings.day_open) if isinstance(settings.day_open, str) else settings.day_open
+    close_t = time.fromisoformat(settings.day_close) if isinstance(settings.day_close, str) else settings.day_close
+
     return ShiftaiFacilitySettings(
-        day_open=settings.day_open,
-        day_close=settings.day_close,
+        day_open=open_t,
+        day_close=close_t,
         granularity_min=settings.granularity_min,
         capacity=settings.capacity,
-        staffing_standard_key=settings.staffing_standard_key,
-        min_two_staff_rule=settings.min_two_staff_rule,
     )

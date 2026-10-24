@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 
 from shiftai.local_rules import build_standard
 from shiftai.solver import solve_shift
+from shiftai.standards import build_requirements
 
 from ..bridge import (
     build_child_plan,
@@ -147,7 +148,7 @@ def _run_solve_sync(
                 attendance_record = session.exec(
                     select(AttendanceRecord).where(
                         AttendanceRecord.child_id == child.id,
-                        AttendanceRecord.target_date == current,
+                        AttendanceRecord.attendance_date == current,
                     )
                 ).first()
                 # 既定登園時刻
@@ -178,14 +179,31 @@ def _run_solve_sync(
                     day_staff.append(sm)
                     day_preferences[str(user.id)] = build_staff_preferences(session, user)
 
+            # 週の日付一覧
+            week_days_list = []
+            tmp_d = current
+            while tmp_d <= week_end:
+                week_days_list.append(tmp_d)
+                tmp_d += timedelta(days=1)
+
+            requirements = build_requirements(
+                day_plans,
+                week_days_list,
+                staffing_standard,
+                day_open=facility_settings.day_open,
+                day_close=facility_settings.day_close,
+                granularity_min=facility_settings.granularity_min,
+            )
+
             # 求解
             try:
                 result = solve_shift(
+                    children=day_plans,
+                    staff=day_staff,
+                    requirements=requirements,
+                    preferences=day_preferences,
                     settings=facility_settings,
                     standard=staffing_standard,
-                    child_plans=day_plans,
-                    staff_members=day_staff,
-                    preferences=day_preferences,
                     fixed_assignments=fixed_assignments,
                     time_limit_sec=time_limit_sec,
                 )
@@ -196,34 +214,41 @@ def _run_solve_sync(
                 repo.save_job(job)
                 return
 
-            # 結果をセルに変換（簡易実装：staff_assignments から）
-            # shiftai の solve_shift 戻り値の構造に合わせる
-            for staff_assignment in getattr(result, "staff_assignments", []):
-                staff_id = staff_assignment.get("staff_id", "")
-                for day_assign in staff_assignment.get("assignments", []):
-                    assign_date = day_assign.get("date")
-                    slot_label = day_assign.get("slot_label", "")
-                    cell = ShiftPlanCells(
-                        plan_id=plan_id,
-                        staff_user_id=int(staff_id) if staff_id.isdigit() else 0,
-                        target_date=date.fromisoformat(assign_date) if assign_date else current,
-                        slot_label=slot_label,
-                        cell_state="specified",
-                    )
-                    all_cells.append(cell)
-                    fixed_assignments[(staff_id, assign_date)] = slot_label
+            # 結果をセルに変換
+            # result.shift_days: 各日・各職員・各スロットの CellState (WORK, BREAK, OFF)
+            for sd in getattr(result, "shift_days", []):
+                for staff_id, slot_dict in getattr(sd, "assignments", {}).items():
+                    # users.id が CHAR(32)（hex形式）の場合に対応
+                    sid_str = str(staff_id)
+                    try:
+                        from uuid import UUID
+                        sid_clean = UUID(sid_str).hex
+                    except (ValueError, AttributeError):
+                        sid_clean = sid_str
+
+                    for slot_label, cell_state in slot_dict.items():
+                        state_val = getattr(cell_state, "name", str(cell_state))
+                        cell = ShiftPlanCells(
+                            plan_id=plan_id,
+                            staff_user_id=sid_clean,
+                            target_date=sd.day,
+                            slot_label=slot_label,
+                            cell_state=state_val,
+                        )
+                        all_cells.append(cell)
+                        fixed_assignments[(str(staff_id), sd.day, slot_label)] = cell_state
 
             # 違反を記録
             for v in getattr(result, "violations", []):
                 violation = ShiftViolations(
                     plan_id=plan_id,
                     job_id=job_id,
-                    code=v.get("code", "UNKNOWN"),
-                    severity=v.get("severity", "INFO"),
-                    target_date=date.fromisoformat(v.get("target_date")) if v.get("target_date") else None,
-                    slot_label=v.get("slot_label"),
-                    staff_user_id=int(v.get("staff_user_id")) if v.get("staff_user_id", "").isdigit() else None,
-                    message=v.get("message", ""),
+                    code=getattr(v, "code", "UNKNOWN"),
+                    severity=getattr(getattr(v, "severity", None), "value", "INFO"),
+                    target_date=getattr(v, "day", None),
+                    slot_label=getattr(getattr(v, "slot", None), "label", None),
+                    staff_user_id=str(v.staff_id) if getattr(v, "staff_id", None) is not None else None,
+                    message=getattr(v, "message", ""),
                 )
                 all_violations.append(violation)
 
