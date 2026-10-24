@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from enum import Enum
 import uuid
+from uuid import UUID, uuid4
 from typing import Any, List, Optional
 
 from sqlalchemy import JSON, CheckConstraint, Index, LargeBinary, UniqueConstraint
@@ -3292,3 +3293,29 @@ class FacilitySettings(SQLModel, table=True):
     supplementary_meal_time: str = Field(default="18:00")
     supplementary_meal_fee: int = Field(default=100)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class StaffPaidLeave(SQLModel, table=True):
+    __tablename__ = "staff_paid_leaves"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    staff_user_id: UUID = Field(foreign_key="users.id", index=True)
+    granted_date: date = Field(index=True)
+    granted_days: float = Field(default=0.0)
+    used_days: float = Field(default=0.0)
+    expires_on: date = Field(index=True)
+
+
+class StaffPaidLeaveRequest(SQLModel, table=True):
+    __tablename__ = "staff_paid_leave_requests"
+
+    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
+    staff_user_id: UUID = Field(foreign_key="users.id", index=True)
+    target_date: date = Field(index=True)
+    days: float = Field(default=1.0)
+    reason: str = Field(default="有給休暇")
+    status: str = Field(default="PENDING", index=True)  # PENDING / APPROVED / REJECTED
+    applied_at: datetime = Field(default_factory=utc_now)
+    decided_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    comment: Optional[str] = None

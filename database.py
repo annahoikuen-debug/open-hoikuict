@@ -97,6 +97,7 @@ def create_db_and_tables() -> None:
     _migrate_sync_health_records_from_legacy()
     _migrate_shift_schedule_tables()
     _migrate_facility_settings()
+    _migrate_paid_leave_tables()
     _validate_sqlite_foreign_keys()
 
 
@@ -104,6 +105,15 @@ def _migrate_facility_settings() -> None:
     from models import FacilitySettings
     with engine.begin() as conn:
         FacilitySettings.metadata.create_all(conn, tables=[FacilitySettings.__table__])
+
+
+def _migrate_paid_leave_tables() -> None:
+    from models import StaffPaidLeave, StaffPaidLeaveRequest
+    with engine.begin() as conn:
+        StaffPaidLeave.metadata.create_all(
+            conn,
+            tables=[StaffPaidLeave.__table__, StaffPaidLeaveRequest.__table__],
+        )
 
 
 def _migrate_observation_sharing_columns() -> None:
