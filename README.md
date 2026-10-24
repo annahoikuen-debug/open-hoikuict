@@ -1,4 +1,4 @@
-﻿# nusoft・open-hoikuict
+# nusoft・open-hoikuict
 
 <!-- READMEはnusoftプロジェクトの概要・現況・開発方針をまとめています -->
 
@@ -67,12 +67,12 @@ GitHub Organization / SNS ID は `nusoft` として統一予定。ドメイン�
 
 | 領域 | 仕様書 | 状況 |
 | --- | --- | --- |
-| 施設設定 | `docs/facility-settings-spec.md` | 未実装。シフト用 `shift_facility_settings` は独立実装予定 |
-| 職員有給管理 | `docs/paid-leave-management-spec.md` | 未実装。シフトと土台共用可 |
+| 施設設定 | `docs/facility-settings-spec.md` | 実装完了 (Phase 3.2、FacilitySettings・CSRF・管理画面) |
+| 職員有給管理 | `docs/paid-leave-management-spec.md` | 実装完了 (Phase 3.3、有給台帳・申請承認・シフト希望休自動連携) |
 | 一括データ移行 | `docs/beta-production-data-migration-spec.md` | 未実装。CSV対応は現行実装へ反映済み |
-| 職員シフト自動作成 | `docs/shift-schedule-integration-proposal-2026-10-03.md` | 基盤実装済み。12テーブル・求解ワーカー・セル編集・承認ゲート・配置割れギャップ検査実装済み |
+| 職員シフト自動作成 | `docs/shift-schedule-integration-proposal-2026-10-03.md` | 実装完了 (Phase 3.1、12テーブル・求解ワーカー・セル編集・承認ゲート・有給連携・配置割れギャップ検査) |
 | MFA | `docs/local-authentication-spec.md` | 実装済み (Phase 3.4、メールOTP) |
-| 児童記録・保育要録 | `docs/child-records-spec.md` | 進行中 |
+| 児童記録・保育要録 | `docs/child-records-spec.md` | 実装完了 (Phase 2.1、独自項目UUIDキー・設定版楽観ロック・動的UI) |
 | 健康管理レビュー | `docs/health-record-spec-review.md` | 進行中 |
 
 ### 2.4 技術的負債 (R01〜R08)

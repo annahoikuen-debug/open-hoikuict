@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
-from auth import Role, StaffUser, get_current_staff_user, require_admin, require_can_edit
+from auth import StaffUser, get_current_staff_user, require_admin, require_can_edit
 from database import get_session
 from models import StaffPaidLeave, StaffPaidLeaveRequest
 from template_utils import create_templates

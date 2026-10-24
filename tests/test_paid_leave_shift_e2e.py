@@ -16,7 +16,6 @@ from models import StaffPaidLeave, StaffPaidLeaveRequest, User
 from shift_schedule.contracts import PlanStatus
 from shift_schedule.db_models import (
     ShiftFacilitySettings,
-    ShiftPlanCells,
     ShiftPlans,
     StaffContracts,
     StaffQualifications,

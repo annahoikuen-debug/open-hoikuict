@@ -11,7 +11,6 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import Session
 
 from database import get_session
-from shift_schedule.contracts import PlanStatus
 from shift_schedule.store import SqlModelShiftRepository
 from template_utils import create_templates
 

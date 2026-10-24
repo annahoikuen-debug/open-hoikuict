@@ -14,7 +14,6 @@ from database import get_session
 from models import StaffPaidLeave, StaffPaidLeaveRequest
 from routers.paid_leave import router as paid_leave_router
 from shift_schedule.bridge import build_staff_member, build_staff_preferences
-from shift_schedule.db_models import StaffShiftUnavailability
 
 
 class StaffPaidLeaveTests(unittest.TestCase):

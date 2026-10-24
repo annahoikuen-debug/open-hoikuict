@@ -1,7 +1,6 @@
 """Boundary and segregation-of-duties tests for FacilitySettings vs ShiftFacilitySettings (Step 18)."""
 
 import unittest
-from datetime import datetime
 
 from sqlmodel import SQLModel, Session, create_engine, select
 from sqlalchemy.pool import StaticPool
