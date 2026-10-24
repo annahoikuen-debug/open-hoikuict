@@ -56,3 +56,100 @@ class FacilitySettingsBoundaryTests(unittest.TestCase):
 
             # テーブル名と責務が完全に独立していること
             self.assertNotEqual(FacilitySettings.__tablename__, ShiftFacilitySettings.__tablename__)
+
+    def test_non_admin_cannot_update_facility_settings(self):
+        from uuid import uuid4
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from auth import Role, StaffUser
+        from database import get_session
+        from auth import get_current_staff_user
+        from routers.facility_settings import router
+
+        app = FastAPI()
+        app.include_router(router)
+
+        staff_user = StaffUser(role=Role.CAN_EDIT, name="一般職員", user_id=uuid4())
+
+        def override_get_session():
+            with Session(self.engine) as session:
+                yield session
+
+        def override_current_user():
+            return staff_user
+
+        app.dependency_overrides[get_session] = override_get_session
+        app.dependency_overrides[get_current_staff_user] = override_current_user
+
+        client = TestClient(app)
+        # GET should be 403
+        r_get = client.get("/settings/facility")
+        self.assertEqual(r_get.status_code, 403)
+
+        # POST should be 403
+        r_post = client.post(
+            "/settings/facility",
+            data={
+                "final_pickup_time": "19:00",
+                "supplementary_meal_time": "18:00",
+                "supplementary_meal_fee": 100,
+            },
+        )
+        self.assertEqual(r_post.status_code, 403)
+
+    def test_admin_updates_facility_settings_with_csrf(self):
+        from uuid import uuid4
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from auth import Role, StaffUser
+        from database import get_session
+        from auth import get_current_staff_user
+        from csrf import CsrfTokenMiddleware, generate_csrf_token, CSRF_COOKIE_NAME
+        from routers.facility_settings import router
+
+        app = FastAPI()
+        app.add_middleware(CsrfTokenMiddleware)
+        app.include_router(router)
+
+        admin_user = StaffUser(role=Role.ADMIN, name="園長", user_id=uuid4())
+
+        def override_get_session():
+            with Session(self.engine) as session:
+                yield session
+
+        def override_current_user():
+            return admin_user
+
+        app.dependency_overrides[get_session] = override_get_session
+        app.dependency_overrides[get_current_staff_user] = override_current_user
+
+        client = TestClient(app)
+
+        # 1. GET page
+        r_get = client.get("/settings/facility")
+        self.assertEqual(r_get.status_code, 200)
+        self.assertIn("施設基本設定", r_get.text)
+
+        # 2. POST without CSRF should fail if enforced or verified
+        token = generate_csrf_token()
+        client.cookies.set(CSRF_COOKIE_NAME, token)
+
+        r_post = client.post(
+            "/settings/facility",
+            data={
+                "csrf_token": token,
+                "final_pickup_time": "19:30",
+                "supplementary_meal_time": "18:15",
+                "supplementary_meal_fee": 150,
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(r_post.status_code, 303)
+        self.assertIn("/settings/facility?saved=1", r_post.headers["location"])
+
+        # Check DB updated
+        with Session(self.engine) as session:
+            updated = session.exec(select(FacilitySettings).where(FacilitySettings.id == 1)).one()
+            self.assertEqual(updated.final_pickup_time, "19:30")
+            self.assertEqual(updated.supplementary_meal_time, "18:15")
+            self.assertEqual(updated.supplementary_meal_fee, 150)

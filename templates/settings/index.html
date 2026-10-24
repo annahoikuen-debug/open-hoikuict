@@ -20,6 +20,7 @@
   <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="nursery-settings">
     <h2 id="nursery-settings" class="px-5 py-3 font-semibold text-slate-600">園の運用</h2>
     {{ item('/classrooms/', 'クラス管理', 'クラス名・表示順・所属園児数を確認します。') }}
+    {% if current_user.is_admin %}{{ item('/settings/facility', '施設基本設定', 'お迎え最終時刻や補食判定時刻、補食費用を設定します。') }}{% endif %}
     {% if current_user.is_admin %}{{ item('/settings/child-records', '児童記録設定', '児童記録に使う項目を設定します。') }}{% endif %}
     {{ item('/extended-care-fees/settings', '延長保育料金ルール', '料金ルールや計算方法を確認します。変更できる範囲は権限によって異なります。') }}
   </section>

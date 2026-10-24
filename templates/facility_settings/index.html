@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}施設設定 | open-hoikuict{% endblock %}
+
+{% block content %}
+{% include "settings/_back.html" %}
+<div class="mx-auto max-w-4xl space-y-6">
+  <div>
+    <p class="text-sm font-semibold text-indigo-600">施設設定</p>
+    <h1 class="mt-1 text-2xl font-bold text-slate-900">施設基本設定</h1>
+    <p class="mt-2 text-sm text-slate-600">園児のお迎え最終受付時刻や補食判定時刻、補食費用を設定します。変更は今後の受付や表示に反映されます。</p>
+  </div>
+
+  {% if saved %}
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    施設設定を保存しました。
+  </div>
+  {% endif %}
+
+  <form method="post" action="/settings/facility" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+      <div>
+        <label class="block text-sm font-semibold text-slate-800" for="final_pickup_time">
+          お迎え最終時刻 (HH:MM)
+        </label>
+        <p class="text-xs text-slate-500 mt-1">保護者キオスク等で選択可能なお迎え予定時刻の上限です。</p>
+        <input type="text" id="final_pickup_time" name="final_pickup_time" value="{{ settings.final_pickup_time }}" required pattern="^([01]\d|2[0-3]):[0-5]\d$" class="mt-2 block w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+
+      <div class="border-t border-slate-100 pt-5">
+        <label class="block text-sm font-semibold text-slate-800" for="supplementary_meal_time">
+          補食判定時刻 (HH:MM)
+        </label>
+        <p class="text-xs text-slate-500 mt-1">この時刻以降のお迎えとなる場合に補食対象として初期判定します。</p>
+        <input type="text" id="supplementary_meal_time" name="supplementary_meal_time" value="{{ settings.supplementary_meal_time }}" required pattern="^([01]\d|2[0-3]):[0-5]\d$" class="mt-2 block w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+
+      <div class="border-t border-slate-100 pt-5">
+        <label class="block text-sm font-semibold text-slate-800" for="supplementary_meal_fee">
+          補食費（円）
+        </label>
+        <p class="text-xs text-slate-500 mt-1">保護者確認画面や各種案内に表示する1食あたりの補食費用です。</p>
+        <div class="mt-2 flex items-center gap-2">
+          <input type="number" id="supplementary_meal_fee" name="supplementary_meal_fee" value="{{ settings.supplementary_meal_fee }}" min="0" max="10000" required class="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <span class="text-sm text-slate-600">円</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="flex justify-end gap-3">
+      <a href="/settings" class="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">キャンセル</a>
+      <button type="submit" class="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">設定を保存</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
