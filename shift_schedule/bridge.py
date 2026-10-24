@@ -19,6 +19,7 @@ from shiftai.domain import (
     FacilitySettings as ShiftaiFacilitySettings,
     Role,
     StaffMember,
+    StaffPreferences,
     Unavailability,
 )
 
@@ -108,14 +109,64 @@ def build_child_plan(
     )
 
 
+def build_staff_preferences(
+    session: Session,
+    user: User,
+) -> StaffPreferences:
+    """職員の希望休・承認済み有給休暇から StaffPreferences を構築。"""
+    uid_hex = user.id.hex if hasattr(user.id, "hex") else str(user.id)
+    uid_str = str(user.id)
+    uids = list({uid_hex, uid_str})
+
+    unavailabilities = list(
+        session.exec(
+            select(StaffShiftUnavailability).where(
+                StaffShiftUnavailability.staff_user_id.in_(uids),
+                StaffShiftUnavailability.target_date >= date.today(),
+            )
+        ).all()
+    )
+
+    # 有給承認データを希望休として自動統合
+    from models import StaffPaidLeaveRequest
+    approved_paid_leaves = session.exec(
+        select(StaffPaidLeaveRequest).where(
+            StaffPaidLeaveRequest.staff_user_id == user.id,
+            StaffPaidLeaveRequest.status == "APPROVED",
+        )
+    ).all()
+
+    unavail_list = [
+        Unavailability(
+            day=u.target_date,
+            start=time.fromisoformat(u.start_time) if u.start_time else time(0, 0),
+            end=time.fromisoformat(u.end_time) if u.end_time else time(23, 59),
+            reason=u.reason or "",
+        )
+        for u in unavailabilities
+    ]
+    for pl in approved_paid_leaves:
+        unavail_list.append(
+            Unavailability(
+                day=pl.target_date,
+                reason=pl.reason or "有給休暇",
+            )
+        )
+
+    return StaffPreferences(unavailable=unavail_list)
+
+
 def build_staff_member(
     session: Session,
     user: User,
 ) -> StaffMember | None:
-    """単職員の StaffMember を組み立てる。資格が無い場合は None（エラー行）。"""
+    uid_hex = user.id.hex if hasattr(user.id, "hex") else str(user.id)
+    uid_str = str(user.id)
+    uids = list({uid_hex, uid_str})
+
     qualifications = session.exec(
         select(StaffQualifications).where(
-            StaffQualifications.staff_user_id == user.id,
+            StaffQualifications.staff_user_id.in_(uids),
             (StaffQualifications.effective_to.is_(None))
             | (StaffQualifications.effective_to >= date.today()),
         )
@@ -127,20 +178,13 @@ def build_staff_member(
 
     contract = session.exec(
         select(StaffContracts).where(
-            StaffContracts.staff_user_id == user.id,
+            StaffContracts.staff_user_id.in_(uids),
             (StaffContracts.effective_to.is_(None))
             | (StaffContracts.effective_to >= date.today()),
         )
     ).first()
     if contract is None:
         return None
-
-    unavailabilities = session.exec(
-        select(StaffShiftUnavailability).where(
-            StaffShiftUnavailability.staff_user_id == user.id,
-            StaffShiftUnavailability.target_date >= date.today(),
-        )
-    ).all()
 
     return StaffMember(
         staff_id=str(user.id),
@@ -154,16 +198,6 @@ def build_staff_member(
             latest_end=time.fromisoformat(contract.latest_end) if contract.latest_end else time(18, 0),
         ),
         skills=frozenset(),
-        unavailabilities=tuple(
-            Unavailability(
-                target_date=u.target_date,
-                start_time=time.fromisoformat(u.start_time) if u.start_time else None,
-                end_time=time.fromisoformat(u.end_time) if u.end_time else None,
-                kind=u.kind,
-                reason=u.reason or "",
-            )
-            for u in unavailabilities
-        ),
     )
 
 

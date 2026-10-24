@@ -17,7 +17,12 @@ from sqlmodel import Session, select
 from shiftai.local_rules import build_standard
 from shiftai.solver import solve_shift
 
-from ..bridge import build_child_plan, build_facility_settings, build_staff_member
+from ..bridge import (
+    build_child_plan,
+    build_facility_settings,
+    build_staff_member,
+    build_staff_preferences,
+)
 from ..contracts import PlanStatus, SolveJobStatus
 from ..db_models import (
     ShiftPlanCells,
@@ -164,12 +169,14 @@ def _run_solve_sync(
                 if cp is not None:
                     day_plans.append(cp)
 
-            # 職員プラン
+            # 職員プラン & 希望休（有給含む）
+            day_preferences = {}
             users = session.exec(select(User)).all()
             for user in users:
                 sm = build_staff_member(session, user)
                 if sm is not None:
                     day_staff.append(sm)
+                    day_preferences[str(user.id)] = build_staff_preferences(session, user)
 
             # 求解
             try:
@@ -178,6 +185,7 @@ def _run_solve_sync(
                     standard=staffing_standard,
                     child_plans=day_plans,
                     staff_members=day_staff,
+                    preferences=day_preferences,
                     fixed_assignments=fixed_assignments,
                     time_limit_sec=time_limit_sec,
                 )

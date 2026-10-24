@@ -8,8 +8,9 @@ Tables are created by ``SQLModel.metadata.create_all()`` in
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
+from sqlalchemy import CHAR, Column
 from sqlmodel import Field, SQLModel
 
 from time_utils import utc_now
@@ -48,7 +49,7 @@ class StaffQualifications(SQLModel, table=True):
     __tablename__ = "staff_qualifications"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_user_id: int = Field(foreign_key="users.id", index=True)
+    staff_user_id: Any = Field(sa_column=Column(CHAR(32), index=True))
     role: str = Field(max_length=32)  # 保育士 / 支援員 / 看護師 / 調理員 等
     effective_from: date = Field(index=True)
     effective_to: Optional[date] = Field(default=None, index=True)
@@ -61,7 +62,7 @@ class StaffContracts(SQLModel, table=True):
     __tablename__ = "staff_contracts"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_user_id: int = Field(foreign_key="users.id", index=True)
+    staff_user_id: Any = Field(sa_column=Column(CHAR(32), index=True))
     employment_type: str = Field(max_length=32)  # full_time / part_time 等
     weekly_hours: Optional[float] = Field(default=None)
     daily_hours: Optional[float] = Field(default=None)
@@ -83,7 +84,7 @@ class StaffShiftPreferences(SQLModel, table=True):
     __tablename__ = "staff_shift_preferences"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_user_id: int = Field(foreign_key="users.id", index=True)
+    staff_user_id: Any = Field(sa_column=Column(CHAR(32), index=True))
     avoid_early: bool = Field(default=False)
     avoid_late: bool = Field(default=False)
     max_early_shifts: Optional[int] = Field(default=None)
@@ -97,7 +98,7 @@ class StaffShiftUnavailability(SQLModel, table=True):
     __tablename__ = "staff_shift_unavailability"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    staff_user_id: int = Field(foreign_key="users.id", index=True)
+    staff_user_id: Any = Field(sa_column=Column(CHAR(32), index=True))
     target_date: date = Field(index=True)
     start_time: Optional[str] = Field(default=None, max_length=5)
     end_time: Optional[str] = Field(default=None, max_length=5)

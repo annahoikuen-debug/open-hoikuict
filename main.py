@@ -63,6 +63,7 @@ from routers.document_reviews import router as document_reviews_router
 from routers.terminal_monitor import router as terminal_monitor_router
 from routers.settings import router as settings_router
 from routers.facility_settings import router as facility_settings_router
+from routers.paid_leave import router as paid_leave_router
 from routers.staff_surveys import router as staff_surveys_router
 from routers.surveys import router as surveys_router
 from routers.zengin import router as zengin_router
@@ -190,6 +191,7 @@ app.include_router(document_reviews_router)
 app.include_router(terminal_monitor_router)
 app.include_router(settings_router)
 app.include_router(facility_settings_router)
+app.include_router(paid_leave_router)
 app.include_router(surveys_router)
 app.include_router(staff_surveys_router)
 app.include_router(zengin_router)
