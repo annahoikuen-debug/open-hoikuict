@@ -3282,3 +3282,13 @@ class DataTransferLog(SQLModel, table=True):
     change_metadata: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON))
     actor_id: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now, index=True)
+
+
+class FacilitySettings(SQLModel, table=True):
+    __tablename__ = "facility_settings"
+
+    id: Optional[int] = Field(default=1, primary_key=True)
+    final_pickup_time: str = Field(default="19:00")
+    supplementary_meal_time: str = Field(default="18:00")
+    supplementary_meal_fee: int = Field(default=100)
+    updated_at: datetime = Field(default_factory=utc_now)

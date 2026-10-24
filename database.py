@@ -96,7 +96,14 @@ def create_db_and_tables() -> None:
     _migrate_family_bootstrap()
     _migrate_sync_health_records_from_legacy()
     _migrate_shift_schedule_tables()
+    _migrate_facility_settings()
     _validate_sqlite_foreign_keys()
+
+
+def _migrate_facility_settings() -> None:
+    from models import FacilitySettings
+    with engine.begin() as conn:
+        FacilitySettings.metadata.create_all(conn, tables=[FacilitySettings.__table__])
 
 
 def _migrate_observation_sharing_columns() -> None:
