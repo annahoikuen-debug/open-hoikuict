@@ -122,62 +122,24 @@ def _run_solve_sync(
         else:
             end_date = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
 
-        all_cells: list[ShiftPlanCells] = []
-        all_violations: list[ShiftViolations] = []
-        fixed_assignments: dict[tuple[str, str], str] = {}  # (staff_id, date) -> slot_label
+        from .solve_inputs import build_fixed_assignments
 
         # 既存の手動固定（ピン留め）セルを取得し、求解の固定条件に加える
         existing_cells = repo.list_plan_cells(plan_id)
-        for ec in existing_cells:
-            if ec.cell_state == "pinned":
-                fixed_assignments[(str(ec.staff_user_id), ec.target_date.isoformat())] = ec.slot_label
-                all_cells.append(ec)
+        fixed_assignments = build_fixed_assignments(existing_cells, facility_settings_row)
+
+        all_cells: list[ShiftPlanCells] = [
+            ec for ec in existing_cells if getattr(ec, "is_pinned", False) or ec.cell_state == "pinned"
+        ]
+        all_violations: list[ShiftViolations] = []
+
+        # 園児・職員一覧を事前取得
+        children = session.exec(select(Child)).all()
+        users = session.exec(select(User)).all()
 
         current = start_date
         while current <= end_date:
             week_end = min(current + timedelta(days=WEEK_DAYS - 1), end_date)
-
-            # 週内の各日を組み立て
-            day_plans: list[ChildPlan] = []
-            day_staff: list[StaffMember] = []
-
-            # 園児プラン
-            children = session.exec(select(Child)).all()
-            for child in children:
-                # その日の attendance_record を取得
-                attendance_record = session.exec(
-                    select(AttendanceRecord).where(
-                        AttendanceRecord.child_id == child.id,
-                        AttendanceRecord.attendance_date == current,
-                    )
-                ).first()
-                # 既定登園時刻
-                planned_default = session.exec(
-                    select(ChildPlannedArrivalDefaults).where(
-                        ChildPlannedArrivalDefaults.child_id == child.id,
-                        (ChildPlannedArrivalDefaults.effective_to.is_(None))
-                        | (ChildPlannedArrivalDefaults.effective_to >= current),
-                        ChildPlannedArrivalDefaults.effective_from <= current,
-                    )
-                ).first()
-                cp = build_child_plan(
-                    session,
-                    child,
-                    current,
-                    attendance_record=attendance_record,
-                    planned_arrival_default=planned_default,
-                )
-                if cp is not None:
-                    day_plans.append(cp)
-
-            # 職員プラン & 希望休（有給含む）
-            day_preferences = {}
-            users = session.exec(select(User)).all()
-            for user in users:
-                sm = build_staff_member(session, user)
-                if sm is not None:
-                    day_staff.append(sm)
-                    day_preferences[str(user.id)] = build_staff_preferences(session, user)
 
             # 週の日付一覧
             week_days_list = []
@@ -185,6 +147,43 @@ def _run_solve_sync(
             while tmp_d <= week_end:
                 week_days_list.append(tmp_d)
                 tmp_d += timedelta(days=1)
+
+            # 週内の全日（day_date）について各日の園児予定を組み立てる（初日固定バグを解消）
+            day_plans: list[ChildPlan] = []
+            for day_date in week_days_list:
+                for child in children:
+                    attendance_record = session.exec(
+                        select(AttendanceRecord).where(
+                            AttendanceRecord.child_id == child.id,
+                            AttendanceRecord.attendance_date == day_date,
+                        )
+                    ).first()
+                    planned_default = session.exec(
+                        select(ChildPlannedArrivalDefaults).where(
+                            ChildPlannedArrivalDefaults.child_id == child.id,
+                            (ChildPlannedArrivalDefaults.effective_to.is_(None))
+                            | (ChildPlannedArrivalDefaults.effective_to >= day_date),
+                            ChildPlannedArrivalDefaults.effective_from <= day_date,
+                        )
+                    ).first()
+                    cp = build_child_plan(
+                        session,
+                        child,
+                        day_date,
+                        attendance_record=attendance_record,
+                        planned_arrival_default=planned_default,
+                    )
+                    if cp is not None:
+                        day_plans.append(cp)
+
+            # 職員プラン & 希望休（有給含む）
+            day_staff: list[StaffMember] = []
+            day_preferences = {}
+            for user in users:
+                sm = build_staff_member(session, user)
+                if sm is not None:
+                    day_staff.append(sm)
+                    day_preferences[str(user.id)] = build_staff_preferences(session, user)
 
             requirements = build_requirements(
                 day_plans,
@@ -215,10 +214,8 @@ def _run_solve_sync(
                 return
 
             # 結果をセルに変換
-            # result.shift_days: 各日・各職員・各スロットの CellState (WORK, BREAK, OFF)
             for sd in getattr(result, "shift_days", []):
                 for staff_id, slot_dict in getattr(sd, "assignments", {}).items():
-                    # users.id が CHAR(32)（hex形式）の場合に対応
                     sid_str = str(staff_id)
                     try:
                         from uuid import UUID
@@ -234,6 +231,7 @@ def _run_solve_sync(
                             target_date=sd.day,
                             slot_label=slot_label,
                             cell_state=state_val,
+                            is_pinned=False,
                         )
                         all_cells.append(cell)
                         fixed_assignments[(str(staff_id), sd.day, slot_label)] = cell_state
@@ -254,29 +252,28 @@ def _run_solve_sync(
 
             current = week_end + timedelta(days=1)
 
-        # 既存の未固定セル・違反をクリアし、新結果を保存
+        # アトミック保存: 1つのトランザクション内で未固定セル削除と新セルのコミットを完了させる
         for ec in existing_cells:
-            if ec.cell_state != "pinned":
+            if not getattr(ec, "is_pinned", False) and ec.cell_state != "pinned":
                 session.delete(ec)
         for old_v in repo.list_violations(plan_id):
             session.delete(old_v)
-        session.commit()
 
-        # セルを保存（ピン留めセルは既存のままなので新規生成セルのみ追加）
         for cell in all_cells:
             if cell.id is None:
-                repo.create_plan_cell(cell)
+                session.add(cell)
         for v in all_violations:
-            repo.create_violation(v)
+            session.add(v)
 
-        # プランステータス更新
         plan.status = PlanStatus.GENERATED
-        repo.save_plan(plan)
+        session.add(plan)
 
         job.status = SolveJobStatus.SUCCEEDED
         job.finished_at = utc_now()
         job.stats = f"cells={len(all_cells)} violations={len(all_violations)}"
-        repo.save_job(job)
+        session.add(job)
+
+        session.commit()
 
     except Exception as exc:  # noqa: BLE001
         try:
@@ -305,6 +302,17 @@ def schedule_solve(
     time_limit_sec: int = 30,
 ) -> int:
     """求解ジョブをキューに登録し、ジョブIDを返す。"""
+    # 同一プランで既に QUEUED または RUNNING のジョブがある場合は二重投入を防止
+    with Session(engine) as session:
+        active_job = session.exec(
+            select(ShiftSolveJobs).where(
+                ShiftSolveJobs.plan_id == plan_id,
+                ShiftSolveJobs.status.in_([SolveJobStatus.QUEUED, SolveJobStatus.RUNNING]),
+            )
+        ).first()
+        if active_job is not None:
+            raise RuntimeError(f"Plan {plan_id} has an active solve job ({active_job.id})")
+
     session = Session(engine)
     repo: ShiftRepository = ShiftRepositoryDep(session)
     try:
@@ -332,15 +340,27 @@ def schedule_solve(
     return job_id
 
 
-async def solve_worker_loop() -> None:
-    """FastAPI lifespan バックグラウンドタスク。
+def recover_stale_jobs() -> int:
+    """起動時に未完了のまま残った QUEUED / RUNNING ジョブを FAILED に更新して回復する。"""
+    recovered_count = 0
+    with Session(engine) as session:
+        stale_jobs = session.exec(
+            select(ShiftSolveJobs).where(
+                ShiftSolveJobs.status.in_([SolveJobStatus.QUEUED, SolveJobStatus.RUNNING]),
+            )
+        ).all()
+        for j in stale_jobs:
+            j.status = SolveJobStatus.FAILED
+            j.error_message = "サーバー再起動により求解処理が中断されました。再実行してください。"
+            j.finished_at = utc_now()
+            session.add(j)
+            recovered_count += 1
+        if recovered_count > 0:
+            session.commit()
+    return recovered_count
 
-    現状はスレッドプール経由で同期求解するだけだが、
-    将来のジョブキュー（Redis/DBポーリング）への移行を見越して
-    非同期関数として定義する。
-    """
-    # 現状の実装では solve_jobs をスレッドプールで直接実行するため、
-    # このループはプレースホルダーとして待機し続ける。
-    # 実際の求解は schedule_solve から _solve_executor に投入される。
+
+async def solve_worker_loop() -> None:
+    """FastAPI lifespan バックグラウンドタスク。"""
     while True:
         await asyncio.sleep(3600)

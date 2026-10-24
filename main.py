@@ -107,6 +107,8 @@ def initialize_application() -> None:
     ensure_runtime_files()
     create_db_and_tables()
     apply_parent_push_retention()
+    from shift_schedule.services.solve_jobs import recover_stale_jobs
+    recover_stale_jobs()
 
 
 @asynccontextmanager

@@ -1818,6 +1818,23 @@ def _migrate_shift_schedule_tables() -> None:
                         "ADD COLUMN can_manage_shifts BOOLEAN DEFAULT 0 NOT NULL"
                     )
                 )
+            # shift_plan_cells: is_pinned フラグの追加と既存データの移行
+            cell_cols = _table_columns("shift_plan_cells")
+            if cell_cols and "is_pinned" not in cell_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE shift_plan_cells "
+                        "ADD COLUMN is_pinned BOOLEAN DEFAULT 0 NOT NULL"
+                    )
+                )
+                # U1推奨案: 既存の cell_state='pinned' は is_pinned=1 かつ cell_state='WORK' に移行
+                conn.execute(
+                    text(
+                        "UPDATE shift_plan_cells "
+                        "SET is_pinned = 1, cell_state = 'WORK' "
+                        "WHERE cell_state = 'pinned'"
+                    )
+                )
             conn.commit()
     except Exception as exc:
         _log_migration_skip("shift schedule tables", exc)

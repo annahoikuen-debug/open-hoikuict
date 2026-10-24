@@ -147,7 +147,8 @@ class ShiftPlanCells(SQLModel, table=True):
     staff_user_id: Any = Field(sa_column=Column(CHAR(32), ForeignKey("users.id"), index=True))
     target_date: date = Field(index=True)
     slot_label: str = Field(max_length=32)
-    cell_state: str = Field(default="unspecified", max_length=32)  # specified / pinned / unspecified
+    cell_state: str = Field(default="unspecified", max_length=32)  # specified / pinned / unspecified / WORK / BREAK / OFF
+    is_pinned: bool = Field(default=False)
     pinned_by_user_id: Optional[int] = Field(default=None, index=True)
 
 

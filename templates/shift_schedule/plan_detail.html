@@ -111,9 +111,14 @@
                   <option value="OFF">公休 (OFF)</option>
                 </select>
                 <select name="cell_state" class="rounded border border-slate-300 py-0.5 px-2 text-xs">
-                  <option value="specified" {% if cell.cell_state == 'specified' %}selected{% endif %}>指定</option>
-                  <option value="pinned" {% if cell.cell_state == 'pinned' %}selected{% endif %}>固定(ピン)</option>
+                  <option value="WORK" {% if cell.cell_state in ('specified', 'pinned', 'WORK') %}selected{% endif %}>勤務</option>
+                  <option value="BREAK" {% if cell.cell_state == 'BREAK' %}selected{% endif %}>休憩</option>
+                  <option value="OFF" {% if cell.cell_state == 'OFF' %}selected{% endif %}>公休</option>
                 </select>
+                <label class="inline-flex items-center gap-1 text-xs text-slate-600">
+                  <input type="checkbox" name="is_pinned" value="true" {% if cell.is_pinned or cell.cell_state == 'pinned' %}checked{% endif %} class="rounded border-slate-300 text-indigo-600">
+                  ピン
+                </label>
                 <button type="submit" class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">更新</button>
               </form>
               {% else %}
