@@ -30,14 +30,36 @@ class RateLimiter:
     _timestamps: dict[str, list[float]] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    _check_counter: int = 0
+    sweep_interval: int = 1000
+
     def _now(self) -> float:
         return time.monotonic()
 
     def _cleanup_expired(self, key: str, now: float) -> None:
-        """ウィンドウ外の古いタイムスタンプを削除する。"""
+        """ウィンドウ外の古いタイムスタンプを削除する。空になったキーは破棄する。"""
         cutoff = now - self.window_seconds
         timestamps = self._timestamps.get(key, [])
-        self._timestamps[key] = [ts for ts in timestamps if ts > cutoff]
+        valid = [ts for ts in timestamps if ts > cutoff]
+        if valid:
+            self._timestamps[key] = valid
+        else:
+            self._timestamps.pop(key, None)
+
+    def sweep(self) -> None:
+        """全キーを走査し、期限切れタイムスタンプおよび空キーを一括削除する。"""
+        now = self._now()
+        with self._lock:
+            cutoff = now - self.window_seconds
+            empty_keys = []
+            for k, ts_list in self._timestamps.items():
+                valid = [ts for ts in ts_list if ts > cutoff]
+                if valid:
+                    self._timestamps[k] = valid
+                else:
+                    empty_keys.append(k)
+            for k in empty_keys:
+                self._timestamps.pop(k, None)
 
     def check(self, key: str) -> tuple[bool, int | None]:
         """キーに対してリクエストを許可するか判定する。
@@ -47,6 +69,14 @@ class RateLimiter:
         """
         now = self._now()
         with self._lock:
+            self._check_counter += 1
+            if self._check_counter >= self.sweep_interval:
+                self._check_counter = 0
+                cutoff = now - self.window_seconds
+                empty_keys = [k for k, ts in self._timestamps.items() if not any(t > cutoff for t in ts)]
+                for k in empty_keys:
+                    self._timestamps.pop(k, None)
+
             self._cleanup_expired(key, now)
             timestamps = self._timestamps.get(key, [])
             if len(timestamps) >= self.max_requests:
@@ -78,13 +108,50 @@ class RateLimiter:
 DEFAULT_RATE_LIMITER = RateLimiter(max_requests=10, window_seconds=60)
 
 
+def client_ip(request: Request) -> str:
+    """リクエストから信頼できるクライアントIPアドレスを取得する。
+
+    直接接続されたクライアントIP（request.client.host）を基本とし、
+    そのIPが FORWARDED_ALLOW_IPS で設定された信頼できるプロキシ（またはローカルホスト）
+    である場合にのみ、X-Forwarded-For の最右端（直近の非信頼IP）を採用する。
+    信頼できないホストからの X-Forwarded-For による偽装を防止する。
+    """
+    client_host = request.client.host if request.client else "unknown"
+    if client_host == "unknown":
+        return "unknown"
+
+    from security_config import forwarded_allow_ips
+    trusted_raw = forwarded_allow_ips()
+    trusted_proxies = set(trusted_raw) if trusted_raw else {"127.0.0.1", "::1", "testserver"}
+
+    is_trusted = client_host in trusted_proxies
+    if not is_trusted:
+        import ipaddress
+        for t in trusted_proxies:
+            try:
+                if "/" in t and ipaddress.ip_address(client_host) in ipaddress.ip_network(t, strict=False):
+                    is_trusted = True
+                    break
+            except ValueError:
+                pass
+
+    if is_trusted:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            # カンマ区切りの右から順に走査し、信頼できるプロキシでない最初のIPを採用
+            parts = [p.strip() for p in forwarded_for.split(",") if p.strip()]
+            for ip in reversed(parts):
+                if ip not in trusted_proxies:
+                    return ip
+            if parts:
+                return parts[0]
+
+    return client_host
+
+
 def rate_limit_key_from_request(request: Request, prefix: str = "") -> str:
     """リクエストからレート制限キーを生成する（クライアントIPベース）。"""
-    client_host = request.client.host if request.client else "unknown"
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        client_host = forwarded_for.split(",")[0].strip()
-    return f"{prefix}{client_host}"
+    return f"{prefix}{client_ip(request)}"
 
 
 def check_rate_limit(

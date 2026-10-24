@@ -244,6 +244,19 @@ def validate_runtime_security() -> None:
             _validate_production_webpush_configuration()
         except RuntimeError as exc:
             errors.append(str(exc))
+
+    # マルチワーカー検知（インメモリレートリミットの整合性保護）
+    workers_raw = os.getenv("WEB_CONCURRENCY") or os.getenv("HOIKUICT_WORKERS") or "1"
+    try:
+        worker_count = int(workers_raw)
+    except ValueError:
+        worker_count = 1
+    if worker_count > 1 and os.getenv("HOIKUICT_ALLOW_MULTIWORKER_RATE_LIMIT") != "1":
+        errors.append(
+            f"production環境ではインメモリレートリミット整合性保護のため単一ワーカーのみ許可されます (検出: {worker_count})。"
+            "継続する場合は HOIKUICT_ALLOW_MULTIWORKER_RATE_LIMIT=1 を設定してください"
+        )
+
     if errors:
         raise RuntimeError("productionセキュリティ設定が不正です: " + "; ".join(errors))
 

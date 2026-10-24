@@ -311,11 +311,8 @@ def local_staff_login(
     session: Session = Depends(get_session),
 ):
     # IPアドレス単位のレート制限
-    client_ip = request.client.host if request.client else "unknown"
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        client_ip = forwarded_for.split(",")[0].strip()
-    ip_key = f"staff_login_ip:{client_ip}"
+    from rate_limiter import client_ip
+    ip_key = f"staff_login_ip:{client_ip(request)}"
     allowed, retry_after = STAFF_LOGIN_RATE_LIMITER_IP.check(ip_key)
     if not allowed:
         response = templates.TemplateResponse(
