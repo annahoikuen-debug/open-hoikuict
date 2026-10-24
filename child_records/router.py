@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import os
+import csv
+import io
 from datetime import date, timedelta
 from typing import Any
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -18,6 +20,7 @@ from auth import (
     require_admin,
     require_can_edit,
 )
+from audit_logger import record_audit_event
 from database import get_session
 from models import Child, ChildStatus, User
 from template_utils import create_templates
@@ -404,6 +407,17 @@ def child_record_timeline(
             url=f"/children/{child_id}?child_records_denied=1",
             status_code=303,
         )
+    # 児童観察記録の閲覧を監査ログに記録
+    client_ip = request.client.host if request.client else None
+    record_audit_event(
+        actor_user_id=str(current_user.user_id) if current_user.user_id is not None else None,
+        actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
+        target_resource="child_records",
+        resource_id=str(child_id),
+        action="VIEW",
+        ip_address=client_ip,
+        detail={"child_id": child_id, "section": "observation_timeline"},
+    )
     statement = select(ChildObservationLog).where(
         ChildObservationLog.child_id == child_id,
     )
@@ -896,6 +910,17 @@ def child_progress_record_list(
             url=f"/children/{child_id}?child_records_denied=1",
             status_code=303,
         )
+    # 進捗記録一覧の閲覧を監査ログに記録
+    client_ip = request.client.host if request.client else None
+    record_audit_event(
+        actor_user_id=str(current_user.user_id) if current_user.user_id is not None else None,
+        actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
+        target_resource="child_records",
+        resource_id=str(child_id),
+        action="VIEW",
+        ip_address=client_ip,
+        detail={"child_id": child_id, "section": "progress_record_list"},
+    )
     cycle = _progress_cycle(child, config)
     records = session.exec(
         select(PlanDocumentRow).where(
@@ -1126,6 +1151,21 @@ def child_progress_dashboard(
         for child in children
         if can_view_progress_records(session, current_user, child, config)
     ]
+    # 進捗ダッシュボードの一括閲覧を監査ログに記録
+    client_ip = request.client.host if request.client else None
+    record_audit_event(
+        actor_user_id=str(current_user.user_id) if current_user.user_id is not None else None,
+        actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
+        target_resource="child_records",
+        resource_id="dashboard",
+        action="VIEW",
+        ip_address=client_ip,
+        detail={
+            "section": "progress_dashboard",
+            "accessible_children_count": len(accessible_children),
+            "total_children_count": len(children),
+        },
+    )
     documents = session.exec(
         select(PlanDocumentRow).where(
             PlanDocumentRow.document_type == DocumentType.CHILD_PROGRESS_RECORD.value
@@ -1202,4 +1242,78 @@ def child_progress_dashboard(
             "uncreated_count": uncreated_count,
             "filtered_count": len(rows),
         },
+    )
+
+
+@router.get("/{child_id}/records/export", response_class=StreamingResponse)
+def export_child_records(
+    request: Request,
+    child_id: int,
+    format: str = Query(default="csv"),
+    session: Session = Depends(get_session),
+    current_user: StaffUser = Depends(get_current_staff_user),
+):
+    child = _load_child(session, child_id)
+    if not _has_child_access(session, current_user, child):
+        return RedirectResponse(
+            url=f"/children/{child_id}?child_records_export_denied=1",
+            status_code=303,
+        )
+    # 児童観察記録のエクスポートを監査ログに記録
+    client_ip = request.client.host if request.client else None
+    export_format = format.lower() if format else "csv"
+    if export_format not in {"csv", "pdf"}:
+        export_format = "csv"
+    statement = select(ChildObservationLog).where(
+        ChildObservationLog.child_id == child_id,
+        ChildObservationLog.voided_at.is_(None),
+    )
+    logs = session.exec(
+        statement.order_by(
+            ChildObservationLog.observed_on.desc(),
+            ChildObservationLog.created_at.desc(),
+        )
+    ).all()
+    logs = [log for log in logs if can_view_observation_log(session, current_user, child, log)]
+    filename = f"{child.full_name}_records_{local_today().isoformat()}.{export_format}"
+    record_audit_event(
+        actor_user_id=str(current_user.user_id) if current_user.user_id is not None else None,
+        actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
+        target_resource="child_records",
+        resource_id=str(child_id),
+        action="EXPORT",
+        ip_address=client_ip,
+        detail={
+            "child_id": child_id,
+            "format": export_format,
+            "filename": filename,
+            "child_count": len(logs),
+            "section": "export_child_records",
+        },
+    )
+    if export_format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["observed_on", "child_state", "caregiver_support", "reflection", "next_focus", "family_note", "categories", "perspective_tags", "created_by"])
+        for log in logs:
+            writer.writerow([
+                log.observed_on.isoformat(),
+                log.child_state,
+                log.caregiver_support or "",
+                log.reflection or "",
+                log.next_focus or "",
+                log.family_note or "",
+                ",".join(log.categories or []),
+                ",".join(log.perspective_tags or []),
+                log.created_by_name or "",
+            ])
+        content = output.getvalue()
+        media_type = "text/csv; charset=utf-8"
+    else:
+        content = f"PDF export for {child.full_name} records ({len(logs)} entries)".encode("utf-8")
+        media_type = "application/pdf"
+    return StreamingResponse(
+        iter([content]),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

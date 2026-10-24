@@ -50,6 +50,7 @@ from parent_auth import (
     registration_token_from_input,
     submit_parent_identity,
 )
+from rate_limiter import RateLimiter
 from security_config import secure_cookie_enabled
 from time_utils import utc_now
 from parent_account_lifecycle import (
@@ -83,6 +84,10 @@ REGISTRATION_STATUS_LABELS = {
     "expired": "期限切れ",
     "cancelled": "取消済み",
 }
+
+# IP単位・アカウント単位で保護者ログインのレート制限
+PARENT_LOGIN_RATE_LIMITER_IP = RateLimiter(max_requests=10, window_seconds=60)
+PARENT_LOGIN_RATE_LIMITER_ACCOUNT = RateLimiter(max_requests=5, window_seconds=60)
 
 
 def _no_store(response):
@@ -165,6 +170,42 @@ def parent_login(
     redirect_to: str = Form("/parent-portal/"),
     session: Session = Depends(get_session),
 ):
+    # IP単位のレート制限
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    ip_key = f"parent_login_ip:{client_ip}"
+    allowed, retry_after = PARENT_LOGIN_RATE_LIMITER_IP.check(ip_key)
+    if not allowed:
+        return _render(
+            request,
+            "parent_auth/login.html",
+            {
+                "login_id": login_id,
+                "form_error": "ログイン試行回数が上限に達しました。しばらくお待ちください。",
+                "password_changed": False,
+                "redirect_to": redirect_to,
+            },
+            429,
+        )
+
+    # アカウント単位のレート制限
+    account_key = f"parent_login_account:{login_id.strip().lower()}"
+    account_allowed, account_retry_after = PARENT_LOGIN_RATE_LIMITER_ACCOUNT.check(account_key)
+    if not account_allowed:
+        return _render(
+            request,
+            "parent_auth/login.html",
+            {
+                "login_id": login_id,
+                "form_error": "このアカウントのログイン試行回数が上限に達しました。しばらくお待ちください。",
+                "password_changed": False,
+                "redirect_to": redirect_to,
+            },
+            429,
+        )
+
     try:
         result = authenticate_parent(
             session, login_id=login_id, password=password, request=request

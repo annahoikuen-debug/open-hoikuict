@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_can_edit
+from audit_logger import record_audit_event
 from child_health_service import (
     build_health_attention_labels,
     build_health_check_chart_records,
@@ -376,6 +377,18 @@ def health_summary(
     expired_allergies = [
         allergy for allergy in allergies if allergy.valid_until is not None and allergy.valid_until < local_today()
     ]
+
+    # 児童健康情報の閲覧を監査ログに記録
+    client_ip = request.client.host if request.client else None
+    record_audit_event(
+        actor_user_id=str(current_user.id) if current_user.id is not None else None,
+        actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
+        target_resource="child_health",
+        resource_id=str(child_id),
+        action="VIEW",
+        ip_address=client_ip,
+        detail={"child_id": child_id},
+    )
 
     return templates.TemplateResponse(
         request,

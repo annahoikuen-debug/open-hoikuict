@@ -96,6 +96,7 @@ from auth import (
 )
 from csrf import CsrfTokenMiddleware, verify_csrf
 from security_config import deployment_environment, parent_auth_mode, staff_auth_mode, validate_runtime_security
+from security_headers import SecurityHeadersMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -153,6 +154,7 @@ app = FastAPI(
 )
 app.add_exception_handler(StarletteHTTPException, staff_auth_http_exception_handler)
 app.add_middleware(CsrfTokenMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(staff_portal_router)
 app.include_router(classrooms_router)

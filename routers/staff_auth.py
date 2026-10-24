@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
+from rate_limiter import RateLimiter
+
 from auth import (
     Role,
     clear_staff_cookies,
@@ -84,6 +86,15 @@ local_login_router = APIRouter(prefix="/staff", tags=["staff-auth-local"])
 from template_utils import create_templates
 
 templates = create_templates()
+
+# IP単位: 1分間に最大10回、アカウント単位: 1分間に最大5回失敗
+STAFF_LOGIN_RATE_LIMITER_IP = RateLimiter(max_requests=10, window_seconds=60)
+STAFF_LOGIN_RATE_LIMITER_ACCOUNT = RateLimiter(max_requests=5, window_seconds=60)
+
+# MFA OTP送信: アカウント単位で1分間に最大1回、最大5回/時間
+MFA_SEND_CODE_RATE_LIMITER = RateLimiter(max_requests=5, window_seconds=3600)
+# MFA 検証試行: セッション単位で連続5回失敗まで
+MFA_VERIFY_RATE_LIMITER = RateLimiter(max_requests=5, window_seconds=300)
 
 DEFAULT_STAFF_REDIRECT = "/"
 DEFAULT_LOGOUT_REDIRECT = "/"
@@ -299,6 +310,48 @@ def local_staff_login(
     redirect_to: str = Form(DEFAULT_STAFF_REDIRECT),
     session: Session = Depends(get_session),
 ):
+    # IPアドレス単位のレート制限
+    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+    ip_key = f"staff_login_ip:{client_ip}"
+    allowed, retry_after = STAFF_LOGIN_RATE_LIMITER_IP.check(ip_key)
+    if not allowed:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/login_password.html",
+            {
+                "request": request,
+                "redirect_to": safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT),
+                "login_id": login_id,
+                "form_error": "ログイン試行回数が上限に達しました。しばらくお待ちください。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(retry_after or 60)
+        return _no_store(response)
+
+    # ユーザーアカウント単位のレート制限
+    account_key = f"staff_login_account:{login_id.strip().lower()}"
+    account_allowed, account_retry_after = STAFF_LOGIN_RATE_LIMITER_ACCOUNT.check(account_key)
+    if not account_allowed:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/login_password.html",
+            {
+                "request": request,
+                "redirect_to": safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT),
+                "login_id": login_id,
+                "form_error": "このアカウントのログイン試行回数が上限に達しました。しばらくお待ちください。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(account_retry_after or 60)
+        return _no_store(response)
+
     target = safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT)
     try:
         result = authenticate_staff(
@@ -308,6 +361,7 @@ def local_staff_login(
             request=request,
         )
     except (AuthenticationFailed, LoginThrottled):
+        # 認証失敗時はアカウント単位のレートカウントを維持（失敗扱いとしてチェック済み）
         response = templates.TemplateResponse(
             request,
             "staff_auth/login_password.html",
@@ -325,6 +379,25 @@ def local_staff_login(
     # パスワード検証済み。セッションはまだ発行せず、MFA コードをメール送信する。
     # authenticate_staff で作成済みのセッションは無効化する。
     revoke_session_token(session, result.session_token)
+
+    # MFA OTP送信レート制限: アカウント単位で1時間に最大5回
+    mfa_send_key = f"mfa_send:{login_id.strip().lower()}"
+    mfa_allowed, mfa_retry_after = MFA_SEND_CODE_RATE_LIMITER.check(mfa_send_key)
+    if not mfa_allowed:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/login_password.html",
+            {
+                "request": request,
+                "redirect_to": target,
+                "login_id": login_id,
+                "form_error": "認証コードの送信回数が上限に達しました。しばらくお待ちください。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(mfa_retry_after or 3600)
+        return _no_store(response)
 
     # MFA ワンタイムコードを発行（既存の issue_credential_action_token を流用）
     raw_code = issue_credential_action_token(
@@ -410,6 +483,26 @@ def staff_mfa_verify_submit(
 ) -> HTMLResponse:
     """MFA ワンタイムコードを検証し、セッションを発行する。"""
     target = safe_internal_redirect(redirect_to, DEFAULT_STAFF_REDIRECT)
+
+    # MFA 検証レート制限: mfa_pendingクッキー値またはIPベースでキー生成
+    mfa_verify_key = request.cookies.get("mfa_pending") or (
+        request.client.host if request.client else "unknown"
+    )
+    allowed, retry_after = MFA_VERIFY_RATE_LIMITER.check(mfa_verify_key)
+    if not allowed:
+        response = templates.TemplateResponse(
+            request,
+            "staff_auth/mfa_verify.html",
+            {
+                "request": request,
+                "form_error": "認証試行回数を超えました。しばらく待ってから再度お試しください。",
+                "csrf_token": getattr(request.state, "csrf_token", ""),
+            },
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(retry_after or 60)
+        return _no_store(response)
+
     pending_reference = request.cookies.get("mfa_pending")
     if not pending_reference:
         response = templates.TemplateResponse(
