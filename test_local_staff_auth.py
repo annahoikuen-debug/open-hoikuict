@@ -57,10 +57,24 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
                 "HOIKUICT_LOGIN_THROTTLE_HMAC_KEY": "t" * 40,
                 "HOIKUICT_COOKIE_SECURE": "0",
                 "HOIKUICT_CSRF_ENFORCE": "0",
+                "HOIKUICT_PARENT_MAIL_FROM": "noreply@example.jp",
             },
         )
         self.environment.start()
         configure_auth_backends_from_environment()
+        # テスト間でレートリミッタの状態が持ち越されないようリセットする
+        from rate_limiter import DEFAULT_RATE_LIMITER
+
+        DEFAULT_RATE_LIMITER.reset_all()
+        from routers.staff_auth import (
+            MFA_SEND_CODE_RATE_LIMITER,
+            STAFF_LOGIN_RATE_LIMITER_ACCOUNT,
+            STAFF_LOGIN_RATE_LIMITER_IP,
+        )
+
+        STAFF_LOGIN_RATE_LIMITER_IP.reset_all()
+        STAFF_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
+        MFA_SEND_CODE_RATE_LIMITER.reset_all()
         self.engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
@@ -118,6 +132,19 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
         database.engine = self.original_engine
         self.engine.dispose()
         reset_auth_backends()
+        # テスト間でレートリミッタの状態が持ち越されないようリセットする
+        from rate_limiter import DEFAULT_RATE_LIMITER
+
+        DEFAULT_RATE_LIMITER.reset_all()
+        from routers.staff_auth import (
+            MFA_SEND_CODE_RATE_LIMITER,
+            STAFF_LOGIN_RATE_LIMITER_ACCOUNT,
+            STAFF_LOGIN_RATE_LIMITER_IP,
+        )
+
+        STAFF_LOGIN_RATE_LIMITER_IP.reset_all()
+        STAFF_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
+        MFA_SEND_CODE_RATE_LIMITER.reset_all()
         self.environment.stop()
 
     def _activate(self):
@@ -241,14 +268,11 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
         response = self._login()
 
         self.assertEqual(response.status_code, 303)
-        self.assertEqual(response.headers["location"], "/protected")
+        self.assertEqual(response.headers["location"], "/staff/mfa/verify")
         raw_cookie = self.client.cookies.get(LOCAL_STAFF_SESSION_COOKIE)
         self.assertTrue(raw_cookie)
         self.assertNotIn(str(self.user_id), raw_cookie)
-        self.assertEqual(
-            self.client.get("/protected").json(),
-            {"name": "園長", "role": "admin"},
-        )
+        # ログイン直後はMFA未検証のため /protected へは到達せず、クッキーのみ発行されることを確認
 
         with Session(self.engine) as session:
             user = session.get(User, self.user_id)
@@ -567,7 +591,8 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
     def test_external_redirect_is_rejected(self):
         self._activate()
         response = self._login(redirect_to="https://attacker.example/")
-        self.assertEqual(response.headers["location"], "/")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/staff/mfa/verify")
 
 
 if __name__ == "__main__":

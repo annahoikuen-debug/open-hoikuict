@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, timedelta
+from typing import Callable
 
 from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import make_url
@@ -47,6 +48,71 @@ def get_session():
         yield session
 
 
+# 組み込みマイグレーションの実行順序。適用済みのものは schema_migrations
+# テーブルに記録され、再実行時はスキップされる。新しいマイグレーションは
+# このリストの末尾に追記すること(既存エントリの順序は変更しない)。
+# 関数参照を含むため、モジュール読み込み後に create_db_and_tables() 内で構築する。
+def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
+    return [
+        ("001_family_archive", _migrate_family_archive),
+        ("002_add_child_columns", _migrate_add_child_columns),
+        ("003_add_child_health_profile_columns", _migrate_add_child_health_profile_columns),
+        ("004_add_attendance_columns", _migrate_add_attendance_columns),
+        ("005_guardian_confirmation_columns", _migrate_guardian_confirmation_columns),
+        ("006_pickup_history_columns", _migrate_pickup_history_columns),
+        ("007_add_daily_contact_columns", _migrate_add_daily_contact_columns),
+        ("008_spec_20260924_columns", _migrate_spec_20260924_columns),
+        ("009_observation_sharing_columns", _migrate_observation_sharing_columns),
+        ("010_add_parent_account_columns", _migrate_add_parent_account_columns),
+        ("011_add_guardian_columns", _migrate_add_guardian_columns),
+        ("012_parent_mail_delivery_columns", _migrate_parent_mail_delivery_columns),
+        ("013_add_family_columns", _migrate_add_family_columns),
+        ("014_add_message_columns", _migrate_add_message_columns),
+        ("015_data_transfer_audit", _migrate_data_transfer_audit),
+        ("016_add_meeting_note_columns", _migrate_add_meeting_note_columns),
+        ("017_notice_columns", _migrate_notice_columns),
+        ("018_document_review_columns", _migrate_document_review_columns),
+        ("019_add_calendar_columns", _migrate_add_calendar_columns),
+        ("020_survey_tables", _migrate_survey_tables),
+        ("021_plan_document_child_record_columns", _migrate_plan_document_child_record_columns),
+        ("022_monthly_sheet_columns", _migrate_monthly_sheet_columns),
+        ("023_plan_document_action_columns", _migrate_plan_document_action_columns),
+        ("024_plan_review_notification_columns", _migrate_plan_review_notification_columns),
+        ("025_parent_push_delivery_columns", _migrate_parent_push_delivery_columns),
+        ("026_billing_fee_labels", _migrate_billing_fee_labels),
+        ("027_zengin_workflow", _migrate_zengin_workflow),
+        ("028_care_certification_and_extended_care_columns", _migrate_care_certification_and_extended_care_columns),
+        ("029_extended_care_billing_transfer", _migrate_extended_care_billing_transfer),
+        ("030_family_bootstrap", _migrate_family_bootstrap),
+        ("031_sync_health_records_from_legacy", _migrate_sync_health_records_from_legacy),
+        ("032_shift_schedule_tables", _migrate_shift_schedule_tables),
+        ("033_facility_settings", _migrate_facility_settings),
+        ("034_paid_leave_tables", _migrate_paid_leave_tables),
+    ]
+
+
+def _ensure_schema_migrations_table() -> None:
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "migration_id VARCHAR(128) PRIMARY KEY, "
+            "applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+        )
+
+
+def _applied_migrations() -> set[str]:
+    with engine.connect() as conn:
+        rows = conn.exec_driver_sql("SELECT migration_id FROM schema_migrations")
+        return {row[0] for row in rows}
+
+
+def _record_migration(conn, migration_id: str) -> None:
+    conn.exec_driver_sql(
+        "INSERT INTO schema_migrations (migration_id) VALUES (?)",
+        (migration_id,),
+    )
+
+
 def create_db_and_tables() -> None:
     import models  # noqa: F401
     import child_records.models  # noqa: F401
@@ -64,40 +130,15 @@ def create_db_and_tables() -> None:
 
     _enable_sqlite_wal()
     SQLModel.metadata.create_all(engine)
-    _migrate_family_archive()
-    _migrate_add_child_columns()
-    _migrate_add_child_health_profile_columns()
-    _migrate_add_attendance_columns()
-    _migrate_guardian_confirmation_columns()
-    _migrate_pickup_history_columns()
-    _migrate_add_daily_contact_columns()
-    _migrate_spec_20260924_columns()
-    _migrate_observation_sharing_columns()
-    _migrate_add_parent_account_columns()
-    _migrate_add_guardian_columns()
-    _migrate_parent_mail_delivery_columns()
-    _migrate_add_family_columns()
-    _migrate_add_message_columns()
-    _migrate_data_transfer_audit()
-    _migrate_add_meeting_note_columns()
-    _migrate_notice_columns()
-    _migrate_document_review_columns()
-    _migrate_add_calendar_columns()
-    _migrate_survey_tables()
-    _migrate_plan_document_child_record_columns()
-    _migrate_monthly_sheet_columns()
-    _migrate_plan_document_action_columns()
-    _migrate_plan_review_notification_columns()
-    _migrate_parent_push_delivery_columns()
-    _migrate_billing_fee_labels()
-    _migrate_zengin_workflow()
-    _migrate_care_certification_and_extended_care_columns()
-    _migrate_extended_care_billing_transfer()
-    _migrate_family_bootstrap()
-    _migrate_sync_health_records_from_legacy()
-    _migrate_shift_schedule_tables()
-    _migrate_facility_settings()
-    _migrate_paid_leave_tables()
+    _ensure_schema_migrations_table()
+    applied = _applied_migrations()
+    for migration_id, migrate in _sqlite_migrations():
+        if migration_id in applied:
+            continue
+        logger.info("applying migration %s", migration_id)
+        migrate()
+        with engine.begin() as conn:
+            _record_migration(conn, migration_id)
     _validate_sqlite_foreign_keys()
 
 

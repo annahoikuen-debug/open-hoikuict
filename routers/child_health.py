@@ -381,7 +381,7 @@ def health_summary(
     # 児童健康情報の閲覧を監査ログに記録
     client_ip = request.client.host if request.client else None
     record_audit_event(
-        actor_user_id=str(current_user.id) if current_user.id is not None else None,
+        actor_user_id=str(getattr(current_user, "id", None)) if getattr(current_user, "id", None) is not None else None,
         actor_role=current_user.role.value if hasattr(current_user, "role") and current_user.role is not None else None,
         target_resource="child_health",
         resource_id=str(child_id),

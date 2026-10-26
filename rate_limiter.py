@@ -94,6 +94,11 @@ class RateLimiter:
         with self._lock:
             self._timestamps.pop(key, None)
 
+    def reset_all(self) -> None:
+        """全キーのレート制限状態をリセットする（主にテスト用）。"""
+        with self._lock:
+            self._timestamps.clear()
+
     def get_remaining(self, key: str) -> int:
         """キーの残り許容リクエスト数を取得する。"""
         now = self._now()

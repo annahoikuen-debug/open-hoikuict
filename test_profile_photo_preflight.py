@@ -101,6 +101,9 @@ def test_old_schema_upgrade_and_photo_backup_restore(tmp_path, monkeypatch):
         session.commit()
         child_id = child.id
     engine.dispose()
+    # スキーママイグレーション状態をリセットし、カラム追加マイグレーションを再適用可能にする
+    with sqlite3.connect(main_db) as connection:
+        connection.execute("DELETE FROM schema_migrations")
     # Reconstruct the exact pre-feature columns, retaining all prior row values.
     with sqlite3.connect(main_db) as connection:
         connection.execute("ALTER TABLE children DROP COLUMN sex")

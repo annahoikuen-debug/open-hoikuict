@@ -1274,6 +1274,16 @@
       "staff_user_id",
       "token_hash"
     ],
+    "staff_mfa_pending": [
+      "attempt_count",
+      "code_hash",
+      "created_at",
+      "credential_id",
+      "expires_at",
+      "id",
+      "pending_reference",
+      "staff_user_id"
+    ],
     "staff_session_timeouts": [
       "idle_minutes",
       "token_hash"
@@ -1509,6 +1519,33 @@
       "transfer_type",
       "updated_count"
     ],
+    "facility_settings": [
+      "final_pickup_time",
+      "id",
+      "supplementary_meal_fee",
+      "supplementary_meal_time",
+      "updated_at"
+    ],
+    "staff_paid_leaves": [
+      "expires_on",
+      "granted_date",
+      "granted_days",
+      "id",
+      "staff_user_id",
+      "used_days"
+    ],
+    "staff_paid_leave_requests": [
+      "applied_at",
+      "comment",
+      "days",
+      "decided_at",
+      "decided_by",
+      "id",
+      "reason",
+      "staff_user_id",
+      "status",
+      "target_date"
+    ],
     "child_record_setting_versions": [
       "activated_at",
       "activated_by",
@@ -1517,8 +1554,10 @@
       "created_by",
       "effective_from",
       "id",
+      "lock_version",
       "preset_key",
       "status",
+      "updated_at",
       "version_no"
     ],
     "child_observation_logs": [
@@ -1674,6 +1713,131 @@
       "reason_note",
       "recorded_at",
       "recorded_by"
+    ],
+    "shift_facility_settings": [
+      "capacity",
+      "day_close",
+      "day_open",
+      "enforce_min_two",
+      "granularity_min",
+      "id",
+      "min_two_staff_rule",
+      "staffing_standard_key",
+      "updated_at"
+    ],
+    "shift_facility_closed_days": [
+      "id",
+      "kind",
+      "setting_id",
+      "target_date"
+    ],
+    "staff_qualifications": [
+      "effective_from",
+      "effective_to",
+      "id",
+      "note",
+      "role",
+      "staff_user_id"
+    ],
+    "staff_contracts": [
+      "can_work_holiday",
+      "daily_hours",
+      "earliest_start",
+      "effective_from",
+      "effective_to",
+      "employment_type",
+      "id",
+      "latest_end",
+      "max_consecutive_days",
+      "max_monthly_hours",
+      "max_weekly_days",
+      "min_monthly_hours",
+      "overtime_allowed",
+      "staff_user_id",
+      "weekly_hours"
+    ],
+    "staff_shift_preferences": [
+      "avoid_early",
+      "avoid_late",
+      "id",
+      "max_early_shifts",
+      "max_late_shifts",
+      "notes",
+      "staff_user_id"
+    ],
+    "staff_shift_unavailability": [
+      "end_time",
+      "id",
+      "kind",
+      "reason",
+      "staff_user_id",
+      "start_time",
+      "target_date"
+    ],
+    "child_planned_arrival_defaults": [
+      "child_id",
+      "effective_from",
+      "effective_to",
+      "planned_check_in_time",
+      "updated_at",
+      "updated_by_name",
+      "updated_by_user_id"
+    ],
+    "shift_plans": [
+      "created_at",
+      "created_by_name",
+      "created_by_user_id",
+      "id",
+      "input_fingerprint",
+      "lock_version",
+      "staffing_standard_key",
+      "status",
+      "target_month",
+      "updated_at"
+    ],
+    "shift_plan_cells": [
+      "cell_state",
+      "id",
+      "is_pinned",
+      "pinned_by_user_id",
+      "plan_id",
+      "slot_label",
+      "staff_user_id",
+      "target_date"
+    ],
+    "shift_solve_jobs": [
+      "error_message",
+      "finished_at",
+      "id",
+      "is_approved_snapshot",
+      "plan_id",
+      "relax_level",
+      "requested_at",
+      "requested_by_user_id",
+      "started_at",
+      "stats",
+      "status",
+      "time_limit_sec"
+    ],
+    "shift_violations": [
+      "code",
+      "id",
+      "job_id",
+      "message",
+      "plan_id",
+      "severity",
+      "slot_label",
+      "staff_user_id",
+      "target_date"
+    ],
+    "shift_planning_audits": [
+      "action",
+      "actor_user_id",
+      "audit_metadata",
+      "created_at",
+      "id",
+      "summary",
+      "target_plan_id"
     ]
   },
   "photos": true
