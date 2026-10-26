@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}{% if video and video.id %}動画の編集{% else %}新規動画登録{% endif %} | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">
+        {% if video and video.id %}動画の編集{% else %}新規動画登録{% endif %}
+      </h1>
+      <p class="mt-1 text-sm text-slate-500">YouTubeの限定公開URLを登録して保護者へ配信します。</p>
+    </div>
+    <a href="/videos" class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+      一覧へ戻る
+    </a>
+  </div>
+
+  {% if errors %}
+  <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4">
+    <div class="flex items-start gap-2">
+      <svg class="h-5 w-5 text-rose-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <div>
+        <h3 class="text-sm font-semibold text-rose-800">入力内容をご確認ください</h3>
+        <ul class="mt-2 list-disc list-inside text-xs text-rose-700 space-y-1">
+          {% for err in errors %}
+          <li>{{ err }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{% if video and video.id %}/videos/{{ video.id }}/edit{% else %}/videos{% endif %}" class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+    <!-- Title -->
+    <div>
+      <label for="title" class="block text-sm font-semibold text-slate-800">
+        動画タイトル <span class="text-rose-500">*</span>
+      </label>
+      <input
+        type="text"
+        id="title"
+        name="title"
+        required
+        value="{{ video.title if video else '' }}"
+        placeholder="例: 2026年度 秋の運動会ハイライト（りす組・うさぎ組）"
+        class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+    </div>
+
+    <!-- YouTube URL -->
+    <div>
+      <label for="youtube_url" class="block text-sm font-semibold text-slate-800">
+        YouTube 動画URL または 動画ID <span class="text-rose-500">*</span>
+      </label>
+      <input
+        type="text"
+        id="youtube_url"
+        name="youtube_url"
+        required
+        value="{{ video.youtube_url if video else '' }}"
+        placeholder="例: https://www.youtube.com/watch?v=XXXX または https://youtu.be/XXXX"
+        class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+      >
+      <p class="mt-1.5 text-xs text-slate-500 leading-relaxed">
+        ※ YouTubeで「限定公開」に設定した動画の共有URLをそのまま貼り付けてください。<br>
+        ※ 保護者ポータルでは広告やおすすめ動画を抑えたセキュアなプレーヤー（youtube-nocookie.com）で埋め込み再生されます。
+      </p>
+    </div>
+
+    <!-- Description -->
+    <div>
+      <label for="description" class="block text-sm font-semibold text-slate-800">
+        説明・見どころ（任意）
+      </label>
+      <textarea
+        id="description"
+        name="description"
+        rows="4"
+        placeholder="例: お天気にも恵まれ、こどもたちが元気にかけっこやお遊戯を披露してくれました。ぜひご家族でご覧ください！"
+        class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >{{ video.description if video and video.description else '' }}</textarea>
+    </div>
+
+    <!-- Target Audience (Classroom Restriction) -->
+    <div class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+      <label class="block text-sm font-semibold text-slate-800 mb-2">
+        公開対象（クラス制限） <span class="text-rose-500">*</span>
+      </label>
+      <div class="flex flex-col sm:flex-row gap-4 mb-3">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+          <input
+            type="radio"
+            name="target_type"
+            value="all"
+            {% if not video or (video and video.target_type.value == 'all') %}checked{% endif %}
+            onchange="document.getElementById('classroom_select_wrap').classList.add('hidden')"
+            class="text-indigo-600 focus:ring-indigo-500"
+          >
+          <span>全体（すべての保護者が視聴可能）</span>
+        </label>
+        <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+          <input
+            type="radio"
+            name="target_type"
+            value="classroom"
+            {% if video and video.target_type.value == 'classroom' %}checked{% endif %}
+            onchange="document.getElementById('classroom_select_wrap').classList.remove('hidden')"
+            class="text-indigo-600 focus:ring-indigo-500"
+          >
+          <span>クラス限定（特定クラスの園児の保護者のみ）</span>
+        </label>
+      </div>
+
+      <div id="classroom_select_wrap" class="{% if not video or (video and video.target_type.value == 'all') %}hidden{% endif %} mt-2 pt-2 border-t border-slate-200">
+        <label for="target_classroom_id" class="block text-xs font-semibold text-slate-600 mb-1">
+          対象クラスを選択
+        </label>
+        <select
+          id="target_classroom_id"
+          name="target_classroom_id"
+          class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none"
+        >
+          <option value="">選択してください</option>
+          {% for c in classrooms %}
+          <option value="{{ c.id }}" {% if video and video.target_classroom_id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Publishing Dates & Expiry -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="published_at" class="block text-sm font-semibold text-slate-800">
+          公開開始日時
+        </label>
+        <input
+          type="datetime-local"
+          id="published_at"
+          name="published_at"
+          value="{{ video.published_at.strftime('%Y-%m-%dT%H:%M') if video and video.published_at else '' }}"
+          class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+        >
+        <p class="mt-1 text-xs text-slate-500">未指定の場合は登録と同時に公開されます。</p>
+      </div>
+
+      <div>
+        <label for="expires_at" class="block text-sm font-semibold text-slate-800">
+          公開終了日時（公開期限）
+        </label>
+        <input
+          type="datetime-local"
+          id="expires_at"
+          name="expires_at"
+          value="{{ video.expires_at.strftime('%Y-%m-%dT%H:%M') if video and video.expires_at else '' }}"
+          class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none"
+        >
+        <p class="mt-1 text-xs text-slate-500">空欄の場合は「無期限」になります。</p>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div>
+      <label for="status" class="block text-sm font-semibold text-slate-800 mb-1">
+        公開ステータス
+      </label>
+      <select
+        id="status"
+        name="status"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none"
+      >
+        <option value="published" {% if not video or (video and video.status.value == 'published') %}selected{% endif %}>
+          公開中（保護者ポータルへ表示）
+        </option>
+        <option value="draft" {% if video and video.status.value == 'draft' %}selected{% endif %}>
+          下書き（保護者には非表示・職員のみ確認可能）
+        </option>
+        <option value="archived" {% if video and video.status.value == 'archived' %}selected{% endif %}>
+          終了（アーカイブ・非表示）
+        </option>
+      </select>
+    </div>
+
+    <!-- Submit Buttons -->
+    <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+      <a href="/videos" class="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        キャンセル
+      </a>
+      <button
+        type="submit"
+        class="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      >
+        {% if video and video.id %}更新して保存{% else %}動画を登録して公開{% endif %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

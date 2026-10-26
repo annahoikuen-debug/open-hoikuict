@@ -37,10 +37,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
-            "font-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "img-src 'self' data: https://img.youtube.com https://i.ytimg.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "
             "connect-src 'self';"
         ),
     }

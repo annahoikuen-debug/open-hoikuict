@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 from sqlalchemy import JSON, CheckConstraint, Index, LargeBinary, UniqueConstraint
 from sqlmodel import Column, Field, Relationship, SQLModel
 
-from time_utils import local_naive_now, local_today, utc_now
+from time_utils import ensure_utc, local_naive_now, local_today, utc_now
 
 
 class ChildSex(str, Enum):
@@ -3319,3 +3319,76 @@ class StaffPaidLeaveRequest(SQLModel, table=True):
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     comment: Optional[str] = None
+
+
+class VideoStatus(str, Enum):
+    draft = "draft"
+    published = "published"
+    archived = "archived"
+
+    @property
+    def label(self) -> str:
+        return {
+            self.draft: "下書き",
+            self.published: "公開中",
+            self.archived: "終了",
+        }[self]
+
+
+class VideoTargetType(str, Enum):
+    all = "all"
+    classroom = "classroom"
+
+    @property
+    def label(self) -> str:
+        return {
+            self.all: "全体（全学年）",
+            self.classroom: "クラス限定",
+        }[self]
+
+
+class Video(SQLModel, table=True):
+    __tablename__ = "videos"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(index=True)
+    description: Optional[str] = None
+    youtube_url: str
+    youtube_video_id: str = Field(index=True)
+    target_type: VideoTargetType = Field(default=VideoTargetType.all)
+    target_classroom_id: Optional[int] = Field(default=None, foreign_key="classrooms.id", index=True)
+    status: VideoStatus = Field(default=VideoStatus.published, index=True)
+    published_at: datetime = Field(default_factory=utc_now, index=True)
+    expires_at: Optional[datetime] = Field(default=None, index=True)
+    created_by_staff_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    target_classroom: Optional["Classroom"] = Relationship()
+
+    @property
+    def embed_url(self) -> str:
+        return f"https://www.youtube-nocookie.com/embed/{self.youtube_video_id}?rel=0"
+
+    @property
+    def thumbnail_url(self) -> str:
+        return f"https://img.youtube.com/vi/{self.youtube_video_id}/mqdefault.jpg"
+
+    def is_currently_active(self, at_time: Optional[datetime] = None) -> bool:
+        now = ensure_utc(at_time or utc_now())
+        if self.status != VideoStatus.published:
+            return False
+        pub = ensure_utc(self.published_at)
+        if pub and pub > now:
+            return False
+        exp = ensure_utc(self.expires_at)
+        if exp and exp < now:
+            return False
+        return True
+
+    @property
+    def is_expired(self) -> bool:
+        if not self.expires_at:
+            return False
+        return ensure_utc(self.expires_at) < utc_now()
+

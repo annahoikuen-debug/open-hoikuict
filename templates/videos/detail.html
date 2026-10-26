@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} | 動画プレビュー | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <div class="mb-4 flex items-center justify-between">
+    <a href="/videos" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-indigo-600">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+      </svg>
+      動画配信一覧へ戻る
+    </a>
+    <div class="flex items-center gap-2">
+      <a href="/videos/{{ video.id }}/edit" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+        編集する
+      </a>
+      <form method="post" action="/videos/{{ video.id }}/delete" onsubmit="return confirm('本当にこの動画を削除しますか？');">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <button type="submit" class="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm hover:bg-rose-50">
+          削除
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% if created %}
+  <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    ✨ 動画を新しく登録しました。保護者ポータルから視聴可能かご確認ください。
+  </div>
+  {% endif %}
+
+  {% if updated %}
+  <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    動画情報を更新しました。
+  </div>
+  {% endif %}
+
+  <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <!-- Responsive Video Player -->
+    <div class="relative aspect-video w-full bg-black">
+      <iframe
+        class="absolute inset-0 h-full w-full"
+        src="{{ video.embed_url }}"
+        title="{{ video.title }}"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
+    </div>
+
+    <!-- Video Meta & Details -->
+    <div class="p-6">
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        {% if video.is_currently_active() %}
+        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">● 配信中</span>
+        {% elif video.status.value == 'draft' %}
+        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">下書き（非公開）</span>
+        {% elif video.is_expired %}
+        <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">公開期限終了</span>
+        {% else %}
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ video.status.label }}</span>
+        {% endif %}
+
+        {% if video.target_type.value == 'all' %}
+        <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">全学年対象</span>
+        {% elif video.target_classroom %}
+        <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">{{ video.target_classroom.name }} 限定</span>
+        {% endif %}
+      </div>
+
+      <h1 class="text-2xl font-bold text-slate-900 mb-3">{{ video.title }}</h1>
+
+      {% if video.description %}
+      <div class="mb-6 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700 leading-relaxed">
+        {{ video.description }}
+      </div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-xs text-slate-500">
+        <div>
+          <span class="font-semibold text-slate-700">YouTube URL:</span>
+          <a href="{{ video.youtube_url }}" target="_blank" rel="noopener" class="text-indigo-600 hover:underline break-all">
+            {{ video.youtube_url }}
+          </a>
+        </div>
+        <div>
+          <span class="font-semibold text-slate-700">動画ID:</span>
+          <span class="font-mono text-slate-800">{{ video.youtube_video_id }}</span>
+        </div>
+        <div>
+          <span class="font-semibold text-slate-700">公開開始:</span>
+          {{ video.published_at.strftime('%Y-%m-%d %H:%M') if video.published_at else '-' }}
+        </div>
+        <div>
+          <span class="font-semibold text-slate-700">公開期限:</span>
+          {{ video.expires_at.strftime('%Y-%m-%d %H:%M') if video.expires_at else '無期限' }}
+        </div>
+        <div>
+          <span class="font-semibold text-slate-700">登録者:</span>
+          {{ video.created_by_staff_id or '管理者' }}
+        </div>
+        <div>
+          <span class="font-semibold text-slate-700">最終更新:</span>
+          {{ video.updated_at.strftime('%Y-%m-%d %H:%M') if video.updated_at else '-' }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

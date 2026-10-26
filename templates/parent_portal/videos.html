@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}園からの動画配信 | 保護者ポータル{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col gap-2 rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-sky-500 p-6 text-white shadow-sm md:flex-row md:items-center md:justify-between">
+  <div>
+    <div class="flex items-center gap-2">
+      <span class="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur-sm">Movie Gallery</span>
+    </div>
+    <h1 class="mt-2 text-2xl font-bold">園からの動画配信</h1>
+    <p class="mt-1 text-sm text-indigo-100">行事やお遊戯会、日々の園での様子を限定配信しています。</p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/parent-portal/" class="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20">
+      ホームへ戻る
+    </a>
+  </div>
+</div>
+
+{% if videos %}
+<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+  {% for video in videos %}
+  <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md">
+    <!-- Video Thumbnail -->
+    <a href="/parent-portal/videos/{{ video.id }}" class="relative block aspect-video w-full bg-slate-900 overflow-hidden group">
+      <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy">
+      <div class="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition">
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-xl transition transform group-hover:scale-110">
+          <svg class="h-7 w-7 ml-1" fill="currentColor" viewBox="0 0 24 24">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </div>
+      </div>
+      <!-- Target Class Badge -->
+      <div class="absolute top-3 left-3">
+        {% if video.target_type.value == 'all' %}
+        <span class="rounded-lg bg-indigo-900/85 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-white">全学年対象</span>
+        {% elif video.target_classroom %}
+        <span class="rounded-lg bg-sky-900/85 backdrop-blur-sm px-2.5 py-1 text-xs font-semibold text-white">{{ video.target_classroom.name }} 限定</span>
+        {% endif %}
+      </div>
+    </a>
+
+    <!-- Info Area -->
+    <div class="flex flex-1 flex-col p-5">
+      <h2 class="mb-2 text-base font-bold text-slate-900 line-clamp-2 leading-snug">
+        <a href="/parent-portal/videos/{{ video.id }}" class="hover:text-indigo-600">{{ video.title }}</a>
+      </h2>
+
+      {% if video.description %}
+      <p class="mb-4 text-xs text-slate-600 line-clamp-2 leading-relaxed">{{ video.description }}</p>
+      {% endif %}
+
+      <div class="mt-auto border-t border-slate-100 pt-3 flex items-center justify-between text-xs text-slate-500">
+        <span>配信日: {{ video.published_at.strftime('%Y/%m/%d') if video.published_at else '-' }}</span>
+        {% if video.expires_at %}
+        <span class="text-amber-700 font-medium">〜{{ video.expires_at.strftime('%m/%dまで') }}</span>
+        {% else %}
+        <span class="text-slate-400">無期限</span>
+        {% endif %}
+      </div>
+
+      <div class="mt-3 pt-2">
+        <a href="/parent-portal/videos/{{ video.id }}" class="block w-full rounded-xl bg-indigo-50 py-2.5 text-center text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition">
+          動画を再生する ▶
+        </a>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
+  <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 mb-4">
+    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+    </svg>
+  </div>
+  <h2 class="text-lg font-bold text-slate-800">現在公開されている動画はありません</h2>
+  <p class="mt-1 text-sm text-slate-500">新しい行事動画やお便り動画が配信されると、こちらに表示されます。</p>
+  <div class="mt-6">
+    <a href="/parent-portal/" class="inline-flex items-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+      保護者ホームへ戻る
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -67,6 +67,7 @@ from routers.paid_leave import router as paid_leave_router
 from routers.staff_surveys import router as staff_surveys_router
 from routers.surveys import router as surveys_router
 from routers.zengin import router as zengin_router
+from routers.videos import router as videos_router
 from child_records.router import router as child_records_router
 from child_records.router import settings_router as child_record_settings_router
 from child_records.router import progress_router as child_progress_router
@@ -201,6 +202,7 @@ app.include_router(paid_leave_router)
 app.include_router(surveys_router)
 app.include_router(staff_surveys_router)
 app.include_router(zengin_router)
+app.include_router(videos_router)
 app.include_router(child_record_settings_router)
 app.include_router(child_progress_router)
 if mock_auth_enabled() and staff_auth_mode() == "mock":

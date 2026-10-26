@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} | 動画視聴 | 保護者ポータル{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl">
+  <div class="mb-4">
+    <a href="/parent-portal/videos" class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+      </svg>
+      動画配信一覧へ戻る
+    </a>
+  </div>
+
+  <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <!-- Responsive Video Player -->
+    <div class="relative aspect-video w-full bg-black">
+      <iframe
+        class="absolute inset-0 h-full w-full"
+        src="{{ video.embed_url }}"
+        title="{{ video.title }}"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
+    </div>
+
+    <!-- Video Info -->
+    <div class="p-6">
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        {% if video.target_type.value == 'all' %}
+        <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">全学年対象</span>
+        {% elif video.target_classroom %}
+        <span class="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">{{ video.target_classroom.name }} 限定配信</span>
+        {% endif %}
+
+        {% if video.expires_at %}
+        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+          公開期限: {{ video.expires_at.strftime('%Y年%m月%d日 %H:%M') }} まで
+        </span>
+        {% endif %}
+      </div>
+
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-900 mb-3">{{ video.title }}</h1>
+
+      <div class="mb-6 text-xs text-slate-400">
+        配信日: {{ video.published_at.strftime('%Y年%m月%d日') if video.published_at else '-' }}
+      </div>
+
+      {% if video.description %}
+      <div class="mb-6 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm text-slate-700 leading-relaxed border border-slate-100">
+        {{ video.description }}
+      </div>
+      {% endif %}
+
+      <!-- Security / Privacy Guidance Notice -->
+      <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 leading-relaxed">
+        <div class="flex items-center gap-2 font-bold text-amber-800 mb-1">
+          <svg class="h-4 w-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+          保護者の皆様へのお願い（プライバシー保護）
+        </div>
+        本動画は園関係者（対象クラスの保護者の皆様）限定で配信されています。他の園児のプライバシー保護のため、動画URLの共有・外部への転送、およびSNS（LINE、Instagram、TikTok、X等）への動画や画面写真の転載・投稿は固くお断りいたします。
+      </div>
+    </div>
+  </article>
+
+  <div class="mt-6 text-center">
+    <a href="/parent-portal/videos" class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+      動画配信一覧へ戻る
+    </a>
+  </div>
+</div>
+{% endblock %}

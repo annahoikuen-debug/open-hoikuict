@@ -58,6 +58,9 @@ from models import (
     SurveyAudienceType,
     SurveyQuestion,
     SurveyStatus,
+    Video,
+    VideoStatus,
+    VideoTargetType,
 )
 from notice_content import notice_attachment_path, render_notice_body_html
 from parent_push_subscription_service import (
@@ -1959,3 +1962,79 @@ def parent_pickup_save(request: Request, child_id: int, date: str = Form(...), r
         return _parent_pickup_context(request, parent, child, day, session, error=str(exc.detail), status_code=exc.status_code,
             values={"planned_pickup_time": planned_pickup_time, "pickup_person": pickup_person, "snack_required": snack_required, "revision": revision})
     return RedirectResponse(f"/parent-portal/?date={day.isoformat()}&notice=pickup_saved", status_code=303)
+
+
+@router.get("/videos", response_class=HTMLResponse)
+def parent_videos_list(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    classroom_ids = _classroom_ids(current_parent_user)
+    now = utc_now()
+
+    # Load all published videos
+    videos = session.exec(
+        select(Video)
+        .options(selectinload(Video.target_classroom))
+        .where(Video.status == VideoStatus.published)
+        .order_by(Video.published_at.desc())
+    ).all()
+
+    # Filter active and accessible videos
+    accessible_videos = []
+    for video in videos:
+        if not video.is_currently_active(now):
+            continue
+        if video.target_type == VideoTargetType.all:
+            accessible_videos.append(video)
+        elif video.target_type == VideoTargetType.classroom and video.target_classroom_id in classroom_ids:
+            accessible_videos.append(video)
+
+    return templates.TemplateResponse(
+        request,
+        "parent_portal/videos.html",
+        {
+            "request": request,
+            "current_parent_user": current_parent_user,
+            "videos": accessible_videos,
+            "now": now,
+        },
+    )
+
+
+@router.get("/videos/{video_id}", response_class=HTMLResponse)
+def parent_video_detail(
+    video_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    video = session.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="指定された動画が見つかりません。")
+
+    now = utc_now()
+    if not video.is_currently_active(now):
+        raise HTTPException(status_code=404, detail="この動画は現在公開されていません。")
+
+    classroom_ids = _classroom_ids(current_parent_user)
+    if video.target_type == VideoTargetType.classroom and video.target_classroom_id not in classroom_ids:
+        raise HTTPException(status_code=403, detail="この動画はお子様のクラス向けに限定公開されています。")
+
+    return templates.TemplateResponse(
+        request,
+        "parent_portal/video_detail.html",
+        {
+            "request": request,
+            "current_parent_user": current_parent_user,
+            "video": video,
+            "now": now,
+        },
+    )
