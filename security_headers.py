@@ -15,8 +15,7 @@ Starlette BaseHTTPMiddleware を継承し、すべてのレスポンスに対し
 - Content-Security-Policy: default-src 'self'（デフォルト同一オリジンのみ許可）
 """
 
-from __future__ import annotations
-
+import secrets
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -24,6 +23,20 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from security_config import is_production
+
+
+def build_csp_header(nonce: str | None = None) -> str:
+    """CSPヘッダー文字列を生成する。nonce が指定されている場合は script-src に追加する。"""
+    script_src = f"'self' 'unsafe-inline' 'nonce-{nonce}'" if nonce else "'self' 'unsafe-inline'"
+    return (
+        "default-src 'self'; "
+        f"script-src {script_src}; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "img-src 'self' data: https://img.youtube.com https://i.ytimg.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "
+        "connect-src 'self';"
+    )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -35,15 +48,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "X-Content-Type-Options": "nosniff",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Content-Security-Policy": (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "img-src 'self' data: https://img.youtube.com https://i.ytimg.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "
-            "connect-src 'self';"
-        ),
     }
 
     # 本番環境かつHTTPS時のみ付与するヘッダー
@@ -53,6 +57,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        # リクエストスコープに安全な CSP nonce を生成
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
+
         response = await call_next(request)
 
         # WebSocket Upgrade（scope["type"] == "websocket"）はBaseHTTPMiddlewareが
@@ -66,6 +74,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         for key, value in self._BASE_HEADERS.items():
             mutable_headers[key] = value
+
+        # 動的 Nonce を付与した CSP をセット
+        mutable_headers["Content-Security-Policy"] = build_csp_header(nonce)
 
         # HSTS: 本番環境かつHTTPS時のみ（開発環境ではlocalhost HTTPS強制事故防止のため付与しない）
         if is_production() and request.url.scheme == "https":
