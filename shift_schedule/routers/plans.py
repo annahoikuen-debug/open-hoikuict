@@ -111,6 +111,7 @@ def plans_detail(
 @router.post("/plans/{plan_id}/solve")
 def plans_solve(
     plan_id: int,
+    request: Request,
     time_limit_sec: int = Form(30),
     repo: ShiftRepository = Depends(ShiftRepositoryDep),
 ) -> RedirectResponse:
@@ -134,13 +135,45 @@ def plans_solve(
             detail="シフト最適化ソルバー (CBC) がサーバー上で利用できません。管理者に環境設定を確認してください。",
         )
 
-    schedule_solve(
+    # 認証職員情報の解決
+    from auth import get_optional_current_staff_user
+    from audit_logger import record_audit_event
+
+    staff = get_optional_current_staff_user(request)
+    staff_id_str = staff.staff_id if staff else None
+    actor_user_id = str(staff.user_id) if staff and staff.user_id else staff_id_str
+
+    numeric_user_id = None
+    if staff and staff.user_id:
+        try:
+            numeric_user_id = int(str(staff.user_id))
+        except (ValueError, TypeError):
+            numeric_user_id = staff.user_id.int % (2**31 - 1)
+
+    job_id = schedule_solve(
         plan_id=plan_id,
         target_month=plan.target_month,
         staffing_standard_key=plan.staffing_standard_key,
-        requested_by_user_id=None,  # TODO: 認証ユーザーID
+        requested_by_user_id=numeric_user_id,
         time_limit_sec=time_limit_sec,
     )
+
+    # 監査ログを記録
+    record_audit_event(
+        actor_user_id=actor_user_id or "anonymous",
+        actor_role=staff.role.value if staff and hasattr(staff.role, "value") else (str(staff.role) if staff else None),
+        target_resource="shift_plan",
+        resource_id=plan_id,
+        action="solve_requested",
+        ip_address=request.client.host if request.client else None,
+        detail={
+            "target_month": plan.target_month,
+            "job_id": job_id,
+            "staffing_standard_key": plan.staffing_standard_key,
+            "time_limit_sec": time_limit_sec,
+        },
+    )
+
     return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)
 
 
