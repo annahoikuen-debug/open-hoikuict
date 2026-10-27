@@ -61,3 +61,42 @@ def extract_youtube_video_id(url_or_id: str) -> Optional[str]:
         return match.group(1)
 
     return None
+
+
+def fetch_youtube_oembed(video_url_or_id: str, timeout_sec: float = 3.0) -> dict[str, str] | None:
+    """YouTube oEmbed エンドポイント（APIキー不要）から動画のタイトル・作成者情報を取得する。"""
+    video_id = extract_youtube_video_id(video_url_or_id)
+    if not video_id:
+        return None
+
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    import json
+
+    canonical_url = f"https://www.youtube.com/watch?v={video_id}"
+    oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(canonical_url)}&format=json"
+
+    try:
+        req = urllib.request.Request(
+            oembed_url,
+            headers={"User-Agent": "open-hoikuict/v0.4.0 (compatible)"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout_sec) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                return {
+                    "video_id": video_id,
+                    "title": data.get("title", "").strip(),
+                    "author_name": data.get("author_name", "").strip(),
+                    "thumbnail_url": data.get("thumbnail_url", "").strip(),
+                }
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+        pass
+
+    return {
+        "video_id": video_id,
+        "title": "",
+        "author_name": "",
+        "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
+    }

@@ -59,15 +59,25 @@
       <label for="youtube_url" class="block text-sm font-semibold text-slate-800">
         YouTube 動画URL または 動画ID <span class="text-rose-500">*</span>
       </label>
-      <input
-        type="text"
-        id="youtube_url"
-        name="youtube_url"
-        required
-        value="{{ video.youtube_url if video else '' }}"
-        placeholder="例: https://www.youtube.com/watch?v=XXXX または https://youtu.be/XXXX"
-        class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
-      >
+      <div class="mt-1 flex gap-2">
+        <input
+          type="text"
+          id="youtube_url"
+          name="youtube_url"
+          required
+          value="{{ video.youtube_url if video else '' }}"
+          placeholder="例: https://www.youtube.com/watch?v=XXXX または https://youtu.be/XXXX"
+          class="block flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+        >
+        <button
+          type="button"
+          id="fetch-oembed-btn"
+          class="shrink-0 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+        >
+          🔍 タイトル自動取得
+        </button>
+      </div>
+      <p id="oembed-feedback" class="mt-1 text-xs text-indigo-600 hidden"></p>
       <p class="mt-1.5 text-xs text-slate-500 leading-relaxed">
         ※ YouTubeで「限定公開」に設定した動画の共有URLをそのまま貼り付けてください。<br>
         ※ 保護者ポータルでは広告やおすすめ動画を抑えたセキュアなプレーヤー（youtube-nocookie.com）で埋め込み再生されます。
@@ -204,4 +214,51 @@
     </div>
   </form>
 </div>
+
+<script nonce="{{ request.state.csp_nonce if request and request.state and request.state.csp_nonce else '' }}">
+  document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.getElementById('fetch-oembed-btn');
+    const urlInput = document.getElementById('youtube_url');
+    const titleInput = document.getElementById('title');
+    const feedback = document.getElementById('oembed-feedback');
+
+    if (!btn || !urlInput) return;
+
+    btn.addEventListener('click', async function () {
+      const url = (urlInput.value || '').trim();
+      if (!url) {
+        feedback.className = 'mt-1 text-xs text-rose-600 block';
+        feedback.textContent = 'YouTube URLを入力してください。';
+        return;
+      }
+
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = '取得中...';
+      feedback.className = 'mt-1 text-xs text-slate-500 block';
+      feedback.textContent = 'YouTubeから動画情報を取得中...';
+
+      try {
+        const res = await fetch('/videos/oembed-preview?url=' + encodeURIComponent(url));
+        const data = await res.json();
+        if (res.ok && data.title) {
+          if (titleInput && (!titleInput.value || titleInput.value.trim() === '')) {
+            titleInput.value = data.title;
+          }
+          feedback.className = 'mt-1 text-xs text-emerald-600 font-medium block';
+          feedback.textContent = `取得成功: 「${data.title}」${data.author_name ? ' (' + data.author_name + ')' : ''}`;
+        } else {
+          feedback.className = 'mt-1 text-xs text-amber-600 block';
+          feedback.textContent = data.detail || '動画情報の取得に失敗しました。手動でタイトルを入力してください。';
+        }
+      } catch (err) {
+        feedback.className = 'mt-1 text-xs text-rose-600 block';
+        feedback.textContent = '通信エラーが発生しました。';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+  });
+</script>
 {% endblock %}

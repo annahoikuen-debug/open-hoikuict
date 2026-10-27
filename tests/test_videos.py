@@ -287,3 +287,52 @@ def test_parent_portal_video_access_control():
     # Inaccessible: Draft (404 not found)
     r5 = client.get(f"/parent-portal/videos/{v_draft_id}")
     assert r5.status_code == 404
+
+
+def test_videos_pagination_and_oembed_preview():
+    """Test pagination parameters and oEmbed preview endpoint."""
+    client = TestClient(app)
+    authenticate_mock_staff(client)
+
+    # 1. Test pagination on staff videos list
+    resp = client.get("/videos?page=1&per_page=5")
+    assert resp.status_code == 200
+
+    # 2. Test pagination with invalid query parameter returns 422
+    resp_inv = client.get("/videos?page=-1&per_page=0")
+    assert resp_inv.status_code == 422
+
+    # 3. Test oEmbed preview endpoint with missing/invalid URL
+    resp_empty = client.get("/videos/oembed-preview")
+    assert resp_empty.status_code == 422
+
+    resp_invalid = client.get("/videos/oembed-preview?url=https://example.com/not-youtube")
+    assert resp_invalid.status_code == 400
+
+
+def test_storage_driver_abstraction(tmp_path):
+    """Test LocalFileSystemStorageDriver basic file operations."""
+    from storage_driver import LocalFileSystemStorageDriver
+
+    driver = LocalFileSystemStorageDriver(base_dir=str(tmp_path))
+    test_rel = "media/sample.txt"
+    test_bytes = b"Hello OpenICT Storage Driver"
+
+    # Save returns bytes written
+    bytes_written = driver.save(test_rel, test_bytes)
+    assert bytes_written == len(test_bytes)
+    assert driver.exists(test_rel) is True
+
+    local_path = driver.get_local_path(test_rel)
+    assert local_path.is_file()
+    assert local_path.name == "sample.txt"
+
+    # Read
+    read_bytes = driver.read(test_rel)
+    assert read_bytes == test_bytes
+
+    # Delete
+    assert driver.delete(test_rel) is True
+    assert driver.exists(test_rel) is False
+    assert driver.delete(test_rel) is False
+

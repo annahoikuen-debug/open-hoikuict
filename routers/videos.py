@@ -30,6 +30,8 @@ def _parse_datetime_input(dt_str: Optional[str]) -> Optional[datetime]:
 @router.get("", response_class=HTMLResponse)
 def list_videos(
     request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(12, ge=1, le=50),
     status: Optional[str] = Query(None),
     classroom_id: Optional[int] = Query(None),
     session: Session = Depends(get_session),
@@ -42,26 +44,34 @@ def list_videos(
     if classroom_id:
         query = query.where(Video.target_classroom_id == classroom_id)
 
-    videos = session.exec(query).all()
+    all_videos = session.exec(query).all()
     classrooms = session.exec(select(Classroom).order_by(Classroom.id)).all()
 
     # Pre-calculate active counts
     now = utc_now()
-    active_count = sum(1 for v in videos if v.is_currently_active(now))
-    draft_count = sum(1 for v in videos if v.status == VideoStatus.draft)
+    active_count = sum(1 for v in all_videos if v.is_currently_active(now))
+    draft_count = sum(1 for v in all_videos if v.status == VideoStatus.draft)
+
+    total_count = len(all_videos)
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+    paged_videos = all_videos[offset : offset + per_page]
 
     return templates.TemplateResponse(
         request,
         "videos/list.html",
         {
             "request": request,
-            "videos": videos,
+            "videos": paged_videos,
             "classrooms": classrooms,
             "selected_status": status,
             "selected_classroom_id": classroom_id,
             "active_count": active_count,
             "draft_count": draft_count,
-            "total_count": len(videos),
+            "total_count": total_count,
+            "page": page,
+            "total_pages": total_pages,
+            "per_page": per_page,
             "now": now,
         },
     )
@@ -84,6 +94,19 @@ def new_video_form(
             "errors": [],
         },
     )
+
+
+@router.get("/oembed-preview")
+def video_oembed_preview(
+    url: str = Query(...),
+    staff_user=Depends(require_can_edit),
+):
+    from youtube_utils import fetch_youtube_oembed
+
+    data = fetch_youtube_oembed(url)
+    if not data:
+        raise HTTPException(status_code=400, detail="無効なYouTube URLです")
+    return data
 
 
 @router.post("", response_class=HTMLResponse)

@@ -1,9 +1,39 @@
+const CACHE_NAME = 'nusoft-portal-cache-v1';
+const PRECACHE_ASSETS = [
+  '/static/js/tailwindcss.js',
+  '/static/js/htmx.min.js',
+  '/parent-portal/manifest.webmanifest',
+  '/parent-portal/push-icon.svg'
+];
+
 self.addEventListener('install', event => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_ASSETS)).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+    )).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  // キャッシュ対象の静的アセットへのリクエストはキャッシュから優先返却
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && (url.pathname.startsWith('/static/') || PRECACHE_ASSETS.includes(url.pathname))) {
+    event.respondWith(
+      caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+        }
+        return response;
+      }))
+    );
+  }
 });
 
 self.addEventListener('push', event => {
