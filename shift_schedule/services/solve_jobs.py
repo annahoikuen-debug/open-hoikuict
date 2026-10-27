@@ -26,10 +26,11 @@ from ..bridge import (
 )
 from ..contracts import PlanStatus, SolveJobStatus
 from ..db_models import (
+    ChildPlannedArrivalDefaults,
     ShiftPlanCells,
+    ShiftPlans,
     ShiftSolveJobs,
     ShiftViolations,
-    ChildPlannedArrivalDefaults,
 )
 from ..store import ShiftRepository, ShiftRepositoryDep
 from database import engine
@@ -328,25 +329,66 @@ def schedule_solve(
     finally:
         session.close()
 
-    # ワーカーに投入（同期関数をスレッドプールで実行）
-    _solve_executor.submit(
-        _run_solve_sync,
-        job_id,
-        plan_id,
-        target_month,
-        staffing_standard_key,
-        time_limit_sec,
-    )
+    # ワーカーを即時キック（待機中ワーカーがいれば即時取得・実行）
+    _solve_executor.submit(process_next_solve_job)
     return job_id
 
 
+def process_next_solve_job() -> bool:
+    """DB上の最古の QUEUED ジョブを取得して求解を実行する。ジョブを処理した場合は True を返す。"""
+    with _solve_lock:
+        with Session(engine) as session:
+            next_job = session.exec(
+                select(ShiftSolveJobs)
+                .where(ShiftSolveJobs.status == SolveJobStatus.QUEUED)
+                .order_by(ShiftSolveJobs.requested_at.asc())
+            ).first()
+
+            if next_job is None:
+                return False
+
+            job_id = next_job.id
+            plan_id = next_job.plan_id
+            time_limit_sec = next_job.time_limit_sec
+
+            plan = session.exec(select(ShiftPlans).where(ShiftPlans.id == plan_id)).first()
+            if plan is None:
+                next_job.status = SolveJobStatus.FAILED
+                next_job.error_message = f"plan {plan_id} not found"
+                next_job.finished_at = utc_now()
+                session.add(next_job)
+                session.commit()
+                return True
+
+            target_month = plan.target_month
+            staffing_standard_key = plan.staffing_standard_key
+
+            # 排他取得のため即座に RUNNING に更新
+            next_job.status = SolveJobStatus.RUNNING
+            next_job.started_at = utc_now()
+            session.add(next_job)
+            session.commit()
+
+        _run_solve_sync(
+            job_id,
+            plan_id,
+            target_month,
+            staffing_standard_key,
+            time_limit_sec,
+        )
+        return True
+
+
 def recover_stale_jobs() -> int:
-    """起動時に未完了のまま残った QUEUED / RUNNING ジョブを FAILED に更新して回復する。"""
+    """起動時に未完了のまま残った RUNNING ジョブを FAILED に更新して回復する。
+    
+    QUEUED ジョブはそのまま保持され、バックグラウンドワーカーにより安全に順次再処理される。
+    """
     recovered_count = 0
     with Session(engine) as session:
         stale_jobs = session.exec(
             select(ShiftSolveJobs).where(
-                ShiftSolveJobs.status.in_([SolveJobStatus.QUEUED, SolveJobStatus.RUNNING]),
+                ShiftSolveJobs.status == SolveJobStatus.RUNNING,
             )
         ).all()
         for j in stale_jobs:
@@ -361,6 +403,16 @@ def recover_stale_jobs() -> int:
 
 
 async def solve_worker_loop() -> None:
-    """FastAPI lifespan バックグラウンドタスク。"""
+    """FastAPI lifespan バックグラウンドワーカー。DBキュー内の QUEUED ジョブを順次監視・実行する。"""
     while True:
-        await asyncio.sleep(3600)
+        try:
+            # 実行中スロットに余裕がある場合はキューからジョブを取り出す
+            processed = await asyncio.to_thread(process_next_solve_job)
+            if processed:
+                await asyncio.sleep(1.0)
+            else:
+                await asyncio.sleep(5.0)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            await asyncio.sleep(5.0)
