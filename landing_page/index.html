@@ -339,12 +339,12 @@
           </div>
         </div>
 
-        <!-- Tab Content 2: Attendance -->
+        <!-- Tab Content 2: Attendance & Videos -->
         <div class="tab-content" id="tab-attendance">
           <div class="tab-text">
-            <h3>タッチだけの玄関キオスク & スムーズな保護者連絡</h3>
+            <h3>タッチだけの玄関キオスク & スムーズな保護者連絡・動画配信</h3>
             <p>
-              玄関のタブレットやChromebookで直感的に打刻。保護者は専用アプリのインストール不要で、スマホのブラウザから出欠連絡、お迎え変更、連絡帳のやりとりが行えます。
+              玄関のタブレットやChromebookで直感的に打刻。保護者は専用アプリのインストール不要で、スマホのブラウザから出欠連絡、お迎え変更、連絡帳のやりとり、さらに運動会等の限定動画の視聴まで安全に行えます。
             </p>
             <ul class="feature-bullet-list">
               <li>
@@ -353,7 +353,11 @@
               </li>
               <li>
                 <span class="bullet-icon">✓</span>
-                <span>アプリ不要！スマホブラウザから届くリアルタイム Web Push 通知</span>
+                <span>アプリ不要！スマホブラウザから届くリアルタイム Web Push 通知 & PWAオフラインキャッシュ</span>
+              </li>
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span>🎥 YouTube限定公開 & クラス別視聴制御対応のセキュア動画ストリーミング（oEmbed自動取得付き）</span>
               </li>
               <li>
                 <span class="bullet-icon">✓</span>
@@ -363,12 +367,15 @@
           </div>
           <div class="tab-visual">
             <div style="background: var(--bg-secondary); border-radius: 12px; padding: 24px; border: 1px solid var(--border-glass); text-align: center;">
-              <div style="font-size: 3rem; margin-bottom: 10px;">📱</div>
-              <h4 style="font-size: 1.2rem; margin-bottom: 8px;">保護者ポータル & Web Push</h4>
+              <div style="font-size: 3rem; margin-bottom: 10px;">📱🎬</div>
+              <h4 style="font-size: 1.2rem; margin-bottom: 8px;">保護者ポータル & 映像配信</h4>
               <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">
-                緊急連絡や園だより、日々の連絡帳がワンタップで保護者のスマホに届きます。
+                緊急連絡や園だより、日々の連絡帳、行事動画がワンタップで保護者のスマホに届きます。
               </p>
-              <div class="status-pill success" style="display: inline-block;">PWA & Web Push 対応</div>
+              <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                <span class="status-pill success">PWA & オフラインキャッシュ</span>
+                <span class="status-pill pinned">YouTube 限定公開連携</span>
+              </div>
             </div>
           </div>
         </div>
@@ -450,25 +457,29 @@
           </div>
         </div>
 
-        <!-- Tab Content 5: Security -->
+        <!-- Tab Content 5: Security & Platform -->
         <div class="tab-content" id="tab-security">
           <div class="tab-text">
-            <h3>医療・金融水準のゼロトラストセキュリティ</h3>
+            <h3>医療・金融水準のゼロトラストセキュリティ & 運用基盤</h3>
             <p>
-              園児の大切な個人情報と職員の労務データを守るため、メールOTPによる多要素認証 (MFA)、アクセス監査ログ、IP偽装対策済みレート制限、自動整合性バックアップを標準装備しています。
+              園児の大切な個人情報と職員の労務データを守るため、メールOTP多要素認証 (MFA)、アクセス監査ログ、動的CSP Nonce、IP偽装対策済みレート制限、Alembic DBマイグレーションを標準装備しています。
             </p>
             <ul class="feature-bullet-list">
               <li>
                 <span class="bullet-icon">✓</span>
-                <span>アプリ不要のメールOTPによる多要素認証 (MFA)</span>
+                <span>アプリ不要のメールOTPによる多要素認証 (MFA) & IP偽装対策レート制限</span>
               </li>
               <li>
                 <span class="bullet-icon">✓</span>
-                <span>個人情報閲覧・変更をすべて記録する機微情報監査ログ</span>
+                <span>動的 CSP Nonce 適用 & 完全ローカルバンドル（外部CDN障害ゼロ）</span>
               </li>
               <li>
                 <span class="bullet-icon">✓</span>
-                <span>スキーマ契約 (Backup Contract) に基づく安心の自動復元</span>
+                <span>個人情報・シフト求解イベントを追跡する構造化監査ログ基盤</span>
+              </li>
+              <li>
+                <span class="bullet-icon">✓</span>
+                <span>Alembic DBマイグレーション & クラウド移行対応ストレージドライバー</span>
               </li>
             </ul>
           </div>
@@ -476,10 +487,10 @@
             <div style="background: var(--bg-secondary); border-radius: 12px; padding: 24px; border: 1px solid var(--border-glass); text-align: left;">
               <h4 style="font-size: 1.1rem; margin-bottom: 12px;">🛡️ ゼロトラスト・アーキテクチャ</h4>
               <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem;">
-                <div style="padding: 8px 12px; background: rgba(99,102,241,0.1); border-radius: 6px;">・Argon2id ハッシュ化パスワード</div>
-                <div style="padding: 8px 12px; background: rgba(16,185,129,0.1); border-radius: 6px;">・6桁メールワンタイムパスワード (MFA)</div>
-                <div style="padding: 8px 12px; background: rgba(6,182,212,0.1); border-radius: 6px;">・IP偽装対策付きレートリミッター</div>
-                <div style="padding: 8px 12px; background: rgba(245,158,11,0.1); border-radius: 6px;">・CSP / HSTS / CSRF 完全保護</div>
+                <div style="padding: 8px 12px; background: rgba(99,102,241,0.1); border-radius: 6px;">・Argon2id ハッシュ化パスワード & メールMFA</div>
+                <div style="padding: 8px 12px; background: rgba(16,185,129,0.1); border-radius: 6px;">・動的 CSP Nonce (XSS完全遮断) & オフライン資産バンドル</div>
+                <div style="padding: 8px 12px; background: rgba(6,182,212,0.1); border-radius: 6px;">・Alembic スキーママイグレーション & StorageDriver</div>
+                <div style="padding: 8px 12px; background: rgba(245,158,11,0.1); border-radius: 6px;">・シフト求解ワーカーDBキュー & 構造化監査ログ</div>
               </div>
             </div>
           </div>
@@ -675,6 +686,17 @@
           </div>
           <div class="faq-answer">
             いいえ、不要です。登録されたメールアドレス宛に6桁の認証コード（メールOTP）が送信される仕組みのため、スマホやPCでメールが受信できれば特別なアプリなしで安全にログインできます。
+          </div>
+        </div>
+
+        <!-- FAQ 6 -->
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>運動会などの動画を保護者へ限定公開することはできますか？</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            はい、標準対応しています。YouTubeの限定公開URLを登録するだけで、タイトルやサムネイルを自動取得し、クラス別視聴制限や公開期限（タイマー非公開）を設けて安全に保護者ポータルへストリーミング配信できます。トラッキングCookieを送らない高セキュリティ再生環境と、電波の弱い環境でも快適なPWA静的キャッシュに対応しています。
           </div>
         </div>
       </div>
