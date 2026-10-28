@@ -27,6 +27,7 @@ from child_health_service import (
     load_health_checks_for_children,
     load_health_check_records,
     load_health_profiles_for_children,
+    notify_fever_to_guardians,
     sync_child_extra_data_from_health_records,
     sync_health_records_from_legacy_extra_data,
 )
@@ -390,6 +391,13 @@ def health_summary(
         detail={"child_id": child_id},
     )
 
+    attention_labels = build_health_attention_labels(
+        profile=profile,
+        allergies=allergies,
+        check_records=check_records,
+        child=child,
+    )
+
     return templates.TemplateResponse(
         request,
         "health/summary.html",
@@ -404,6 +412,7 @@ def health_summary(
             "latest_height": latest_measurement_summary(chart_records, "height_cm"),
             "latest_weight": latest_measurement_summary(chart_records, "weight_kg"),
             "health_check_stale": health_check_is_stale(check_records),
+            "attention_labels": attention_labels,
             "today_date": local_today(),
             "notice": {
                 "profile_updated": "健康プロフィールを更新しました。",
@@ -755,6 +764,8 @@ def health_check_list(
     child = _load_child(session, child_id)
     _ensure_health_records(session, child)
     records = load_health_check_records(session, child_id)
+    profile = get_or_create_child_health_profile(session, child)
+    allergies = load_child_allergies(session, child_id, include_inactive=False)
     selected_range = _normalize_range_key(range_key)
     chart_records = build_health_check_chart_records(records, range_key=selected_range)
     chart_payload = build_measurement_chart_payload(chart_records)
@@ -770,6 +781,13 @@ def health_check_list(
     corrections = session.exec(select(HealthCheckCorrection).join(
         HealthCheckRecord, HealthCheckCorrection.record_id == HealthCheckRecord.id
     ).where(HealthCheckRecord.child_id == child_id).order_by(HealthCheckCorrection.id.desc())).all()
+
+    attention_labels = build_health_attention_labels(
+        profile=profile,
+        allergies=allergies,
+        check_records=records,
+        child=child,
+    )
 
     return templates.TemplateResponse(
         request,
@@ -788,6 +806,7 @@ def health_check_list(
             "form_data": form_data,
             "editing_record": editing_record,
             "corrections": corrections,
+            "attention_labels": attention_labels,
             "notice": {"created": "健康診断記録を追加しました。", "corrected": "健診記録を訂正し、変更履歴を保存しました。"}.get(notice, ""),
             "form_error": "",
         },
@@ -922,8 +941,10 @@ def create_health_check_record(
             updated_at=now,
     )
     if record is None:
-        session.add(HealthCheckRecord(child_id=child_id, created_by=current_user.name, created_at=now, **values))
+        new_record = HealthCheckRecord(child_id=child_id, created_by=current_user.name, created_at=now, **values)
+        session.add(new_record)
     else:
+        new_record = None
         before = record.model_dump(mode="json")
         result = session.execute(update(HealthCheckRecord).where(
             HealthCheckRecord.id == record.id, HealthCheckRecord.updated_at == record.updated_at
@@ -935,6 +956,19 @@ def create_health_check_record(
         session.add(HealthCheckCorrection(record_id=record.id, before=before, after=record.model_dump(mode="json"),
                     reason=correction_reason.strip(), actor_user_id=current_user.user_id,
                     actor_name=current_user.name, created_at=now))
+    session.flush()
+    if (
+        new_record is not None
+        and check_type_value == HealthCheckType.daily
+        and temperature_value is not None
+        and temperature_value >= 37.5
+    ):
+        notify_fever_to_guardians(
+            session,
+            child=child,
+            record=new_record,
+            created_by_name=current_user.name,
+        )
     session.commit()
     return RedirectResponse(
         url=f"/children/{child_id}/health/check-records?range={selected_range}&notice={'corrected' if record_id is not None else 'created'}",

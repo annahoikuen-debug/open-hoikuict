@@ -6,17 +6,22 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
-from child_health_service import build_health_check_chart_records
+from child_health_service import build_health_check_chart_records, build_growth_deviation_labels
 from models import (
     Child,
     ChildAllergy,
     ChildHealthProfile,
     ChildProfileHistory,
+    ChildSex,
     ChildStatus,
     Classroom,
     Family,
     HealthCheckRecord,
     HealthCheckType,
+    ParentAccount,
+    ParentAccountStatus,
+    ParentChildLink,
+    ParentNotification,
 )
 import routers.child_health as child_health_module
 import routers.children as children_module
@@ -129,6 +134,28 @@ class ChildHealthRouterTests(unittest.TestCase):
 
         self.assertIsNotNone(record)
         self.assertEqual(record.doctor_name, "園医")
+
+    def test_health_summary_shows_fever_alert(self):
+        self.client.post(
+            f"/children/{self.child_id}/health/check-records",
+            data={
+                "check_type": "daily",
+                "checked_at": "2026-04-01",
+                "temperature": "38.2",
+                "general_condition": "機嫌悪い",
+                "range_key": "all",
+            },
+            follow_redirects=False,
+        )
+
+        page = self.client.get(f"/children/{self.child_id}/health")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("発熱", page.text)
+        self.assertIn("38.2", page.text)
+
+        page2 = self.client.get(f"/children/{self.child_id}/health/check-records?range=all")
+        self.assertEqual(page2.status_code, 200)
+        self.assertIn("発熱", page2.text)
 
     def test_chart_records_keep_same_day_different_check_types(self):
         records = [
@@ -343,6 +370,200 @@ class ChildHealthRouterTests(unittest.TestCase):
         self.assertIn("牛乳を解除", allergy_event_titles)
         self.assertIn("牛乳を再有効化", allergy_event_titles)
         self.assertIn("牛乳", child.extra_data["allergy"])
+
+
+    def test_growth_deviation_height_high(self):
+        child = Child(
+            last_name="テスト",
+            first_name="太郎",
+            last_name_kana="テスト",
+            first_name_kana="タロウ",
+            birth_date=date(2026, 1, 1),
+            sex=ChildSex.male,
+            enrollment_date=date(2026, 4, 1),
+            status=ChildStatus.enrolled,
+        )
+        records = [
+            HealthCheckRecord(
+                child_id=1,
+                check_type=HealthCheckType.periodic,
+                checked_at=date(2026, 1, 1),
+                height_cm=58.8,
+                weight_kg=3.1,
+            ),
+        ]
+        labels = build_growth_deviation_labels(child, records)
+        self.assertIn("身長偏位（高／+2SD以上）", labels)
+
+    def test_growth_deviation_weight_low(self):
+        child = Child(
+            last_name="テスト",
+            first_name="花子",
+            last_name_kana="テスト",
+            first_name_kana="ハナコ",
+            birth_date=date(2026, 1, 1),
+            sex=ChildSex.female,
+            enrollment_date=date(2026, 4, 1),
+            status=ChildStatus.enrolled,
+        )
+        records = [
+            HealthCheckRecord(
+                child_id=1,
+                check_type=HealthCheckType.periodic,
+                checked_at=date(2026, 1, 1),
+                height_cm=49.1,
+                weight_kg=1.4,
+            ),
+        ]
+        labels = build_growth_deviation_labels(child, records)
+        self.assertIn("体重偏位（低／-2SD以下）", labels)
+
+    def test_growth_deviation_not_set_returns_empty(self):
+        child = Child(
+            last_name="テスト",
+            first_name="次郎",
+            last_name_kana="テスト",
+            first_name_kana="ジロウ",
+            birth_date=date(2026, 1, 1),
+            sex=ChildSex.not_set,
+            enrollment_date=date(2026, 4, 1),
+            status=ChildStatus.enrolled,
+        )
+        records = [
+            HealthCheckRecord(
+                child_id=1,
+                check_type=HealthCheckType.periodic,
+                checked_at=date(2026, 1, 1),
+                height_cm=58.8,
+                weight_kg=3.1,
+            ),
+        ]
+        labels = build_growth_deviation_labels(child, records)
+        self.assertEqual(labels, [])
+
+
+    def test_fever_notification_sent_to_guardians(self):
+        with Session(self.engine) as session:
+            parent_account = ParentAccount(
+                display_name="田中 母",
+                email="mother@example.com",
+                status=ParentAccountStatus.active,
+            )
+            session.add(parent_account)
+            session.flush()
+            session.add(
+                ParentChildLink(
+                    parent_account_id=parent_account.id,
+                    child_id=self.child_id,
+                    is_primary_contact=True,
+                )
+            )
+            session.commit()
+
+        response = self.client.post(
+            f"/children/{self.child_id}/health/check-records",
+            data={
+                "check_type": "daily",
+                "checked_at": "2026-04-01",
+                "temperature": "38.2",
+                "general_condition": "機嫌悪い",
+                "range_key": "all",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(response.status_code, 303)
+
+        with Session(self.engine) as session:
+            notifications = session.exec(
+                select(ParentNotification).where(
+                    ParentNotification.child_id == self.child_id,
+                    ParentNotification.kind == "fever_notification",
+                )
+            ).all()
+
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("38.2", notifications[0].body)
+        self.assertEqual(notifications[0].title, "【発熱のお知らせ】")
+
+    def test_fever_notification_not_sent_for_normal_temperature(self):
+        with Session(self.engine) as session:
+            parent_account = ParentAccount(
+                display_name="田中 母",
+                email="mother@example.com",
+                status=ParentAccountStatus.active,
+            )
+            session.add(parent_account)
+            session.flush()
+            session.add(
+                ParentChildLink(
+                    parent_account_id=parent_account.id,
+                    child_id=self.child_id,
+                    is_primary_contact=True,
+                )
+            )
+            session.commit()
+
+        self.client.post(
+            f"/children/{self.child_id}/health/check-records",
+            data={
+                "check_type": "daily",
+                "checked_at": "2026-04-01",
+                "temperature": "36.5",
+                "general_condition": "元気",
+                "range_key": "all",
+            },
+            follow_redirects=False,
+        )
+
+        with Session(self.engine) as session:
+            notifications = session.exec(
+                select(ParentNotification).where(
+                    ParentNotification.child_id == self.child_id,
+                    ParentNotification.kind == "fever_notification",
+                )
+            ).all()
+
+        self.assertEqual(len(notifications), 0)
+
+    def test_fever_notification_not_sent_for_periodic_check_type(self):
+        with Session(self.engine) as session:
+            parent_account = ParentAccount(
+                display_name="田中 母",
+                email="mother@example.com",
+                status=ParentAccountStatus.active,
+            )
+            session.add(parent_account)
+            session.flush()
+            session.add(
+                ParentChildLink(
+                    parent_account_id=parent_account.id,
+                    child_id=self.child_id,
+                    is_primary_contact=True,
+                )
+            )
+            session.commit()
+
+        self.client.post(
+            f"/children/{self.child_id}/health/check-records",
+            data={
+                "check_type": "periodic",
+                "checked_at": "2026-04-01",
+                "temperature": "39.0",
+                "general_condition": "元気",
+                "range_key": "all",
+            },
+            follow_redirects=False,
+        )
+
+        with Session(self.engine) as session:
+            notifications = session.exec(
+                select(ParentNotification).where(
+                    ParentNotification.child_id == self.child_id,
+                    ParentNotification.kind == "fever_notification",
+                )
+            ).all()
+
+        self.assertEqual(len(notifications), 0)
 
 
 if __name__ == "__main__":
