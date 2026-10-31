@@ -8,8 +8,12 @@
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20%7C%20All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](pyproject.toml)
 [![Security: MFA & Audit](https://img.shields.io/badge/Security-MFA%20%7C%20Audit%20%7C%20RateLimit-orange.svg)](security_config.py)
+[![CI](https://img.shields.io/badge/CI-Tests%20%7C%20Lint-blueviolet.svg)](.github/)
+[![Support](https://img.shields.io/badge/Support-Email%20%7C%20Issues-7b1fa2.svg)](SUPPORT.md)
+[![Community](https://img.shields.io/badge/Community-Discussions-9cf.svg)](https://github.com/hoikuict/open-hoikuict/discussions)
+[![SECURITY.md](https://img.shields.io/badge/Security-Policy-ff3e00.svg)](SECURITY.md)
 
-**[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [操作マニュアル](MANUAL.md) | [Q&A (よくある質問)](Q_AND_A.md) | [ランディングページ](landing_page/index.html) | [技術ガイド](docs/technical-guide.md)**
+**[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [操作マニュアル](MANUAL.md) | [Q&A (よくある質問)](Q_AND_A.md) | [ランディングページ](landing_page/index.html) | [技術ガイド](docs/technical-guide.md) | [セキュリティポリシー](SECURITY.md) | [コントリビューション](CONTRIBUTING.md)**
 
 ---
 
@@ -46,7 +50,7 @@
 
 ---
 
-## 2. システム構成と最新ファイル状態 (v0.4.0)
+## 2. システム構成とバージョン情報 (v0.4.0)
 
 本リポジトリは **v0.4.0** として、全てのフェーズ（Phase 0〜3）の負債解消と最新機能統合が完了しています。
 
@@ -61,11 +65,28 @@
 | **テストスイート** | 100 ファイル以上 | pytest / 回帰防止テスト完備 |
 | **シフトソルバー統合** | `vendor/nushift/shiftai` | CBCソルバー DB駆動非同期ワーカー・監査連動 |
 
+### アーキテクチャ概要図
+
+```mermaid
+graph TD
+    Browser[ブラウザ / PWA / キオスク端末] -->|HTTPS| LB[リバースプロキシ Nginx/Caddy]
+    LB -->|FastAPI| App[main.py FastAPI アプリ]
+    App --> Auth[認証基盤 Argon2id + MFAメールOTP]
+    App --> Router[APIルーター群 routers/]
+    Router --> DB[(SQLite / PostgreSQL)]
+    App --> Solver[NuShift MILP求解ワーカー CBC]
+    App --> Audit[監査ログ audit_logger.py]
+    App --> Storage[StorageDriver ローカル/S3]
+    App --> Mail[メールOTP・通知送信]
+    App --> Zengin[全銀Zengin口座振替]
+    Browser -->|Web Push| Push[Web Push通知]
+```
+
 ### ディレクトリ構成
 
 ```text
 open-hoikuict/
-├── alembic/                # 【新規】Alembic データベーススキーママイグレーション環境
+├── alembic/                # Alembic データベーススキーママイグレーション環境
 ├── child_records/          # 児童観察記録・要録・成長進捗管理 (独自項目UUID対応)
 ├── common/                 # 共通楽観ロック (optimistic_lock.py) など基盤モジュール
 ├── data/                   # 規定データ・初期マスタ
@@ -92,10 +113,11 @@ open-hoikuict/
 ├── requirements.txt        # 本番実行依存関係 (FastAPI, PuLP, Pandas 等)
 ├── security_config.py      # セキュリティ設定・環境バリデーション
 ├── security_headers.py     # セキュリティHTTPレスポンスヘッダー (動的 CSP Nonce 対応)
-├── storage_driver.py       # 【新規】ストレージ抽象化レイヤー (Local / S3)
+├── storage_driver.py       # ストレージ抽象化レイヤー (Local / S3)
 ├── version.py              # バージョン定義 (v0.4.0)
-├── youtube_utils.py        # 【新規】YouTube 動画ID解析 & oEmbed メタデータ自動取得
-└── zengin_service.py       # 全銀協標準フォーマット口座振替サービス
+├── youtube_utils.py        # YouTube 動画ID解析 & oEmbed メタデータ自動取得
+├── zengin_service.py       # 全銀協標準フォーマット口座振替サービス
+└── LICENSE                 # 商用プロプライエタリ ライセンス
 ```
 
 ---
@@ -104,11 +126,42 @@ open-hoikuict/
 
 ### 3.1 動作要件
 
-- **OS**: Windows 11 / 10, Ubuntu 22.04 LTS / 24.04 LTS, macOS, TrueNAS SCALE
-- **Python**: 3.11 または 3.12
-- **ソルバー**: COIN-OR CBC ソルバー (PuLP 経由で同梱、またはシステムインストール)
+| 項目 | 要件 | 備考 |
+| :--- | :--- | :--- |
+| **OS** | Windows 11 / 10, Ubuntu 22.04 LTS / 24.04 LTS, macOS, TrueNAS SCALE | 開発・本番両対応 |
+| **Python** | 3.11 または 3.12 | 公式サポート |
+| **メモリ** | 4 GB 以上推奨 | ソルバー実行時は 8 GB 推奨 |
+| **ディスク空き容量** | 5 GB 以上 | データベース・バックアップ・ログを含む |
+| **ソルバー** | COIN-OR CBC ソルバー (PuLP 経由で同梱、またはシステムインストール) | MILP 最適化用 |
+| **データベース** | SQLite (開発/小規模) / PostgreSQL (本番/中規模以上) | Alembic マイグレーション対応 |
+| **ブラウザ** | Chrome / Edge / Safari 最新版 | 保護者ポータル・管理画面 |
 
 ### 3.2 インストール手順
+
+#### Windows (PowerShell)
+
+```powershell
+# 1. リポジトリのクローン
+git clone https://github.com/hoikuict/open-hoikuict.git
+cd open-hoikuict
+
+# 2. 仮想環境の作成と有効化
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+# 3. 依存パッケージのインストール
+pip install --upgrade pip
+pip install -r requirements.txt -r requirements-dev.txt
+
+# 4. 環境変数の設定
+copy .env.example .env
+# .env をエディタで開き、秘密鍵・メール設定・データベースURLを編集
+
+# 5. データベースマイグレーションの実行
+alembic upgrade head
+```
+
+#### Linux / macOS
 
 ```bash
 # 1. リポジトリのクローン
@@ -117,20 +170,25 @@ cd open-hoikuict
 
 # 2. 仮想環境の作成と有効化
 python -m venv .venv
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# Linux / macOS:
 source .venv/bin/activate
 
 # 3. 依存パッケージのインストール
 pip install --upgrade pip
 pip install -r requirements.txt -r requirements-dev.txt
 
-# 4. 環境変数の設定 (開発環境用サンプルのコピー)
+# 4. 環境変数の設定
 cp .env.example .env
+# .env をエディタで開き、秘密鍵・メール設定・データベースURLを編集
 
-# 5. データベースマイグレーションの実行 (Alembic)
+# 5. データベースマイグレーションの実行
 alembic upgrade head
+```
+
+#### Docker (オプション)
+
+```bash
+docker build -t open-hoikuict .
+docker run -d -p 8000:8000 --env-file .env open-hoikuict
 ```
 
 ### 3.3 アプリケーションの起動
@@ -141,9 +199,11 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 起動後、ブラウザで以下のURLにアクセスしてください：
+
 - **メインアプリケーション**: `http://127.0.0.1:8000/`
 - **ランディングページ**: `http://127.0.0.1:8000/landing_page/` (または `landing_page/index.html` を直接ブラウザで開く)
 - **API ドキュメント (Swagger UI)**: `http://127.0.0.1:8000/docs`
+- **ReDoc API ドキュメント**: `http://127.0.0.1:8000/redoc`
 
 ### 3.4 シフト自動作成単体エンジン (NuShift / Streamlit) の起動
 
@@ -195,13 +255,16 @@ python -m streamlit run streamlit_app.py
 
 ### 4.5 セキュリティ & 運用基盤
 
-- **動的 CSP Nonce**: すべてのリクエストで暗号学的に安全な一時 nonce を生成し、厳格な Content-Security-Policy ヘッダーを適用。インラインスクリプト悪用による XSS 攻撃を完全遮断。
-- **オフライン完全対応 (CDNフリー)**: Chart.js, Tailwind CSS, HTMX を完全ローカルバンドル化し、外部CDN障害の影響を受けないゼロ外部依存設計。
-- **メールOTP (MFA)**: ログイン時に6桁の一時パスコードを登録メールアドレスに送信。専用認証アプリ不要で高いセキュリティを確保。
-- **機微情報監査ログ**: 園児・保護者の個人情報や口座情報に加え、シフト求解要求を行った職員ID・パラメータ・結果を構造化ログとして記録。
-- **Alembic スキーママイグレーション**: SQLite バッチモード対応のマイグレーションにより、運用環境での安全なテーブル変更・履歴管理を実現。
-- **ストレージ抽象化 (`storage_driver.py`)**: 将来のクラウドS3移行を見据えた抽象ドライバにより、パストラバーサル防止を施した安全なファイル管理を提供。
-- **レートリミット**: ブルートフォース攻撃やDoS攻撃を防ぎ、メモリリークを防止する自動クリーンアップ機構を内蔵。
+| セキュリティ機能 | 詳細 |
+| :--- | :--- |
+| **多要素認証 (MFA)** | メールOTP (6桁, 有効期限10分) による2段階認証。専用認証アプリ不要。 |
+| **動的 CSP Nonce** | リクエスト毎に暗号学的に安全なnonceを生成し、厳格なContent-Security-Policyヘッダーを適用。XSS攻撃を遮断。 |
+| **レートリミット** | ブルートフォース攻撃・DoS攻撃を防止。IP偽装対策・メモリ自動クリーンアップ付き。 |
+| **監査ログ** | ログイン成功/失敗、機微情報アクセス、シフト求解要求（職員ID・パラメータ・結果）を構造化記録。 |
+| **データ暗号化** | 通信はSSL/TLS暗号化。パスワードはArgon2idで不可逆ハッシュ化。 |
+| **オフライン対応 (CDNフリー)** | Chart.js, Tailwind CSS, HTMX を完全ローカルバンドル化しゼロ外部依存。 |
+| **ストレージ抽象化** | `StorageDriver` によりパストラバーサル防止・将来のS3移行に対応。 |
+| **PWA キャッシュ** | Service Worker による静的アセット事前キャッシュでオフライン耐性・高速表示。 |
 
 ### 4.6 施設型給付費・加算算定 & 自治体監査対策
 
@@ -212,7 +275,18 @@ python -m streamlit run streamlit_app.py
 
 ---
 
-## 5. 品質保証・テスト・CI
+## 5. サポート対象ブラウザ・デバイス
+
+| 端末区分 | 推奨環境 | 主な用途 |
+| :--- | :--- | :--- |
+| **事務用 PC** | Windows 10/11, macOS, Chrome / Edge 最新版 | 園長・主任・事務の管理業務、シフト作成、請求 |
+| **保育室 タブレット** | iPad (iPadOS 16+), Android タブレット (10インチ以上) | 連絡帳入力、児童観察記録、園児出欠確認 |
+| **玄関 キオスク端末** | Chromebook, iPad, Windows タブレット（固定設置） | 保護者・園児の登降園タッチ打刻 |
+| **保護者 スマートフォン** | iPhone (iOS 15+), Android (Android 10+) | 保護者ポータル、連絡帳、出欠連絡、Web Push |
+
+---
+
+## 6. 品質保証・テスト・CI
 
 本プロジェクトは厳格なテスト駆動開発とCI基準を維持しています。
 
@@ -231,7 +305,7 @@ python -m mkdocs build --strict
 
 ---
 
-## 6. ドキュメント体系
+## 7. ドキュメント体系
 
 用途に合わせて以下の充実したドキュメントをご参照ください。
 
@@ -240,14 +314,23 @@ python -m mkdocs build --strict
 - 🎨 **[ランディングページ (landing_page/index.html)](landing_page/index.html)**: nusoft の魅力を伝える美麗なプロダクト紹介LP
 - 🛠️ **[docs/technical-guide.md](docs/technical-guide.md)**: アーキテクチャ設計・API仕様・開発者向けガイド
 - 📋 **[docs/features.md](docs/features.md)**: 実装済み機能の網羅的一覧
+- 🔒 **[SECURITY.md](SECURITY.md)**: セキュリティポリシー・脆弱性報告の窓口
+- 🤝 **[CONTRIBUTING.md](CONTRIBUTING.md)**: コントリビューションガイド (開発参加の手順)
+- 📞 **[SUPPORT.md](SUPPORT.md)**: サポート窓口・お問い合わせ情報
 
 ---
 
-## 7. ライセンス・免責事項
+## 8. ライセンス・免責事項
 
 ### ライセンス（商用プロプライエタリ・全権利保持）
+
 本プロジェクトおよび関連成果物一式は、著作者（nusoft 開発者）がすべての知的財産権を保有する商用ソフトウェア（個人プロジェクト商用化版）です。  
 事前の書面による許諾なく、本ソフトウェアのソースコード・バイナリ・ドキュメントの全部または一部を複製、改変、再配布、リバースエンジニアリング、または無断で商業利用することを固く禁じます。詳細は [LICENSE](LICENSE) をご確認ください。
 
 ### 免責事項
+
 本ソフトウェアが提供する職員配置基準の計算結果およびシフト自動作成機能は、数理最適化モデルに基づく提案です。最終的な法令遵守・人員配置の確認および安全管理責任は、各施設の施設長・管理者が負うものとします。
+
+---
+
+> nusoft open-hoikuict v0.4.0 | 商用プロプライエタリ | 最終更新: 2026年
