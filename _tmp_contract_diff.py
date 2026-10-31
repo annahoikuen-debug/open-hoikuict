@@ -1,4 +1,3 @@
-import json
 from scripts.backup_validation import load_contract
 from sqlmodel import SQLModel
 

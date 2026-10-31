@@ -149,24 +149,42 @@ def _run_solve_sync(
                 week_days_list.append(tmp_d)
                 tmp_d += timedelta(days=1)
 
-            # 週内の全日（day_date）について各日の園児予定を組み立てる（初日固定バグを解消）
+            # 週内の全日（day_date）について各日の園児予定を組み立てる（N+1クエリ解消：一括プリロード）
+            att_records = session.exec(
+                select(AttendanceRecord).where(
+                    AttendanceRecord.attendance_date.in_(week_days_list)
+                )
+            ).all()
+            att_map: dict[tuple[int, date], AttendanceRecord] = {
+                (ar.child_id, ar.attendance_date): ar for ar in att_records if ar.child_id is not None
+            }
+
+            min_date = week_days_list[0]
+            max_date = week_days_list[-1]
+            all_defaults = session.exec(
+                select(ChildPlannedArrivalDefaults).where(
+                    ChildPlannedArrivalDefaults.effective_from <= max_date,
+                    (ChildPlannedArrivalDefaults.effective_to.is_(None))
+                    | (ChildPlannedArrivalDefaults.effective_to >= min_date),
+                )
+            ).all()
+            defaults_by_child: dict[int, list[ChildPlannedArrivalDefaults]] = {}
+            for d in all_defaults:
+                defaults_by_child.setdefault(d.child_id, []).append(d)
+
             day_plans: list[ChildPlan] = []
             for day_date in week_days_list:
                 for child in children:
-                    attendance_record = session.exec(
-                        select(AttendanceRecord).where(
-                            AttendanceRecord.child_id == child.id,
-                            AttendanceRecord.attendance_date == day_date,
-                        )
-                    ).first()
-                    planned_default = session.exec(
-                        select(ChildPlannedArrivalDefaults).where(
-                            ChildPlannedArrivalDefaults.child_id == child.id,
-                            (ChildPlannedArrivalDefaults.effective_to.is_(None))
-                            | (ChildPlannedArrivalDefaults.effective_to >= day_date),
-                            ChildPlannedArrivalDefaults.effective_from <= day_date,
-                        )
-                    ).first()
+                    attendance_record = att_map.get((child.id, day_date)) if child.id else None
+                    planned_default = None
+                    child_defs = defaults_by_child.get(child.id, []) if child.id else []
+                    for cd in child_defs:
+                        if cd.effective_from <= day_date and (
+                            cd.effective_to is None or cd.effective_to >= day_date
+                        ):
+                            planned_default = cd
+                            break
+
                     cp = build_child_plan(
                         session,
                         child,
