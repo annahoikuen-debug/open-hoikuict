@@ -2718,6 +2718,8 @@ class User(SQLModel, table=True):
     is_calendar_admin: bool = Field(default=False)
     can_manage_child_records: bool = Field(default=False)
     can_manage_billing_accounts: bool = Field(default=False)
+    can_export_documents: bool = Field(default=False)
+    can_export_zengin: bool = Field(default=False)
     provisioning_source: str = Field(default=USER_SOURCE_MANUAL, max_length=32, index=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now)
@@ -2748,6 +2750,20 @@ class User(SQLModel, table=True):
         return self.is_active and (
             self.staff_role == "admin"
             or (self.staff_role == "can_edit" and self.can_manage_billing_accounts)
+        )
+
+    @property
+    def can_export_documents_effective(self) -> bool:
+        return self.is_active and (
+            self.staff_role == "admin"
+            or (self.staff_role == "can_edit" and self.can_export_documents)
+        )
+
+    @property
+    def can_export_zengin_effective(self) -> bool:
+        return self.is_active and (
+            self.staff_role == "admin"
+            or (self.staff_role == "can_edit" and self.can_export_zengin)
         )
 
     @property
@@ -3392,4 +3408,20 @@ class Video(SQLModel, table=True):
         if not self.expires_at:
             return False
         return ensure_utc(self.expires_at) < utc_now()
+
+
+class DocumentExportLog(SQLModel, table=True):
+    __tablename__ = "document_export_logs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    export_type: str = Field(index=True)  # 'attendance', 'zengin', 'monthly_plan', 'billing'
+    export_format: str = Field(index=True)  # 'csv', 'xlsx', 'pdf', 'txt'
+    target_month: Optional[str] = Field(default=None, index=True)
+    exported_by_user_id: Optional[uuid.UUID] = Field(default=None, index=True)
+    exported_by_name: Optional[str] = Field(default=None)
+    record_count: Optional[int] = Field(default=None)
+    file_size_bytes: Optional[int] = Field(default=None)
+    status: str = Field(default="success")  # 'success', 'error', 'warning'
+    error_message: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=utc_now)
 

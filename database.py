@@ -89,6 +89,8 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("032_shift_schedule_tables", _migrate_shift_schedule_tables),
         ("033_facility_settings", _migrate_facility_settings),
         ("034_paid_leave_tables", _migrate_paid_leave_tables),
+        ("035_document_export_permissions", _migrate_document_export_permissions),
+        ("036_document_export_history", _migrate_document_export_history),
     ]
 
 
@@ -1880,3 +1882,71 @@ def _migrate_shift_schedule_tables() -> None:
             conn.commit()
     except Exception as exc:
         _log_migration_skip("shift schedule tables", exc)
+
+
+def _migrate_document_export_permissions() -> None:
+    """Add document export permission columns to users table."""
+    try:
+        user_cols = _table_columns("users")
+        if user_cols and "can_export_documents" not in user_cols:
+            conn = engine.connect()
+            try:
+                conn.execute(
+                    text(
+                        "ALTER TABLE users "
+                        "ADD COLUMN can_export_documents BOOLEAN DEFAULT 0 NOT NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE users "
+                        "ADD COLUMN can_export_zengin BOOLEAN DEFAULT 0 NOT NULL"
+                    )
+                )
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception as exc:
+        _log_migration_skip("document export permissions", exc)
+
+
+def _migrate_document_export_history() -> None:
+    """Create document_export_logs table for export history management."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS document_export_logs ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "export_type VARCHAR NOT NULL, "
+                    "export_format VARCHAR NOT NULL, "
+                    "target_month VARCHAR, "
+                    "exported_by_user_id UUID, "
+                    "exported_by_name VARCHAR, "
+                    "record_count INTEGER, "
+                    "file_size_bytes INTEGER, "
+                    "status VARCHAR DEFAULT 'success', "
+                    "error_message VARCHAR, "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_document_export_logs_export_type "
+                    "ON document_export_logs(export_type)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_document_export_logs_export_format "
+                    "ON document_export_logs(export_format)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_document_export_logs_target_month "
+                    "ON document_export_logs(target_month)"
+                )
+            )
+    except Exception as exc:
+        _log_migration_skip("document export history", exc)

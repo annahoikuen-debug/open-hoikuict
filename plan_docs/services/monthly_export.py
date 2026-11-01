@@ -1,6 +1,7 @@
 """Monthly document snapshots: no database writes or persistent export files."""
 from __future__ import annotations
 
+import time
 from io import BytesIO
 from threading import BoundedSemaphore
 from typing import Literal
@@ -16,6 +17,10 @@ from .monthly_library import field_definitions
 
 EXPORT_GATE = BoundedSemaphore(1)
 NO_CACHE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff'}
+
+# デフォルトのリトライ設定
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_BASE_DELAY = 0.5  # 秒
 
 
 class ExportCell(BaseModel):
@@ -136,8 +141,15 @@ def xlsx_bytes(layout, fixture=False):
     return stream.getvalue()
 
 
-def render_export(context, kind, mode, fixture=False, pdf_attachment=False, download_snapshot='', csrf_token=''):
-    if not EXPORT_GATE.acquire(blocking=False):
+def render_export(context, kind, mode, fixture=False, pdf_attachment=False, download_snapshot='', csrf_token='',
+                  max_retries: int = DEFAULT_MAX_RETRIES, retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY):
+    for attempt in range(max_retries + 1):
+        if EXPORT_GATE.acquire(blocking=False):
+            break
+        if attempt < max_retries:
+            delay = retry_base_delay * (2 ** attempt)
+            time.sleep(delay)
+    else:
         raise HTTPException(429, '別の帳票を出力中です。少し待ってからもう一度お試しください', headers={'Retry-After': '3'})
     try:
         from .monthly_export_layout import make_layout

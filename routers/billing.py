@@ -31,7 +31,11 @@ from models import (
     ZenginExportLine,
     ZenginExportStatus,
 )
-from staff_permissions import can_manage_billing_accounts, require_billing_account_manager
+from staff_permissions import (
+    can_manage_billing_accounts,
+    require_billing_account_manager,
+    require_zengin_exporter,
+)
 from time_utils import utc_now
 from zengin_service import (
     ParsedResultRecord,
@@ -1205,7 +1209,7 @@ def create_zengin_export_from_ui(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_can_edit(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         export = create_zengin_export(session, cycle_id, created_by=current_user.name)
     except ZenginError as exc:
@@ -1219,7 +1223,7 @@ def mark_zengin_export_submitted_from_ui(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_admin(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         mark_zengin_export_submitted(session, export_id)
     except ZenginError as exc:
@@ -1234,7 +1238,7 @@ def supersede_zengin_export_from_ui(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_admin(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         replacement = supersede_zengin_export(
             session,
@@ -1255,7 +1259,7 @@ def import_paid_demo_result(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_can_edit(current_user)
+    require_zengin_exporter(session, current_user)
     export = session.get(ZenginExport, export_id)
     if export is None:
         raise HTTPException(status_code=404, detail="Zengin出力履歴が見つかりません")

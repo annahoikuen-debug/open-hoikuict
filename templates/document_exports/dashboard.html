@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-slate-800">帳票出力ダッシュボード</h1>
+    <p class="text-slate-600">過去30日間の帳票出力履歴を確認できます。</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <div class="text-slate-500 text-sm font-medium mb-1">総出力数</div>
+        <div class="text-3xl font-bold text-slate-800">{{ total_count }}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <div class="text-emerald-500 text-sm font-medium mb-1">成功</div>
+        <div class="text-3xl font-bold text-emerald-600">{{ success_count }}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <div class="text-rose-500 text-sm font-medium mb-1">エラー</div>
+        <div class="text-3xl font-bold text-rose-600">{{ error_count }}</div>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="border-b border-slate-200 px-5 py-4">
+        <h2 class="text-lg font-semibold text-slate-800">最近の出力履歴</h2>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-600 uppercase">
+                <tr>
+                    <th class="px-5 py-3">日時</th>
+                    <th class="px-5 py-3">帳票種別</th>
+                    <th class="px-5 py-3">フォーマット</th>
+                    <th class="px-5 py-3">対象月</th>
+                    <th class="px-5 py-3">出力者</th>
+                    <th class="px-5 py-3">レコード数</th>
+                    <th class="px-5 py-3">ステータス</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                {% for log in logs %}
+                <tr class="hover:bg-slate-50">
+                    <td class="px-5 py-3 text-slate-700">{{ log.created_at[:16] }}</td>
+                    <td class="px-5 py-3 text-slate-700">{{ export_type_labels.get(log.export_type, log.export_type) }}
+                    </td>
+                    <td class="px-5 py-3 text-slate-700">{{ export_format_labels.get(log.export_format,
+                        log.export_format) }}</td>
+                    <td class="px-5 py-3 text-slate-700">{{ log.target_month or "-" }}</td>
+                    <td class="px-5 py-3 text-slate-700">{{ log.exported_by_name or "-" }}</td>
+                    <td class="px-5 py-3 text-slate-700">{{ log.record_count or "-" }}</td>
+                    <td class="px-5 py-3">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if log.status == 'success' %}bg-emerald-100 text-emerald-800
+                            {% elif log.status == 'error' %}bg-rose-100 text-rose-800
+                            {% else %}bg-amber-100 text-amber-800{% endif %}">
+                            {{ status_labels.get(log.status, log.status) }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td class="px-5 py-3 text-slate-500 text-center" colspan="7">履歴がありません。</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="mt-6">
+    <a href="/document-exports/history" class="text-sm font-medium text-emerald-600 hover:underline">
+        履歴一覧を見る &rarr;
+    </a>
+</div>
+{% endblock %}

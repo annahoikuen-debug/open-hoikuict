@@ -4,13 +4,15 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session
 
-from auth import get_current_staff_user, require_admin, require_can_edit
+from auth import get_current_staff_user
 from database import get_session
+from staff_permissions import require_zengin_exporter
 from zengin_service import (
     ZenginError,
     ZenginFileValidationError,
     build_zengin_file,
     create_zengin_export,
+    generate_zengin_validation_report,
     import_result_file,
     mark_zengin_export_submitted,
     supersede_zengin_export,
@@ -25,7 +27,7 @@ def create_export(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_can_edit(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         export = create_zengin_export(session, cycle_id, created_by=current_user.name)
     except ZenginError as exc:
@@ -45,7 +47,7 @@ def download_export(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_admin(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         file_bytes = build_zengin_file(session, export_id)
     except ZenginError as exc:
@@ -63,7 +65,7 @@ def mark_export_submitted(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_admin(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         export = mark_zengin_export_submitted(session, export_id)
     except ZenginError as exc:
@@ -78,7 +80,7 @@ def supersede_export(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_admin(current_user)
+    require_zengin_exporter(session, current_user)
     try:
         replacement = supersede_zengin_export(
             session,
@@ -102,7 +104,7 @@ async def import_results(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_can_edit(current_user)
+    require_zengin_exporter(session, current_user)
     file_bytes = await file.read()
     try:
         parsed = import_result_file(session, file_bytes, export_id)
@@ -123,3 +125,24 @@ async def import_results(
         "errors": parsed.errors,
         "warnings": parsed.warnings,
     }
+
+
+@router.get("/exports/{export_id}/validation-report")
+def validation_report(
+    export_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_zengin_exporter(session, current_user)
+    try:
+        rows, errors = generate_zengin_validation_report(session, export_id)
+    except ZenginError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    lines = ["\t".join(row) for row in rows]
+    content = "\n".join(lines).encode("utf-8")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="zengin_validation_report_{export_id}.csv"'},
+    )

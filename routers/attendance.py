@@ -1,4 +1,5 @@
 import csv
+from common.csv_utils import sanitize_csv_cell
 from pickup_plan_service import pickup_revision as _pickup_revision, save_pickup_plan
 from dataclasses import dataclass
 from datetime import date, datetime, time
@@ -16,8 +17,9 @@ from sqlmodel import Session, select
 from auth import Role, get_current_staff_user, require_can_edit
 from attendance_checks_service import sync_attendance_alarm
 from attendance_correction_service import cancel_punch, correction_revision
-from models import AttendanceCorrection
 from database import get_session
+from models import AttendanceCorrection
+from staff_permissions import require_document_exporter
 from extended_care_fee_service import charge_status_label, recalculate_attendance_charge, calculation_issues_for_records
 from models import AttendanceRecord, AttendancePickupHistory, Child, ChildStatus, Classroom, ExtendedCareCharge, ExtendedCareChargeStatus
 from time_utils import local_naive_now, local_today, utc_now
@@ -514,19 +516,19 @@ def _export_rows(rows: list[AttendanceReportRow]) -> list[list[str]]:
     return [
         [
             row.attendance_date.isoformat(),
-            row.child_name,
-            row.child_name_kana,
-            row.classroom_name,
+            sanitize_csv_cell(row.child_name),
+            sanitize_csv_cell(row.child_name_kana),
+            sanitize_csv_cell(row.classroom_name),
             f"{row.age}歳",
             _format_time(row.check_in_at),
             _format_time(row.check_out_at),
-            row.status,
-            row.planned_pickup_time,
-            row.pickup_person,
-            row.note,
+            sanitize_csv_cell(row.status),
+            sanitize_csv_cell(row.planned_pickup_time),
+            sanitize_csv_cell(row.pickup_person),
+            sanitize_csv_cell(row.note),
             str(row.extended_care_minutes) if row.extended_care_minutes is not None else "",
             str(row.extended_care_amount) if row.extended_care_amount is not None else "",
-            row.extended_care_status_label if row.extended_care_status_label != "—" else "",
+            sanitize_csv_cell(row.extended_care_status_label if row.extended_care_status_label != "—" else ""),
         ]
         for row in rows
     ]
@@ -744,8 +746,7 @@ def export_attendance_csv(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    if not current_user.is_admin:
-        return _redirect_with_notice(request, "export_admin_required")
+    require_document_exporter(session, current_user)
 
     filters = _build_filters(
         target_date=target_date,
@@ -787,8 +788,7 @@ def export_attendance_xlsx(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    if not current_user.is_admin:
-        return _redirect_with_notice(request, "export_admin_required")
+    require_document_exporter(session, current_user)
 
     filters = _build_filters(
         target_date=target_date,

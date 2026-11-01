@@ -28,6 +28,16 @@ STAFF_PERMISSION_DEFINITIONS = (
         label="請求・口座情報管理",
         description="家族の支払方法、口座振替状態、銀行・支店・口座情報の閲覧と編集を許可します。",
     ),
+    StaffPermissionDefinition(
+        key="can_export_documents",
+        label="帳票出力",
+        description="出勤表、月案、請求明細などの帳票を出力（エクスポート）する権限を許可します。",
+    ),
+    StaffPermissionDefinition(
+        key="can_export_zengin",
+        label="Zengin出力",
+        description="Zenginファイル（振替データ）の作成・ダウンロード・結果取込を行う権限を許可します。",
+    ),
 )
 
 
@@ -56,6 +66,30 @@ def require_billing_account_manager(session: Session, current_user: StaffUser) -
     user = get_live_staff_user(session, current_user)
     if user is None or not user.can_manage_billing_accounts_effective:
         raise HTTPException(status_code=403, detail="請求・口座情報管理権限が必要です")
+    return user
+
+
+def can_export_documents(session: Session, current_user: StaffUser) -> bool:
+    user = get_live_staff_user(session, current_user)
+    return bool(user and user.can_export_documents_effective)
+
+
+def require_document_exporter(session: Session, current_user: StaffUser) -> User:
+    user = get_live_staff_user(session, current_user)
+    if user is None or not user.can_export_documents_effective:
+        raise HTTPException(status_code=403, detail="帳票出力権限が必要です")
+    return user
+
+
+def can_export_zengin(session: Session, current_user: StaffUser) -> bool:
+    user = get_live_staff_user(session, current_user)
+    return bool(user and user.can_export_zengin_effective)
+
+
+def require_zengin_exporter(session: Session, current_user: StaffUser) -> User:
+    user = get_live_staff_user(session, current_user)
+    if user is None or not user.can_export_zengin_effective:
+        raise HTTPException(status_code=403, detail="Zengin出力権限が必要です")
     return user
 
 
