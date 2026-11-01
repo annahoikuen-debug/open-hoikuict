@@ -6,10 +6,17 @@
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initNavbarScroll();
+  initMobileNav();
+  initHeroDemo();
   initSimulator();
+  initRoiSimulator();
   initFeatureTabs();
   initFaqAccordion();
   initModal();
+  initScrollReveal();
+  initStatCounters();
+  initScrollSpy();
+  initFloatingCta();
 });
 
 /* -------------------------------------------------------------
@@ -69,6 +76,43 @@ function initNavbarScroll() {
       navbar.classList.add('scrolled');
     } else {
       navbar.classList.remove('scrolled');
+    }
+  });
+}
+
+/* -------------------------------------------------------------
+   2.5 Mobile Hamburger Navigation
+   ------------------------------------------------------------- */
+function initMobileNav() {
+  const toggle = document.querySelector('.nav-toggle');
+  const links = document.getElementById('navLinks');
+  if (!toggle || !links) return;
+
+  const closeMenu = () => {
+    toggle.setAttribute('aria-expanded', 'false');
+    links.classList.remove('open');
+  };
+
+  toggle.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!expanded));
+    links.classList.toggle('open', !expanded);
+  });
+
+  links.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', closeMenu);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (links.classList.contains('open') && !links.contains(e.target) && !toggle.contains(e.target)) {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && links.classList.contains('open')) {
+      closeMenu();
+      toggle.focus();
     }
   });
 }
@@ -150,30 +194,49 @@ function initSimulator() {
 }
 
 /* -------------------------------------------------------------
-   4. Feature Showcase Tabs
+   4. Feature Showcase Tabs (ARIA & Keyboard Support)
    ------------------------------------------------------------- */
 function initFeatureTabs() {
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
 
-  tabBtns.forEach(btn => {
+  tabBtns.forEach((btn, index) => {
     btn.addEventListener('click', () => {
       const target = btn.getAttribute('data-tab');
 
-      tabBtns.forEach(b => b.classList.remove('active'));
+      tabBtns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+        b.setAttribute('tabindex', '-1');
+      });
       tabContents.forEach(c => c.classList.remove('active'));
 
       btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      btn.setAttribute('tabindex', '0');
       const activeContent = document.getElementById(`tab-${target}`);
       if (activeContent) {
         activeContent.classList.add('active');
+      }
+    });
+
+    btn.addEventListener('keydown', (e) => {
+      let nextIndex = null;
+      if (e.key === 'ArrowRight') nextIndex = (index + 1) % tabBtns.length;
+      if (e.key === 'ArrowLeft') nextIndex = (index - 1 + tabBtns.length) % tabBtns.length;
+      if (e.key === 'Home') nextIndex = 0;
+      if (e.key === 'End') nextIndex = tabBtns.length - 1;
+      if (nextIndex !== null) {
+        e.preventDefault();
+        tabBtns[nextIndex].focus();
+        tabBtns[nextIndex].click();
       }
     });
   });
 }
 
 /* -------------------------------------------------------------
-   5. FAQ Accordion
+   5. FAQ Accordion (ARIA Support)
    ------------------------------------------------------------- */
 function initFaqAccordion() {
   const faqItems = document.querySelectorAll('.faq-item');
@@ -181,27 +244,44 @@ function initFaqAccordion() {
   faqItems.forEach(item => {
     const question = item.querySelector('.faq-question');
     const answer = item.querySelector('.faq-answer');
+    const icon = item.querySelector('.faq-icon');
 
-    question.addEventListener('click', () => {
+    question.setAttribute('role', 'button');
+    question.setAttribute('tabindex', '0');
+    question.setAttribute('aria-expanded', item.classList.contains('active') ? 'true' : 'false');
+    if (icon) icon.setAttribute('aria-hidden', 'true');
+
+    const toggle = () => {
       const isActive = item.classList.contains('active');
 
       // 他を閉じる
       faqItems.forEach(other => {
         other.classList.remove('active');
         const ans = other.querySelector('.faq-answer');
+        const q = other.querySelector('.faq-question');
         if (ans) ans.style.maxHeight = null;
+        if (q) q.setAttribute('aria-expanded', 'false');
       });
 
       if (!isActive) {
         item.classList.add('active');
         answer.style.maxHeight = answer.scrollHeight + 30 + 'px';
+        question.setAttribute('aria-expanded', 'true');
+      }
+    };
+
+    question.addEventListener('click', toggle);
+    question.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
       }
     });
   });
 }
 
 /* -------------------------------------------------------------
-   6. Demo & Contact Modal
+   6. Demo & Contact Modal (Focus Management & Escape)
    ------------------------------------------------------------- */
 function initModal() {
   const openBtns = document.querySelectorAll('.open-modal-btn');
@@ -211,22 +291,42 @@ function initModal() {
 
   if (!modal) return;
 
+  const openModal = (trigger) => {
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    const firstInput = modal.querySelector('input, select, button');
+    if (firstInput) firstInput.focus();
+    modal._lastTrigger = trigger || null;
+  };
+
+  const closeModal = () => {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if (modal._lastTrigger) modal._lastTrigger.focus();
+  };
+
   openBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      modal.classList.add('open');
+      openModal(btn);
     });
   });
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      modal.classList.remove('open');
-    });
+    closeBtn.addEventListener('click', closeModal);
   }
 
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
-      modal.classList.remove('open');
+      closeModal();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal.classList.contains('open')) {
+      closeModal();
     }
   });
 
@@ -252,4 +352,308 @@ function initModal() {
       }, 1000);
     });
   }
+}
+
+/* -------------------------------------------------------------
+   7. Scroll Reveal Animation (IntersectionObserver)
+   ------------------------------------------------------------- */
+function initScrollReveal() {
+  const targets = document.querySelectorAll('.reveal');
+  if (!targets.length) return;
+
+  if (!('IntersectionObserver' in window)) {
+    targets.forEach(el => el.classList.add('is-visible'));
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+  targets.forEach(el => observer.observe(el));
+}
+
+/* -------------------------------------------------------------
+   8. Animated Stat Counters
+   ------------------------------------------------------------- */
+function initStatCounters() {
+  const counters = document.querySelectorAll('[data-count]');
+  if (!counters.length) return;
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const formatValue = (value, el) => {
+    const useComma = el.getAttribute('data-format') === 'comma';
+    const num = useComma ? value.toLocaleString('en-US') : String(value);
+    return (el.getAttribute('data-prefix') || '') + num + (el.getAttribute('data-suffix') || '');
+  };
+
+  const animate = (el) => {
+    const target = parseInt(el.getAttribute('data-count'), 10);
+    if (prefersReducedMotion || isNaN(target) || target === 0) {
+      el.textContent = formatValue(target, el);
+      return;
+    }
+    const duration = 1400;
+    const startTime = performance.now();
+    const step = (now) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = formatValue(Math.round(target * eased), el);
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
+  if (!('IntersectionObserver' in window)) {
+    counters.forEach(animate);
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        animate(entry.target);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.4 });
+
+  counters.forEach(el => observer.observe(el));
+}
+
+/* -------------------------------------------------------------
+   9. Scroll Spy (Active Nav Highlight)
+   ------------------------------------------------------------- */
+function initScrollSpy() {
+  const sections = document.querySelectorAll('main section[id]');
+  const navLinks = document.querySelectorAll('.nav-link[href^="#"]');
+  if (!sections.length || !navLinks.length) return;
+
+  const setActive = (id) => {
+    navLinks.forEach(link => {
+      link.classList.toggle('active', link.getAttribute('href') === `#${id}`);
+    });
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        setActive(entry.target.id);
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+
+  sections.forEach(section => observer.observe(section));
+}
+
+/* -------------------------------------------------------------
+   10. Hero Interactive Dashboard Demo (NuShift Live Preview)
+   ------------------------------------------------------------- */
+function initHeroDemo() {
+  const recomputeBtn = document.getElementById('heroRecomputeBtn');
+  const pinToggleBtn = document.getElementById('heroPinToggleBtn');
+  const gapSimBtn = document.getElementById('heroGapSimBtn');
+  const autoFixBtn = document.getElementById('heroAutoFixBtn');
+  const gapAlertBox = document.getElementById('heroGapAlertBox');
+  const pinCell = document.getElementById('heroPinCell');
+
+  const statusPill = document.getElementById('mockupStatusPill');
+  const compliancePill = document.getElementById('mockupCompliancePill');
+  const violationText = document.getElementById('mockupViolationText');
+  const pinCountText = document.getElementById('mockupPinCount');
+  const gapStatusText = document.getElementById('mockupGapStatus');
+  const miniGrid = document.getElementById('heroMiniGrid');
+
+  if (!recomputeBtn || !statusPill) return;
+
+  let isPinned = true;
+  let hasGapAlert = false;
+  let isSolving = false;
+
+  // 1. Recompute Simulation (CBC Solver Pulse)
+  const triggerRecompute = (callback) => {
+    if (isSolving) return;
+    isSolving = true;
+    statusPill.textContent = '● 最適化求解中 (CBCソルバー)...';
+    statusPill.className = 'status-pill pinned';
+
+    // Animate grid cells
+    if (miniGrid) {
+      const cells = miniGrid.querySelectorAll('.grid-cell:not(:first-child)');
+      cells.forEach(c => c.classList.add('calc-pulse'));
+      setTimeout(() => cells.forEach(c => c.classList.remove('calc-pulse')), 600);
+    }
+
+    setTimeout(() => {
+      isSolving = false;
+      statusPill.textContent = '● 最適化完了 (CBC求解 18.2秒)';
+      statusPill.className = 'status-pill success';
+      if (callback) callback();
+    }, 700);
+  };
+
+  recomputeBtn.addEventListener('click', () => {
+    triggerRecompute();
+  });
+
+  // 2. Toggle Pin Status
+  const togglePin = () => {
+    isPinned = !isPinned;
+    if (isPinned) {
+      pinCell.textContent = '早番 📌';
+      pinCell.classList.add('highlight');
+      pinCountText.textContent = '12コマ固定中';
+      pinToggleBtn.classList.add('active');
+    } else {
+      pinCell.textContent = '早番';
+      pinCell.classList.remove('highlight');
+      pinCountText.textContent = '11コマ固定中';
+      pinToggleBtn.classList.remove('active');
+    }
+  };
+
+  pinToggleBtn.addEventListener('click', () => {
+    togglePin();
+    triggerRecompute();
+  });
+
+  if (pinCell) {
+    pinCell.addEventListener('click', () => {
+      togglePin();
+      triggerRecompute();
+    });
+  }
+
+  // 3. Gap Alert Simulation (Late pickup change)
+  const toggleGapAlert = (forceAlert) => {
+    hasGapAlert = typeof forceAlert === 'boolean' ? forceAlert : !hasGapAlert;
+
+    if (hasGapAlert) {
+      gapAlertBox.classList.add('visible');
+      gapSimBtn.classList.add('active');
+      compliancePill.textContent = '配置充足率 88% ⚠️';
+      compliancePill.className = 'status-pill';
+      compliancePill.style.background = 'rgba(244, 63, 94, 0.2)';
+      compliancePill.style.color = '#ff859b';
+      gapStatusText.textContent = '遅番 1名不足 (17:30-18:30)';
+      gapStatusText.style.color = 'var(--accent-rose)';
+      violationText.textContent = '配置割れ警告あり';
+      violationText.style.color = 'var(--accent-rose)';
+    } else {
+      gapAlertBox.classList.remove('visible');
+      gapSimBtn.classList.remove('active');
+      compliancePill.textContent = '配置充足率 100%';
+      compliancePill.className = 'status-pill success';
+      compliancePill.style.background = '';
+      compliancePill.style.color = '';
+      gapStatusText.textContent = '過不足なし (正常)';
+      gapStatusText.style.color = 'var(--accent-emerald)';
+      violationText.textContent = '0件 (パス)';
+      violationText.style.color = 'var(--accent-emerald)';
+    }
+  };
+
+  gapSimBtn.addEventListener('click', () => {
+    toggleGapAlert();
+  });
+
+  if (autoFixBtn) {
+    autoFixBtn.addEventListener('click', () => {
+      triggerRecompute(() => {
+        toggleGapAlert(false);
+      });
+    });
+  }
+}
+
+/* -------------------------------------------------------------
+   11. ROI & Cost Benefit Calculator
+   ------------------------------------------------------------- */
+function initRoiSimulator() {
+  const btnStaff = document.getElementById('btnSimStaff');
+  const btnRoi = document.getElementById('btnSimRoi');
+  const panelStaff = document.getElementById('panelSimStaff');
+  const panelRoi = document.getElementById('panelSimRoi');
+
+  const sChildren = document.getElementById('roiChildren');
+  const sStaff = document.getElementById('roiStaff');
+  const sHours = document.getElementById('roiHours');
+
+  const vChildren = document.getElementById('valRoiChildren');
+  const vStaff = document.getElementById('valRoiStaff');
+  const vHours = document.getElementById('valRoiHours');
+
+  const outHours = document.getElementById('roiReducedHours');
+  const outYen = document.getElementById('roiSavedYen');
+  const outRoi = document.getElementById('roiMultiple');
+
+  if (!btnStaff || !btnRoi || !panelStaff || !panelRoi) return;
+
+  // Mode Switch
+  btnStaff.addEventListener('click', () => {
+    btnStaff.classList.add('active');
+    btnRoi.classList.remove('active');
+    panelStaff.classList.add('active');
+    panelRoi.classList.remove('active');
+  });
+
+  btnRoi.addEventListener('click', () => {
+    btnRoi.classList.add('active');
+    btnStaff.classList.remove('active');
+    panelRoi.classList.add('active');
+    panelStaff.classList.remove('active');
+  });
+
+  if (!sChildren || !sStaff || !sHours) return;
+
+  const calculateRoi = () => {
+    const children = parseInt(sChildren.value, 10);
+    const staff = parseInt(sStaff.value, 10);
+    const hours = parseInt(sHours.value, 10);
+
+    vChildren.textContent = `${children}名`;
+    vStaff.textContent = `${staff}名`;
+    vHours.textContent = `${hours}時間/月`;
+
+    // 業務削減比率 (シフト作成・登降園集計・全銀出力で工数の約85%を削減)
+    const monthlySavedHours = Math.round(hours * 0.85);
+    const yearlySavedHours = monthlySavedHours * 12;
+
+    // 時給 ¥2,500 換算 (保育士・主任・園長平均人件費)
+    const hourlyCost = 2500;
+    const yearlySavingsYen = yearlySavedHours * hourlyCost;
+
+    // クラウド版年間費用 (¥19,800 * 12 = ¥237,600)
+    const yearlySystemCost = 19800 * 12;
+    const roiPercentage = Math.round((yearlySavingsYen / yearlySystemCost) * 100);
+
+    outHours.innerHTML = `${yearlySavedHours.toLocaleString()}<span class="roi-stat-unit">時間</span>`;
+    outYen.textContent = `¥${yearlySavingsYen.toLocaleString()}`;
+    outRoi.innerHTML = `${roiPercentage}<span class="roi-stat-unit">%</span>`;
+  };
+
+  [sChildren, sStaff, sHours].forEach(el => el.addEventListener('input', calculateRoi));
+  calculateRoi();
+}
+
+/* -------------------------------------------------------------
+   12. Floating Sticky CTA Bar (Scroll Observer)
+   ------------------------------------------------------------- */
+function initFloatingCta() {
+  const bar = document.getElementById('floatingCtaBar');
+  if (!bar) return;
+
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 380) {
+      bar.classList.add('visible');
+    } else {
+      bar.classList.remove('visible');
+    }
+  }, { passive: true });
 }
