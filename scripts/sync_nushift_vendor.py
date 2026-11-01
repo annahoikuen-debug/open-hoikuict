@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = ROOT / "vendor" / "nushift"
 DEST_SHIFTAI = VENDOR_DIR / "shiftai"
 README_FILE = VENDOR_DIR / "README.md"
-TEST_FILE = ROOT / "test_shiftai_vendor.py"
+TEST_FILE = ROOT / "tests" / "services" / "test_shiftai_vendor.py"
 
 DEFAULT_SOURCE = Path(r"E:\nushift\nushift")
 
@@ -33,6 +34,49 @@ def get_git_commit(repo_path: Path) -> str:
         check=True,
     )
     return res.stdout.strip()[:7]
+
+
+def compute_file_hash(path: Path) -> str:
+    hasher = hashlib.sha256()
+    hasher.update(path.read_bytes())
+    return hasher.hexdigest()
+
+
+def verify(source_repo: Path) -> bool:
+    """upstream と vendor のファイルを比較し、差分があれば False を返す。"""
+    src_dir = source_repo / "src" / "shiftai"
+    if not src_dir.is_dir():
+        print(f"Error: {src_dir} does not exist.", file=sys.stderr)
+        return False
+    if not DEST_SHIFTAI.is_dir():
+        print(f"Error: {DEST_SHIFTAI} does not exist.", file=sys.stderr)
+        return False
+
+    src_files = {p.relative_to(src_dir): p for p in src_dir.rglob("*.py") if "__pycache__" not in p.parts}
+    dest_files = {p.relative_to(DEST_SHIFTAI): p for p in DEST_SHIFTAI.rglob("*.py") if "__pycache__" not in p.parts}
+
+    missing_in_dest = set(src_files.keys()) - set(dest_files.keys())
+    extra_in_dest = set(dest_files.keys()) - set(src_files.keys())
+    mismatched = []
+
+    for rel_path in sorted(set(src_files.keys()) & set(dest_files.keys())):
+        h_src = compute_file_hash(src_files[rel_path])
+        h_dest = compute_file_hash(dest_files[rel_path])
+        if h_src != h_dest:
+            mismatched.append(rel_path)
+
+    if missing_in_dest or extra_in_dest or mismatched:
+        print("[VERIFY FAILED] Vendor differences detected:")
+        if missing_in_dest:
+            print(f"  Missing in vendor: {sorted(str(p) for p in missing_in_dest)}")
+        if extra_in_dest:
+            print(f"  Extra in vendor: {sorted(str(p) for p in extra_in_dest)}")
+        if mismatched:
+            print(f"  Content mismatched: {sorted(str(p) for p in mismatched)}")
+        return False
+
+    print(f"[VERIFY SUCCESS] All {len(src_files)} files match between {src_dir} and {DEST_SHIFTAI}.")
+    return True
 
 
 def sync(source_repo: Path) -> None:
@@ -80,14 +124,22 @@ def sync(source_repo: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sync nushift vendor tree")
+    parser = argparse.ArgumentParser(description="Sync or verify nushift vendor tree")
     parser.add_argument(
         "--source",
         type=Path,
         default=DEFAULT_SOURCE,
         help="Path to nushift repository root",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Verify file hash integrity without copying",
+    )
     args = parser.parse_args()
+    if args.verify:
+        success = verify(args.source)
+        sys.exit(0 if success else 1)
     sync(args.source)
 
 

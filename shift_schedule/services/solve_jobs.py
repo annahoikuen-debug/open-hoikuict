@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
@@ -15,7 +16,8 @@ from pulp import PULP_CBC_CMD
 from sqlmodel import Session, select
 
 from shiftai.local_rules import build_standard
-from shiftai.solver import solve_shift
+from shiftai.shift_patterns import DEFAULT_PATTERNS
+from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 from shiftai.standards import build_requirements
 
 from ..bridge import (
@@ -47,7 +49,7 @@ _cbc_available: bool | None = None  # 起動時セルフチェック結果
 
 
 def cbc_available() -> bool:
-    """PULP_CBC_CMD が利用可能か。起動時または初回呼び出し時にチェック。"""
+    """PULP_CBC_CMD が利用可能か。起動時または初回呼び出し時にチェック（後方互換性）。"""
     global _cbc_available
     if _cbc_available is None:
         try:
@@ -56,6 +58,26 @@ def cbc_available() -> bool:
         except Exception:
             _cbc_available = False
     return _cbc_available
+
+
+def solver_available() -> bool:
+    """利用可能な MILP ソルバー（HiGHS または PULP_CBC_CMD）が存在するか判定する。"""
+    return is_highs_available() or cbc_available()
+
+
+def get_configured_solver_name() -> str:
+    """環境設定 HOIKUICT_SHIFT_SOLVER（既定: auto）または利用可能性に基づきソルバー名を決定する。"""
+    configured = (os.getenv("HOIKUICT_SHIFT_SOLVER") or "auto").strip().lower()
+    if configured in ("highs", "highspy") and is_highs_available():
+        return "HiGHS"
+    if configured in ("cbc", "pulp_cbc_cmd") and cbc_available():
+        return "PULP_CBC_CMD"
+    if configured == "auto":
+        if is_highs_available():
+            return "HiGHS"
+        if cbc_available():
+            return "PULP_CBC_CMD"
+    return "HiGHS" if is_highs_available() else "PULP_CBC_CMD"
 
 
 def get_cbc_solver(time_limit_sec: int | None = None) -> PULP_CBC_CMD:
@@ -215,6 +237,8 @@ def _run_solve_sync(
 
             # 求解
             try:
+                pattern_mode = os.getenv("HOIKUICT_SHIFT_PATTERN_MODE") == "1"
+                patterns = DEFAULT_PATTERNS
                 result = solve_shift(
                     children=day_plans,
                     staff=day_staff,
@@ -224,7 +248,21 @@ def _run_solve_sync(
                     standard=staffing_standard,
                     fixed_assignments=fixed_assignments,
                     time_limit_sec=time_limit_sec,
+                    solver_name=get_configured_solver_name(),
+                    warm_start=True,
+                    patterns=patterns,
+                    pattern_mode=pattern_mode,
                 )
+                if patterns and os.getenv("HOIKUICT_SHIFT_PATTERN_SNAP", "1") == "1":
+                    result, _ = snap_to_patterns(
+                        result,
+                        patterns,
+                        requirements=requirements,
+                        preferences=day_preferences,
+                        staff=day_staff,
+                        standard=staffing_standard,
+                        settings=facility_settings,
+                    )
             except Exception as exc:  # noqa: BLE001
                 job.status = SolveJobStatus.FAILED
                 job.error_message = str(exc)

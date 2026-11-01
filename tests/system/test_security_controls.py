@@ -225,7 +225,7 @@ class SecurityControlTests(unittest.TestCase):
             )
 
     def test_container_startup_enables_trusted_proxy_headers(self):
-        repository = Path(__file__).resolve().parent
+        repository = Path(__file__).resolve().parent.parent.parent
         dockerfile = (repository / "Dockerfile").read_text(encoding="utf-8")
         compose = (repository / "deploy" / "dockge" / "compose.yaml").read_text(
             encoding="utf-8"

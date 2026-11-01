@@ -54,6 +54,22 @@ class AgeClass(str, Enum):
             4: cls.AGE_4,
         }.get(years, cls.AGE_5)
 
+    @classmethod
+    def from_birth_date(cls, target_date: date, birth_date: date | None) -> AgeClass:
+        """保育年度（4月1日時点の満年齢、児童福祉法・学校教育法準拠）に基づく年齢区分を返す。
+
+        日本の保育所基準では、4月2日〜翌年4月1日生まれが同一の年齢区分（クラス）となります。
+        年度途中で誕生日を迎えても、当該年度（4月1日〜翌年3月31日）内の年齢区分は変動しません。
+        """
+        if birth_date is None:
+            return cls.INFANT
+        fiscal_year = target_date.year if target_date.month >= 4 else target_date.year - 1
+        if (birth_date.month, birth_date.day) >= (4, 2):
+            years = fiscal_year - birth_date.year - 1
+        else:
+            years = fiscal_year - birth_date.year
+        return cls.from_years(max(years, 0))
+
 
 class Role(str, Enum):
     """職員の職種。基準ごとに換算の扱いが異なる。"""

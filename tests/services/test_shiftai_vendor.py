@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-VENDOR_ROOT = Path(__file__).resolve().parent / "vendor" / "nushift"
+VENDOR_ROOT = Path(__file__).resolve().parent.parent.parent / "vendor" / "nushift"
 PACKAGE_DIR = VENDOR_ROOT / "shiftai"
 
 
@@ -35,7 +35,7 @@ def test_vendor_tree_present() -> None:
 def test_provenance_is_recorded() -> None:
     readme = (VENDOR_ROOT / "README.md").read_text(encoding="utf-8")
     assert "annahoikuen-debug/nushift" in readme
-    assert "db043db" in readme
+    assert "b955e3f" in readme
 
 
 def test_import_works_without_install_and_without_streamlit() -> None:

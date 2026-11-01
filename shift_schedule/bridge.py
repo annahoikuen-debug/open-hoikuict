@@ -39,13 +39,8 @@ from .db_models import (
 
 
 def age_class_on(target_date: date, birth_date: date | None) -> AgeClass:
-    """対象日基準の年齢区分を返す。birth_date が不明なら AgeClass.UNKNOWN。"""
-    if birth_date is None:
-        return AgeClass.UNKNOWN
-    years = target_date.year - birth_date.year
-    if (target_date.month, target_date.day) < (birth_date.month, birth_date.day):
-        years -= 1
-    return AgeClass.from_years(max(years, 0))
+    """対象日が含まれる保育年度基準（4月1日時点の満年齢）の年齢区分を返す。"""
+    return AgeClass.from_birth_date(target_date, birth_date)
 
 
 def build_child_plan(
