@@ -125,7 +125,7 @@ class TestSolveJobsPatternMode:
         )
 
         with patch("shift_schedule.services.solve_jobs.snap_to_patterns", return_value=(mock_result, ())) as mock_snap:
-            from shift_schedule.services.solve_jobs import DEFAULT_PATTERNS
+            from shiftai.shift_patterns import DEFAULT_PATTERNS
             res, changes = mock_snap(mock_result, DEFAULT_PATTERNS)
             assert res == mock_result
             assert mock_snap.called

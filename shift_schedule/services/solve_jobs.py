@@ -16,7 +16,7 @@ from pulp import PULP_CBC_CMD
 from sqlmodel import Session, select
 
 from shiftai.local_rules import build_standard
-from shiftai.shift_patterns import DEFAULT_PATTERNS
+from shiftai.shift_patterns import default_patterns
 from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 from shiftai.standards import build_requirements
 
@@ -238,7 +238,15 @@ def _run_solve_sync(
             # 求解
             try:
                 pattern_mode = os.getenv("HOIKUICT_SHIFT_PATTERN_MODE") == "1"
-                patterns = DEFAULT_PATTERNS
+                # 勤務パターンは園の開所・閉所時間から動的に生成する。
+                # 既定の DEFAULT_PATTERNS（07:30/08:30/10:30 開始の固定枠）は
+                # 開所時間が異なる園では需要の端（早朝・16時以降）と枠が噛み合わず、
+                # パターン整列ペナルティが端時間帯の配置を避けさせて
+                # 「早朝と16時〜に人員不足」が出る原因になっていた。
+                patterns = default_patterns(
+                    facility_settings.day_open,
+                    facility_settings.day_close,
+                )
                 
                 # 微調整①: 中抜け勤務（スプリット勤務）禁止モードの適用
                 # 環境変数 HOIKUICT_SHIFT_DISALLOW_SPLIT（既定: 1）が有効な場合、split_duty_penalty を超高ペナルティに設定
