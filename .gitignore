@@ -80,3 +80,7 @@ coverage_baseline.log
 /output/pdf/monthly-plan-preview.pdf
 /outputs/monthly-print-export-20260927/
 /tools/parent-notice-order-preview/preview.png
+
+# Temporary scripts
+_tmp_*.py
+check_tables_out.txt

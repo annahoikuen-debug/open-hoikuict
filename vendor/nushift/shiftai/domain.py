@@ -354,6 +354,15 @@ class Contract:
             )
 
 
+def daily_cap_minutes(contract: Contract) -> int:
+    """その職員が1日に置ける勤務分の上限（法定10時間を超えない）。36協定なしまたは残業不可は8時間で頭打ち。"""
+    base = int(round(contract.daily_hours * 60))
+    if not contract.overtime_allowed or not contract.has_36_agreement:
+        return int(min(base, config.STATUTORY_DAILY_WORK_HOURS * 60))
+    legal_cap = int(config.STATUTORY_MAX_DAILY_WORK_HOURS * 60)
+    return int(min(base * config.STATUTORY_OVERTIME_MULTIPLIER, legal_cap))
+
+
 @dataclass(frozen=True)
 class StaffMember:
     """職員1名。"""

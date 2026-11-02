@@ -180,7 +180,14 @@ def test_full_http_recovery_revokes_sessions_codes_and_other_links(recovery, mon
     assert complete(recovery, token).status_code == 400
     assert complete(recovery, second_token).status_code == 400
     recovery.client.get("/staff/login")
-    assert post(recovery, "/staff/login", login_id="principal", password=NEW_PASSWORD).status_code == 303
+    captured_mfa = []
+    with patch("routers.staff_auth.send_auth_mail", side_effect=lambda **kw: captured_mfa.append(kw.get("body", ""))):
+        login_resp = post(recovery, "/staff/login", login_id="principal", password=NEW_PASSWORD)
+        assert login_resp.status_code == 303
+        assert login_resp.headers["location"] == "/staff/mfa/verify"
+        code = re.search(r"([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6})", captured_mfa[-1]).group(1)
+        mfa_resp = post(recovery, "/staff/mfa/verify", code=code, redirect_to="/protected")
+        assert mfa_resp.status_code == 303
     assert recovery.client.get("/protected").status_code == 200
 
 

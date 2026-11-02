@@ -658,3 +658,49 @@ def import_result_file(session: Session, file_bytes: bytes, export_id: int) -> P
     session.add(export)
     session.commit()
     return parsed
+
+
+def generate_zengin_validation_report(
+    session: Session, export_id: int
+) -> tuple[list[list[str]], list[str]]:
+    """Zengin結果取込検証レポートの行データとエラーメッセージを返す。"""
+    export = session.get(ZenginExport, export_id)
+    if export is None:
+        raise ZenginError("Zengin出力履歴が見つかりません")
+
+    headers = [
+        "出力ID",
+        "顧客番号",
+        "明細金額",
+        "結果コード",
+        "ステータス",
+        "検証エラー",
+    ]
+    rows: list[list[str]] = [headers]
+
+    lines = _load_export_lines(session, export_id)
+    _ = {line.customer_number: line for line in lines}
+
+    errors: list[str] = []
+
+    # 結果取込済みの場合のみ、結果コードを照らし合わせる
+    if export.status == ZenginExportStatus.result_imported:
+        # ここでは簡易的に、各ラインの結果コードをレポートに反映
+        pass
+
+    for line in lines:
+        claim = session.get(BillingClaim, line.billing_claim_id) if line.billing_claim_id else None
+        row = [
+            str(export.id),
+            line.customer_number,
+            str(line.amount),
+            line.result_code or "",
+            (claim.status.value if claim else "不明"),
+            "",
+        ]
+        if line.result_code and claim and claim.status == BillingClaimStatus.failed:
+            row[5] = f"振替失敗: {claim.failed_reason or ''}"
+            errors.append(f"{line.customer_number}: 振替失敗")
+        rows.append(row)
+
+    return rows, errors

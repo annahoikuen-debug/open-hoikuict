@@ -94,7 +94,7 @@ DATE_FIELDS = {
 DATETIME_FIELDS = {
     "created_at", "updated_at", "invited_at", "last_login_at", "submitted_at", "reviewed_at",
     "read_at", "publish_start_at", "publish_end_at", "check_in_at", "check_out_at", "evaluated_at",
-    "opens_at", "closes_at", "start_at", "end_at", "submitted_at", "split_from_original_start_at",
+    "opens_at", "closes_at", "start_at", "end_at", "split_from_original_start_at",
     "charge_start_at", "actual_check_out_at", "confirmed_at",
 }
 UUID_FIELDS = {
@@ -119,7 +119,7 @@ INT_FIELDS = {
     "parent_account_id", "parent_child_link_id", "notice_id", "survey_id", "question_id", "answer_id",
     "created_by_parent_account_id", "submitted_by_parent_account_id", "staff_sort_order", "heart_rate",
     "respiratory_rate", "created_count", "updated_count", "skipped_count", "error_count", "room_id",
-    "parent_message_id", "value_scale", "display_order", "attendance_record_id", "rule_id",
+    "parent_message_id", "value_scale", "attendance_record_id", "rule_id",
     "grace_minutes", "rounding_minutes", "unit_price", "daily_cap_amount", "extended_minutes",
     "billable_units", "auto_amount", "adjustment_amount", "final_amount",
 }

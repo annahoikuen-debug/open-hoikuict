@@ -126,6 +126,12 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
             }
 
         self.client = TestClient(self.app)
+        self._captured_auth_mails = []
+        self._auth_mail_patcher = patch(
+            "routers.staff_auth.send_auth_mail",
+            side_effect=lambda **kw: self._captured_auth_mails.append(kw.get("body", "")),
+        )
+        self._auth_mail_patcher.start()
 
     def tearDown(self):
         self.client.close()
@@ -145,6 +151,7 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
         STAFF_LOGIN_RATE_LIMITER_IP.reset_all()
         STAFF_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
         MFA_SEND_CODE_RATE_LIMITER.reset_all()
+        self._auth_mail_patcher.stop()
         self.environment.stop()
 
     def _activate(self):
@@ -164,6 +171,19 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
                 "password": self.PASSWORD,
                 "redirect_to": redirect_to,
             },
+            follow_redirects=False,
+        )
+
+    def _complete_mfa(self, *, client=None, redirect_to="/protected"):
+        target_client = client or self.client
+        if not self._captured_auth_mails:
+            raise AssertionError("No MFA verification email captured")
+        match = re.search(r'([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6})', self._captured_auth_mails[-1])
+        if not match:
+            raise AssertionError("Could not extract MFA code from email")
+        return target_client.post(
+            "/staff/mfa/verify",
+            data={"code": match.group(1), "redirect_to": redirect_to},
             follow_redirects=False,
         )
 
@@ -269,6 +289,9 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 303)
         self.assertEqual(response.headers["location"], "/staff/mfa/verify")
+        # MFA コードを入力してログイン完了
+        mfa_response = self._complete_mfa(redirect_to="/protected")
+        self.assertEqual(mfa_response.status_code, 303)
         raw_cookie = self.client.cookies.get(LOCAL_STAFF_SESSION_COOKIE)
         self.assertTrue(raw_cookie)
         self.assertNotIn(str(self.user_id), raw_cookie)
@@ -307,6 +330,8 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
 
         with TestClient(self.app) as second_browser:
             principal_login = self._login()
+            self.assertEqual(principal_login.status_code, 303)
+            self._complete_mfa(redirect_to="/protected")
             teacher_login = second_browser.post(
                 "/staff/login",
                 data={
@@ -319,6 +344,7 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
 
             self.assertEqual(principal_login.status_code, 303)
             self.assertEqual(teacher_login.status_code, 303)
+            self._complete_mfa(client=second_browser, redirect_to="/protected")
             self.assertEqual(self.client.get("/protected").json()["name"], "園長")
             self.assertEqual(second_browser.get("/protected").json()["name"], "担任")
 
@@ -349,6 +375,7 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
     def test_admin_can_issue_activation_code_from_staff_management(self):
         self._activate()
         self._login(redirect_to="/staff/users")
+        self._complete_mfa(redirect_to="/staff/users")
         with Session(self.engine) as session:
             teacher = User(
                 email="teacher@example.com",
@@ -452,6 +479,7 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
     def test_admin_reset_code_changes_password_and_revokes_sessions(self):
         self._activate()
         self._login(redirect_to="/staff/users")
+        self._complete_mfa(redirect_to="/staff/users")
         response = self.client.post(
             f"/staff/users/{self.user_id}/authentication/reset",
             data={"reason": "本人からパスワード紛失の申告"},

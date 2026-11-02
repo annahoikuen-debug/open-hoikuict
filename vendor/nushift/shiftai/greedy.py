@@ -12,6 +12,7 @@ from time import perf_counter
 
 from shiftai import config
 from shiftai.domain import (
+    daily_cap_minutes,
     CellState,
     ChildPlan,
     Contract,
@@ -38,8 +39,8 @@ _BREAK_CONCURRENT_SHARE = config.BREAK_CONCURRENT_SHARE
 
 
 def _daily_cap_minutes(contract: Contract) -> int:
-    """職員の1日あたり勤務時間の上限（分）。"""
-    return int((contract.daily_hours or config.STATUTORY_MAX_DAILY_WORK_HOURS) * 60)
+    """職員の1日あたり勤務時間の上限（domain.daily_cap_minutes に委譲）。"""
+    return daily_cap_minutes(contract)
 
 
 def _day_is_workable(st: StaffMember, day: date, settings: FacilitySettings) -> bool:

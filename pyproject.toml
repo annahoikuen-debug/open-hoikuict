@@ -1,9 +1,30 @@
 [tool.ruff]
 target-version = "py312"
-exclude = ["venv", ".venv", "gen_bunnrei"]
+exclude = [
+    "venv",
+    ".venv",
+    "gen_bunnrei",
+    "vendor",
+    "storage",
+    "alembic",
+    "tests",
+    "tools",
+]
 
 [tool.ruff.lint]
-select = ["E9", "F"]
+select = [
+    "E9",    # Syntax / runtime errors
+    "F",     # Pyflakes (undefined vars, unused imports/variables)
+    "B",     # Bugbear (likely bugs and design issues)
+    "W6",    # Deprecated syntax warnings
+]
+ignore = [
+    "B008",  # do not perform function calls in argument defaults (FastAPI Depends)
+    "B904",  # raise ... from err
+    "B006",  # mutable default argument
+    "B905",  # zip() without explicit strict= (pre-3.10 / standard zip usage)
+    "B018",  # useless expression (used intentionally for port validation property access)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

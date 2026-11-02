@@ -42,6 +42,7 @@ import pulp
 from shiftai import config
 from shiftai.config import STATUTORY_DAILY_WORK_HOURS, STATUTORY_WEEKLY_WORK_HOURS
 from shiftai.domain import (
+    daily_cap_minutes,
     CellState,
     ChildPlan,
     Contract,
@@ -66,7 +67,13 @@ from shiftai.domain import (
     weekly_periods,
     weekly_windows,
 )
-from shiftai.greedy import solve_shift_greedy, staff_shift_count, staff_work_hours  # noqa: F401
+from shiftai.greedy import (
+    _consecutive_streak,
+    _slot_by_label,
+    solve_shift_greedy,
+    staff_shift_count,
+    staff_work_hours,
+)  # noqa: F401
 from shiftai.relaxation import (
     RELAX_LEVELS,
     RelaxLevel,
@@ -184,11 +191,8 @@ def apply_warm_start(
 
 
 def _daily_cap_minutes(contract: Contract) -> int:
-    """その職員が1日に置ける勤務分の上限（法定10時間を超えない）。36協定なしは8時間で頭打ち。"""
-    base = int(round(contract.daily_hours * 60))
-    if not contract.overtime_allowed or not contract.has_36_agreement:
-        return int(min(base, STATUTORY_DAILY_WORK_HOURS * 60))
-    return int(min(base * _OVERTIME_FACTOR, _DAILY_LEGAL_CAP_MIN))
+    """その職員が1日に置ける勤務分の上限（後方互換・domain.daily_cap_minutes に委譲）。"""
+    return daily_cap_minutes(contract)
 
 
 def _week_fraction(n_days: int) -> float:

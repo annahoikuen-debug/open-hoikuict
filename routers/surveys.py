@@ -29,6 +29,7 @@ from models import (
     User,
 )
 from survey_result_access import can_view_survey_results, require_survey_results, viewer_ids
+from common.csv_utils import sanitize_csv_cell
 from staff_user_service import list_active_staff_users
 from survey_service import (
     answer_value_for_display,
@@ -621,19 +622,19 @@ def survey_answers_csv(
         writer.writerow(
             [
                 survey.id,
-                survey.title,
+                sanitize_csv_cell(survey.title),
                 survey.audience_type.value,
                 survey.answer_unit.value,
                 answer.submitted_at.isoformat() if answer.submitted_at else "",
                 answer.family_id or "",
-                family.family_name if family else "",
+                sanitize_csv_cell(family.family_name) if family else "",
                 answer.child_id or "",
-                child.full_name if child else "",
+                sanitize_csv_cell(child.full_name) if child else "",
                 str(answer.staff_user_id) if answer.staff_user_id else "",
-                staff_user.display_name if staff_user else "",
-                staff_user.staff_role if staff_user else "",
+                sanitize_csv_cell(staff_user.display_name) if staff_user else "",
+                sanitize_csv_cell(staff_user.staff_role) if staff_user else "",
             ]
-            + [answer_value_for_display(question, responses.get(question.id)) for question in questions]
+            + [sanitize_csv_cell(answer_value_for_display(question, responses.get(question.id))) for question in questions]
         )
 
     csv_text = "\ufeff" + output.getvalue()

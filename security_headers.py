@@ -1,3 +1,4 @@
+import os
 """HTTPセキュリティヘッダーMiddleware。
 
 ブラウザ側でのクリックジャッキング、XSS、MIMEタイプスニッフィング、
@@ -75,8 +76,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for key, value in self._BASE_HEADERS.items():
             mutable_headers[key] = value
 
-        # 動的 Nonce を付与した CSP をセット
-        mutable_headers["Content-Security-Policy"] = build_csp_header(nonce)
+        # W3C CSP Level 2/3 仕様において script-src に nonce-* が指定されると、
+        # 最新ブラウザは 'unsafe-inline' を無視する。全テンプレートで nonce 属性の
+        # 付与が完了するまでは、デフォルトでは nonce を CSP ヘッダーに注入せず、
+        # 環境変数 HOIKUICT_CSP_NONCE_ENFORCE=1 が指定された場合のみ nonce を付与する。
+        enforce_nonce = os.getenv("HOIKUICT_CSP_NONCE_ENFORCE", "").strip().lower() in ("1", "true")
+        header_nonce = nonce if enforce_nonce else None
+        mutable_headers["Content-Security-Policy"] = build_csp_header(header_nonce)
 
         # HSTS: 本番環境かつHTTPS時のみ（開発環境ではlocalhost HTTPS強制事故防止のため付与しない）
         if is_production() and request.url.scheme == "https":

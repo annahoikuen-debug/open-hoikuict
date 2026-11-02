@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import csv
+from common.csv_utils import sanitize_csv_cell
 import io
 from datetime import date, timedelta
 from typing import Any
@@ -1298,14 +1299,14 @@ def export_child_records(
         for log in logs:
             writer.writerow([
                 log.observed_on.isoformat(),
-                log.child_state,
-                log.caregiver_support or "",
-                log.reflection or "",
-                log.next_focus or "",
-                log.family_note or "",
-                ",".join(log.categories or []),
-                ",".join(log.perspective_tags or []),
-                log.created_by_name or "",
+                sanitize_csv_cell(log.child_state),
+                sanitize_csv_cell(log.caregiver_support or ""),
+                sanitize_csv_cell(log.reflection or ""),
+                sanitize_csv_cell(log.next_focus or ""),
+                sanitize_csv_cell(log.family_note or ""),
+                sanitize_csv_cell(",".join(log.categories or [])),
+                sanitize_csv_cell(",".join(log.perspective_tags or [])),
+                sanitize_csv_cell(log.created_by_name or ""),
             ])
         content = output.getvalue()
         media_type = "text/csv; charset=utf-8"
