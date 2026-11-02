@@ -239,11 +239,21 @@ def _run_solve_sync(
             try:
                 pattern_mode = os.getenv("HOIKUICT_SHIFT_PATTERN_MODE") == "1"
                 patterns = DEFAULT_PATTERNS
+                
+                # 微調整①: 中抜け勤務（スプリット勤務）禁止モードの適用
+                # 環境変数 HOIKUICT_SHIFT_DISALLOW_SPLIT（既定: 1）が有効な場合、split_duty_penalty を超高ペナルティに設定
+                from shiftai.domain import ObjectiveWeights
+                disallow_split = os.getenv("HOIKUICT_SHIFT_DISALLOW_SPLIT", "1") == "1"
+                weights = None
+                if disallow_split:
+                    weights = ObjectiveWeights(split_duty_penalty=5000.0)
+
                 result = solve_shift(
                     children=day_plans,
                     staff=day_staff,
                     requirements=requirements,
                     preferences=day_preferences,
+                    weights=weights,
                     settings=facility_settings,
                     standard=staffing_standard,
                     fixed_assignments=fixed_assignments,

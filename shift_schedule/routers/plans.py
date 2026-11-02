@@ -89,6 +89,39 @@ def plans_detail(
         for td in target_dates[:3]:  # 最大3日分プレビュー
             gap_warnings.extend(detect_day_gap(repo.session, plan_id, td))
 
+    # 微調整③: 不足枠（BLOCKER）に対する「処方箋（ヘルプ提案）」の生成
+    prescriptions = []
+    shortfall_violations = [v for v in violations if v.severity == "BLOCKER" and "SHORTFALL" in v.code]
+    if shortfall_violations:
+        from models import User
+        users = repo.session.exec(select(User).where(User.status == "active")).all()
+        seen_targets = set()
+        for sv in shortfall_violations:
+            key = (sv.target_date, sv.slot_label)
+            if key in seen_targets:
+                continue
+            seen_targets.add(key)
+            day_cells = [c for c in cells if c.target_date == sv.target_date and c.cell_state in ("WORK", "specified", "pinned")]
+            working_user_ids = {str(c.staff_user_id) for c in day_cells}
+            
+            candidate_names = []
+            for u in users:
+                if str(u.id) not in working_user_ids:
+                    candidate_names.append(u.name)
+                if len(candidate_names) >= 2:
+                    break
+            
+            candidate_text = "、".join(candidate_names) if candidate_names else "常勤の残業延長または応援派遣"
+            prescriptions.append({
+                "date": sv.target_date,
+                "slot": sv.slot_label,
+                "code": sv.code,
+                "message": sv.message,
+                "suggested_helpers": candidate_text,
+            })
+            if len(prescriptions) >= 4:
+                break
+
     from template_utils import create_templates
 
     templates = create_templates()
@@ -103,6 +136,7 @@ def plans_detail(
             "audits": audits,
             "jobs": jobs,
             "gap_warnings": gap_warnings,
+            "prescriptions": prescriptions,
             "cbc_available": cbc_available(),
         },
     )

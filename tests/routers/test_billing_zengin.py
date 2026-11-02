@@ -59,10 +59,25 @@ class BillingZenginTests(unittest.TestCase):
             poolclass=StaticPool,
         )
         SQLModel.metadata.create_all(self.engine)
-        self.current_user = StaffUser(role=Role.ADMIN, name="園長")
+        with Session(self.engine) as session:
+            admin_id = self._create_admin_user(session)
+            session.commit()
+        self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
     def tearDown(self):
         self.engine.dispose()
+
+    def _create_admin_user(self, session):
+        from models import User
+        admin = User(
+            email="zengin-admin@example.com",
+            display_name="園長",
+            staff_role="admin",
+            can_export_zengin=True,
+        )
+        session.add(admin)
+        session.flush()
+        return admin.id
 
     def _seed_exportable_claim(self, *, direct_debit_status=DirectDebitStatus.active):
         with Session(self.engine) as session:
