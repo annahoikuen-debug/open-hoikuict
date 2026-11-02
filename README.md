@@ -37,8 +37,9 @@
    - 登降園実績に基づく延長料金の自動算出。
    - 全銀協標準フォーマット（Zengin）準拠の口座振替データを1クリックで生成し、金融機関とのスムーズな振替連携を実現。
 5. **🔒 金融・医療水準のゼロトラストセキュリティ & 運用基盤**
-   - メールOTPによる多要素認証 (MFA) 標準対応（TOTP専用アプリ不要）。
-   - リクエスト毎に動的生成される CSP (Content-Security-Policy) Nonce、Chart.js・Tailwind・HTMX ローカルバンドルによる完全オフライン＆CDN脱却。
+   - メールOTPによる多要素認証 (MFA) 標準対応（TOTP専用アプリ不要、二段階セッション昇格）。
+   - W3C準拠の安全な Content-Security-Policy (CSP)、Chart.js・Tailwind・HTMX ローカルバンドルによる完全オフライン＆CDN脱却。
+   - CSV Formula Injection (CWE-1236) 防止ユーティリティによる安全な帳票・アンケート・児童記録エクスポート。
    - レートリミット（IP偽装防止・メモリ自動クリーンアップ機能付き）。
    - 児童・保護者・職員の機微情報アクセスおよびシフト求解要求を漏れなく追跡する監査ログ基盤。
    - Alembic による安全なスキーママイグレーションと、将来の S3/クラウド移行を見据えた `StorageDriver` 抽象化レイヤー。
@@ -88,7 +89,7 @@ graph TD
 open-hoikuict/
 ├── alembic/                # Alembic データベーススキーママイグレーション環境
 ├── child_records/          # 児童観察記録・要録・成長進捗管理 (独自項目UUID対応)
-├── common/                 # 共通楽観ロック (optimistic_lock.py) など基盤モジュール
+├── common/                 # 共通基盤モジュール (optimistic_lock.py, CSV無害化 csv_utils.py など)
 ├── data/                   # 規定データ・初期マスタ
 ├── docs/                   # 仕様書・運用設計書・導入ガイド・技術ドキュメント
 ├── landing_page/           # モダンで美しいプロダクト紹介LP (HTML/CSS/JS)
