@@ -16,6 +16,9 @@ import json
 import os
 import unittest
 
+# テスト実行時のカレントディレクトリを open-hoikuict に変更（テンプレート相対パス解決用）
+os.chdir(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
@@ -207,6 +210,69 @@ class NushiftPwaTests(unittest.TestCase):
             html = f.read()
         self.assertIn("serviceWorker", html)
         self.assertIn("navigator.serviceWorker.register", html)
+
+
+class ParentPortalPushSwTests(unittest.TestCase):
+    """parent-portal プッシュ通知 SW 連携強化テスト。"""
+
+    def setUp(self):
+        self.app = _build_test_app()
+        self.client = TestClient(self.app)
+
+    def test_push_sw_includes_push_event_handler(self):
+        """push-service-worker.js に push イベントハンドラが含まれること。"""
+        response = self.client.get("/parent-portal/push-service-worker.js")
+        self.assertEqual(response.status_code, 200)
+        sw = response.text
+        self.assertIn("self.addEventListener('push'", sw)
+
+    def test_push_sw_includes_notificationclick_handler(self):
+        """push-service-worker.js に notificationclick イベントハンドラが含まれること。"""
+        response = self.client.get("/parent-portal/push-service-worker.js")
+        self.assertEqual(response.status_code, 200)
+        sw = response.text
+        self.assertIn("self.addEventListener('notificationclick'", sw)
+
+    def test_push_sw_has_action_buttons(self):
+        """push-service-worker.js に open/dismiss アクションボタンが含まれること。"""
+        response = self.client.get("/parent-portal/push-service-worker.js")
+        self.assertEqual(response.status_code, 200)
+        sw = response.text
+        self.assertIn("action: 'open'", sw)
+        self.assertIn("action: 'dismiss'", sw)
+
+    def test_push_sw_has_client_messaging(self):
+        """push-service-worker.js にクライアントへの postMessage が含まれること。"""
+        response = self.client.get("/parent-portal/push-service-worker.js")
+        self.assertEqual(response.status_code, 200)
+        sw = response.text
+        self.assertIn("client.postMessage", sw)
+        self.assertIn("type: 'push-received'", sw)
+
+    def test_push_sw_has_urgent_notification_support(self):
+        """push-service-worker.js に重要通知用の requireInteraction / vibrate が含まれること。"""
+        response = self.client.get("/parent-portal/push-service-worker.js")
+        self.assertEqual(response.status_code, 200)
+        sw = response.text
+        self.assertIn("requireInteraction", sw)
+        self.assertIn("vibrate", sw)
+
+    PUSH_SETTINGS_PATH = "templates/parent_portal/push_settings.html"
+
+    def test_parent_portal_template_has_sw_message_handler(self):
+        """push_settings.html に SW からのメッセージ受信ハンドラが含まれること。"""
+        self.assertTrue(os.path.exists(self.PUSH_SETTINGS_PATH), "push_settings.html が見つかりません")
+        with open(self.PUSH_SETTINGS_PATH, encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("navigator.serviceWorker.addEventListener('message'", html)
+        self.assertIn("data.type === 'push-received'", html)
+
+    def test_parent_portal_template_has_updatefound_handler(self):
+        """push_settings.html に SW 更新検出 (updatefound) が含まれること。"""
+        self.assertTrue(os.path.exists(self.PUSH_SETTINGS_PATH), "push_settings.html が見つかりません")
+        with open(self.PUSH_SETTINGS_PATH, encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("updatefound", html)
 
 
 if __name__ == "__main__":

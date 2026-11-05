@@ -26,7 +26,6 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // キャッシュ対象の静的アセットへのリクエストはキャッシュから優先返却
   const url = new URL(event.request.url);
   if (url.origin === self.location.origin && (url.pathname.startsWith('/static/') || PRECACHE_ASSETS.includes(url.pathname))) {
     event.respondWith(
@@ -46,29 +45,74 @@ self.addEventListener('push', event => {
   try { payload = event.data ? event.data.json() : {}; } catch (_) { payload = {}; }
   const title = payload.title || '保育園から確認のお願い';
   const body = payload.body || '確認が必要な連絡があります。保護者ポータルをご確認ください。';
+  const urgent = payload.urgent === true;
+  const notificationId = payload.notification_id;
   const receiptData = {
     target_id: payload.target_id,
     shown_receipt_token: payload.shown_receipt_token
   };
-  event.waitUntil(self.registration.showNotification(title, {
+
+  const notificationOptions = {
     body,
-    icon: '/parent-portal/push-icon.svg',
-    badge: '/parent-portal/push-icon.svg',
-    tag: payload.notification_id ? `parent-notification-${payload.notification_id}` : undefined,
+    icon: '/parent-portal/icon-192.png',
+    badge: '/parent-portal/icon-192.png',
+    tag: notificationId ? `parent-notification-${notificationId}` : undefined,
+    renotify: !!notificationId,
+    requireInteraction: urgent,
+    vibrate: urgent ? [200, 100, 200, 100, 200] : [100, 50, 100],
     data: {
       action_url: safeActionUrl(payload.action_url),
       target_id: payload.target_id,
-      clicked_receipt_token: payload.clicked_receipt_token
-    }
-  }).then(() => postReceipt(receiptData, 'shown')));
+      clicked_receipt_token: payload.clicked_receipt_token,
+      shown_receipt_token: payload.shown_receipt_token,
+      notification_id: notificationId,
+    },
+    actions: [
+      { action: 'open', title: '開く', icon: '/parent-portal/icon-192.png' },
+      { action: 'dismiss', title: '閉じる' },
+    ],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, notificationOptions).then(() => postReceipt(receiptData, 'shown'))
+  );
+
+  // アクティブクライアントにプッシュ受信を通知（UI リアルタイム更新用）
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'push-received',
+          notification_id: notificationId,
+          target_id: payload.target_id,
+          title,
+          body,
+          urgent,
+        });
+      });
+    })
+  );
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const actionUrl = safeActionUrl(event.notification.data?.action_url);
+  const action = event.action;
+  const notificationData = event.notification.data || {};
+  const notificationId = notificationData.notification_id;
+
+  // 'dismiss' アクションは解除レシートのみ送信し、遷移しない
+  if (action === 'dismiss') {
+    event.waitUntil(postReceipt(notificationData, 'clicked'));
+    return;
+  }
+
+  // 'open' または直接クリックの場合、遷移処理を行う
   event.waitUntil((async () => {
-    await postReceipt(event.notification.data, 'clicked');
+    await postReceipt(notificationData, 'clicked');
+
+    const actionUrl = safeActionUrl(notificationData.action_url);
     const absoluteUrl = new URL(actionUrl, self.location.origin).href;
+
     const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
       let clientUrl;
@@ -78,13 +122,21 @@ self.addEventListener('notificationclick', event => {
         const navigated = 'navigate' in client ? await client.navigate(absoluteUrl) : client;
         return await (navigated || client).focus();
       } catch (_) {
-        // Android Chrome may reject navigation of a stale window client. Try another
-        // portal window and finally open a new one below.
+        // Android Chrome may reject navigation of a stale window client.
       }
     }
     const opened = await clients.openWindow(absoluteUrl);
     return opened && 'focus' in opened ? opened.focus() : opened;
   })());
+});
+
+self.addEventListener('notificationclose', event => {
+  const notificationData = event.notification.data || {};
+  const notificationId = notificationData.notification_id;
+  // 通知が閉じられたことをログ（開発時デバッグ用）
+  if (notificationId) {
+    // 閉じられた通知の解除レシートは送信しない（表示済みのみを正とする）
+  }
 });
 
 function safeActionUrl(value) {
