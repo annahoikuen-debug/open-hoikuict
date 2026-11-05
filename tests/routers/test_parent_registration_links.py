@@ -14,6 +14,10 @@ from time_utils import utc_now
 from test_guardian_account_sync import pilot as pilot_fixture
 from test_parent_enrollment import invite, profile, review
 import routers.parent_auth as routes
+from routers.parent_auth import (
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT,
+    PARENT_LOGIN_RATE_LIMITER_IP,
+)
 
 
 @pytest.fixture
@@ -74,6 +78,8 @@ def test_fragment_lost_during_access_can_finish_both_mail_steps(pilot, use_link,
     }, follow_redirects=False).status_code == 303
     sent = []
     monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
+    PARENT_LOGIN_RATE_LIMITER_IP.reset_all()
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
     response = client.post("/parent-portal/login", data={
         "login_id": "intake@example.test", "password": password
     }, follow_redirects=False)

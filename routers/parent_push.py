@@ -157,7 +157,9 @@ def parent_portal_manifest():
             '"background_color":"#f8fafc",'
             '"theme_color":"#4338ca",'
             '"icons":[{"src":"/parent-portal/push-icon.svg",'
-            '"sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}'
+            '"sizes":"any","type":"image/svg+xml","purpose":"any maskable"},'
+            '{"src":"/parent-portal/icon-192.png","sizes":"192x192","type":"image/png"},'
+            '{"src":"/parent-portal/icon-512.png","sizes":"512x512","type":"image/png"}]}'
         ),
         media_type="application/manifest+json",
     )
@@ -175,6 +177,75 @@ def parent_push_icon():
         ),
         media_type="image/svg+xml",
     )
+
+
+@settings_router.get("/icon-192.png")
+def parent_portal_icon_192():
+    return Response(
+        content=_generate_png_icon(192),
+        media_type="image/png",
+    )
+
+
+@settings_router.get("/icon-512.png")
+def parent_portal_icon_512():
+    return Response(
+        content=_generate_png_icon(512),
+        media_type="image/png",
+    )
+
+
+def _generate_png_icon(size: int) -> bytes:
+    import struct, zlib
+    # 最小構成のPNG（単色の角丸正方形、背景透過）
+    width = height = size
+    # 背景色 #4338ca (67, 56, 202)
+    r, g, b = 67, 56, 202
+    # フィルタバイト付きRGBAデータ（単純な全塗り）
+    raw = bytearray()
+    for y in range(height):
+        raw.append(0)  # filter type: none
+        for x in range(width):
+            raw.extend([r, g, b, 255])
+    # 角を丸める（簡易：四隅を透過にする）
+    corner = 16
+    for y in range(corner):
+        for x in range(corner):
+            dist2 = (corner - 1 - x) ** 2 + (corner - 1 - y) ** 2
+            if dist2 > corner ** 2:
+                idx = (y * width + x) * 4 + 4  # +4 for filter byte
+                raw[idx:idx + 4] = [0, 0, 0, 0]
+    for y in range(corner):
+        for x in range(width - corner, width):
+            dist2 = (x - (width - corner)) ** 2 + (corner - 1 - y) ** 2
+            if dist2 > corner ** 2:
+                idx = (y * width + x) * 4 + 4
+                raw[idx:idx + 4] = [0, 0, 0, 0]
+    for y in range(height - corner, height):
+        for x in range(corner):
+            dist2 = (corner - 1 - x) ** 2 + (y - (height - corner)) ** 2
+            if dist2 > corner ** 2:
+                idx = (y * width + x) * 4 + 4
+                raw[idx:idx + 4] = [0, 0, 0, 0]
+    for y in range(height - corner, height):
+        for x in range(width - corner, width):
+            dist2 = (x - (width - corner)) ** 2 + (y - (height - corner)) ** 2
+            if dist2 > corner ** 2:
+                idx = (y * width + x) * 4 + 4
+                raw[idx:idx + 4] = [0, 0, 0, 0]
+
+    # PNGチャンク構築
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    idat = zlib.compress(bytes(raw))
+    def chunk(ctype, data):
+        c = ctype + data
+        crc = struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+        return struct.pack(">I", len(data)) + c + crc
+    png = b"\x89PNG\r\n\x1a\n"
+    png += chunk(b"IHDR", ihdr)
+    png += chunk(b"IDAT", idat)
+    png += chunk(b"IEND", b"")
+    return png
 
 
 @settings_router.get("/push-service-worker.js")

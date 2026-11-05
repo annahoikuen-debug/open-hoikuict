@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,29 +11,85 @@
   <link rel="icon" href="/guardian/assets/icon-192.png" type="image/png">
   <script src="/static/js/tailwindcss.js"></script>
   <style>
-    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: #f8fafc; color: #1e293b; font-family: sans-serif; }
-    main { width: 100%; box-sizing: border-box; flex: 1; max-width: 80rem; margin: auto; padding: 1.5rem; }
-    button, input, select, a { touch-action: manipulation; }
-    button, main a, input:not([type=hidden]):not([type=checkbox]) { min-height: 56px; }
-    main button[type=submit] { min-height: 64px; min-width: 128px; font-size: 1.125rem; padding: 1rem 1.5rem; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    [hidden] { display: none !important; }
-    #terminal-warning { position: sticky; top: 0; z-index: 10; }
-    #terminal-clock { font-size: clamp(2.5rem, 6vw, 3rem); font-weight: bold; font-variant-numeric: tabular-nums; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #f8fafc;
+      color: #1e293b;
+      font-family: sans-serif;
+    }
+
+    main {
+      width: 100%;
+      box-sizing: border-box;
+      flex: 1;
+      max-width: 80rem;
+      margin: auto;
+      padding: 1.5rem;
+    }
+
+    button,
+    input,
+    select,
+    a {
+      touch-action: manipulation;
+    }
+
+    button,
+    main a,
+    input:not([type=hidden]):not([type=checkbox]) {
+      min-height: 56px;
+    }
+
+    main button[type=submit] {
+      min-height: 64px;
+      min-width: 128px;
+      font-size: 1.125rem;
+      padding: 1rem 1.5rem;
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    #terminal-warning {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    #terminal-clock {
+      font-size: clamp(2.5rem, 6vw, 3rem);
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+    }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body id="guardian-terminal" data-closing-time="{{ closing_time or '' }}" data-today="{{ terminal_today }}" data-server-now="{{ terminal_server_now }}" data-idle-seconds="{{ terminal_idle_seconds }}"
-      data-active="{{ '1' if selected_child or selected_classroom else '0' }}" data-ready="{{ '1' if terminal_ready else '0' }}">
+
+<body id="guardian-terminal" data-closing-time="{{ closing_time or '' }}" data-today="{{ terminal_today }}"
+  data-server-now="{{ terminal_server_now }}" data-idle-seconds="{{ terminal_idle_seconds }}"
+  data-active="{{ '1' if selected_child or selected_classroom else '0' }}"
+  data-ready="{{ '1' if terminal_ready else '0' }}">
   <header class="bg-indigo-700 px-6 py-4 text-white">
     <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-      <div><p class="text-xl font-bold">登園・降園</p><p class="mt-1 text-sm">{{ terminal_today }}</p>
+      <div>
+        <p class="text-xl font-bold">登園・降園</p>
+        <p class="mt-1 text-sm">{{ terminal_today }}</p>
         <p id="terminal-label" class="text-sm"></p>
       </div>
       <time id="terminal-clock" aria-label="現在時刻（日本時間）" class="text-5xl font-bold tabular-nums">--:--:--</time>
       <div class="flex flex-wrap items-center gap-3">
         <span id="terminal-connection" class="text-sm" role="status">{{ '接続済み' if terminal_ready else '端末の準備' }}</span>
-        {% if terminal_ready %}<a href="{{ terminal_start }}" class="rounded-lg bg-white px-4 py-3 font-semibold text-indigo-700">最初に戻る</a>{% endif %}
+        {% if terminal_ready %}<a href="{{ terminal_start }}"
+          class="rounded-lg bg-white px-4 py-3 font-semibold text-indigo-700">最初に戻る</a>{% endif %}
       </div>
     </div>
   </header>
@@ -42,13 +99,29 @@
   </div>
   <div id="terminal-idle-warning" hidden class="bg-indigo-50 px-6 py-3 text-center text-indigo-900" role="status">
     <span id="terminal-idle-message"></span>
-    <button id="terminal-continue" type="button" class="ml-3 rounded-lg border border-indigo-500 px-4 py-2">操作を続ける</button>
+    <button id="terminal-continue" type="button"
+      class="ml-3 rounded-lg border border-indigo-500 px-4 py-2">操作を続ける</button>
   </div>
-<p id="terminal-closed" {% if not kiosk_closed %}hidden{% endif %} class="bg-amber-100 px-6 py-4 text-amber-950" role="alert">閉園時間になりました。職員にお知らせください。</p>
+  <p id="terminal-closed" {% if not kiosk_closed %}hidden{% endif %} class="bg-amber-100 px-6 py-4 text-amber-950"
+    role="alert">閉園時間になりました。職員にお知らせください。</p>
   <main>{% block content %}{% endblock %}</main>
-  {% if terminal_ready %}<footer class="px-6 pb-6 text-center text-sm text-slate-500">操作がない状態が{{ terminal_idle_seconds }}秒続くと、最初の画面に戻ります。</footer>{% endif %}
-  {% if terminal_registration_number %}<p class="px-6 pb-4 text-center text-xs text-slate-500">登録番号 <span id="terminal-registration-number">{{ terminal_registration_number }}</span></p>{% endif %}
-<div class="px-6 pb-4 text-right"><button id="terminal-fullscreen" type="button" style="min-height:32px;font-size:12px" class="rounded border border-slate-300 px-3 py-1 text-slate-500">全画面</button></div>
-  {% block body_end %}<script src="/guardian/assets/terminal.js?v=20260924" defer></script>{% endblock %}
+  {% if terminal_ready %}<footer class="px-6 pb-6 text-center text-sm text-slate-500">操作がない状態が{{ terminal_idle_seconds
+    }}秒続くと、最初の画面に戻ります。</footer>{% endif %}
+  {% if terminal_registration_number %}<p class="px-6 pb-4 text-center text-xs text-slate-500">登録番号 <span
+      id="terminal-registration-number">{{ terminal_registration_number }}</span></p>{% endif %}
+  <div class="px-6 pb-4 text-right"><button id="terminal-fullscreen" type="button"
+      style="min-height:32px;font-size:12px"
+      class="rounded border border-slate-300 px-3 py-1 text-slate-500">全画面</button></div>
+  {% block body_end %}
+  <script src="/guardian/assets/terminal.js?v=20260924" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/guardian-service-worker.js', { scope: '/guardian/' })
+        .then(reg => console.log('Guardian SW registered:', reg.scope))
+        .catch(err => console.error('Guardian SW registration failed:', err));
+    }
+  </script>
+  {% endblock %}
 </body>
+
 </html>

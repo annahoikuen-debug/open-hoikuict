@@ -1243,6 +1243,16 @@
       "target_date",
       "title"
     ],
+    "parent_mfa_pending": [
+      "attempt_count",
+      "code_hash",
+      "created_at",
+      "credential_id",
+      "expires_at",
+      "id",
+      "parent_account_id",
+      "pending_reference"
+    ],
     "parent_public_registration_settings": [
       "enabled",
       "id",

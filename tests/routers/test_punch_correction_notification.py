@@ -19,7 +19,6 @@ from models import (
     ParentNotificationKind,
     User,
 )
-from time_utils import utc_now
 
 
 @pytest.fixture

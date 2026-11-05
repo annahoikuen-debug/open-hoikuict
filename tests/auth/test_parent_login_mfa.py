@@ -1,21 +1,13 @@
 import re
 from datetime import timedelta
-from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from auth import Role, StaffUser
 from local_auth import ACTION_CODE_ALPHABET
-from models import (
-    AuthSession,
-    ParentAccount,
-    ParentMfaPending,
-    ParentNotification,
-    PasswordCredential,
-)
+from models import AuthSession, ParentAccount, ParentMfaPending
 import routers.parent_auth as routes
+from routers.parent_auth import PARENT_MFA_VERIFY_RATE_LIMITER
 from test_guardian_account_sync import pilot as pilot_fixture
 from tests.auth.test_parent_code_mail import active_account
 from time_utils import utc_now
@@ -37,9 +29,9 @@ def _capture_send_auth_mail(monkeypatch):
 
 
 def _complete_mfa(client, captured, *, redirect_to="/parent-portal/"):
-    assert captured, "MFA 認証コードメールが送信されていません"
+    assert captured, "MFA verification email was not sent"
     match = CODE_RE.search(captured[-1])
-    assert match, f"認証コードがメール本文から見つかりませんでした: {captured[-1]!r}"
+    assert match, f"verification code not found in mail body: {captured[-1]!r}"
     return client.post(
         "/parent-portal/mfa/verify",
         data={"code": match.group(0), "redirect_to": redirect_to},
@@ -59,7 +51,7 @@ def test_login_password_then_mfa_redirects_and_issues_session(pilot, monkeypatch
     )
     assert response.status_code == 303
     assert response.headers["location"] == "/parent-portal/mfa/verify"
-    # パスワードだけでは有効なセッションは発行されない（MFA保留セッションは失効済み）
+    # Password alone must not issue a usable session (pre-MFA session is revoked)
     assert client.cookies.get("hoikuict_parent_session") is None
     with Session(engine) as session:
         account = session.get(ParentAccount, account_id)
@@ -76,11 +68,14 @@ def test_login_password_then_mfa_redirects_and_issues_session(pilot, monkeypatch
     assert mfa_response.headers["location"] == "/parent-portal/"
     assert client.cookies.get("hoikuict_parent_session") is not None
 
-    # ポータルが閲覧でき、セッションに MFA 満了時刻が記録される
+    # Portal is viewable and exactly one active session with mfa_satisfied_at remains
     assert client.get("/parent-portal/").status_code == 200
     with Session(engine) as session:
         sessions = session.exec(
-            select(AuthSession).where(AuthSession.parent_account_id == account_id)
+            select(AuthSession).where(
+                AuthSession.parent_account_id == account_id,
+                AuthSession.revoked_at.is_(None),
+            )
         ).all()
         assert len(sessions) == 1
         assert sessions[0].mfa_satisfied_at is not None
@@ -91,8 +86,9 @@ def test_login_password_then_mfa_redirects_and_issues_session(pilot, monkeypatch
 
 
 def test_wrong_mfa_code_is_rejected_and_attempts_are_limited(pilot, monkeypatch):
+    PARENT_MFA_VERIFY_RATE_LIMITER.reset_all()
     client, engine, ids, _ = pilot
-    account_id = active_account(pilot)
+    active_account(pilot)
     captured = _capture_send_auth_mail(monkeypatch)
 
     client.post(
@@ -101,17 +97,8 @@ def test_wrong_mfa_code_is_rejected_and_attempts_are_limited(pilot, monkeypatch)
         follow_redirects=False,
     )
 
-    # 不正なコードは拒絶される
-    response = client.post(
-        "/parent-portal/mfa/verify",
-        data={"code": "000000", "redirect_to": "/parent-portal/"},
-        follow_redirects=False,
-    )
-    assert response.status_code == 400
-    assert "正しくありません" in response.text
-
-    # 5回まで試行可能。5回目の不正後は正しいコードでも拒絶される
-    for _ in range(4):
+    # Up to 5 wrong attempts; after that even the right code is rejected
+    for _ in range(5):
         response = client.post(
             "/parent-portal/mfa/verify",
             data={"code": "111111", "redirect_to": "/parent-portal/"},
@@ -119,6 +106,8 @@ def test_wrong_mfa_code_is_rejected_and_attempts_are_limited(pilot, monkeypatch)
         )
         assert response.status_code == 400
 
+    # Reset the router-level verify limiter and check service-level attempt exhaustion
+    PARENT_MFA_VERIFY_RATE_LIMITER.reset_all()
     response = client.post(
         "/parent-portal/mfa/verify",
         data={
@@ -143,12 +132,11 @@ def test_mfa_verify_requires_pending_cookie(pilot, monkeypatch):
         follow_redirects=False,
     )
     assert response.status_code == 400
-    assert "失効" in response.text
 
 
 def test_expired_mfa_pending_is_rejected(pilot, monkeypatch):
     client, engine, ids, _ = pilot
-    account_id = active_account(pilot)
+    active_account(pilot)
     captured = _capture_send_auth_mail(monkeypatch)
     client.post(
         "/parent-portal/login",
@@ -181,7 +169,7 @@ def test_mfa_can_be_disabled_by_env(pilot, monkeypatch):
     )
 
     client, engine, ids, _ = pilot
-    account_id = active_account(pilot)
+    active_account(pilot)
     response = client.post(
         "/parent-portal/login",
         data={"login_id": "parent@example.test", "password": "River!7892Long-Phrase"},

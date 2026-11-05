@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlmodel import Session, select
 from sqlalchemy import exists, or_, update
 from sqlalchemy.exc import IntegrityError
@@ -537,6 +537,18 @@ def guardian_manifest():
         "background_color": "#f8fafc", "theme_color": "#4338ca", "prefer_related_applications": False,
         "icons": [{"src": f"/guardian/assets/icon-{size}.png", "sizes": f"{size}x{size}", "type": "image/png"} for size in (192, 512)],
     }, media_type="application/manifest+json")
+
+
+@router.get("/guardian-service-worker.js")
+def guardian_service_worker():
+    return Response(
+        content=templates.get_template("guardian/guardian_service_worker.js").render(),
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Service-Worker-Allowed": "/guardian/",
+        },
+    )
 
 
 @router.get("/assets/{filename}")

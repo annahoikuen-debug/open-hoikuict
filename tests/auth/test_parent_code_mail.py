@@ -18,6 +18,10 @@ from models import (
 from test_guardian_account_sync import pilot as pilot_fixture, create_account
 from time_utils import ensure_utc, utc_now
 import routers.parent_auth as routes
+from routers.parent_auth import (
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT,
+    PARENT_LOGIN_RATE_LIMITER_IP,
+)
 
 
 @pytest.fixture
@@ -83,6 +87,8 @@ def test_issued_code_mail_has_both_urls_and_can_set_password_then_login(pilot, m
     assert response.status_code == 303
     sent = []
     monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
+    PARENT_LOGIN_RATE_LIMITER_IP.reset_all()
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
     response = client.post("/parent-portal/login", data={"login_id": "parent@example.test", "password": password}, follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/parent-portal/mfa/verify"

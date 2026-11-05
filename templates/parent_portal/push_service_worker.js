@@ -1,9 +1,14 @@
-const CACHE_NAME = 'nusoft-portal-cache-v1';
+const CACHE_NAME = 'nusoft-portal-cache-v2';
 const PRECACHE_ASSETS = [
   '/static/js/tailwindcss.js',
   '/static/js/htmx.min.js',
+  '/parent-portal/',
   '/parent-portal/manifest.webmanifest',
-  '/parent-portal/push-icon.svg'
+  '/parent-portal/push-icon.svg',
+  '/parent-portal/icon-192.png',
+  '/parent-portal/icon-512.png',
+  '/parent-portal/history',
+  '/parent-portal/notices',
 ];
 
 self.addEventListener('install', event => {
@@ -64,7 +69,7 @@ self.addEventListener('notificationclick', event => {
   event.waitUntil((async () => {
     await postReceipt(event.notification.data, 'clicked');
     const absoluteUrl = new URL(actionUrl, self.location.origin).href;
-    const windows = await clients.matchAll({type: 'window', includeUncontrolled: true});
+    const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
       let clientUrl;
       try { clientUrl = new URL(client.url); } catch (_) { continue; }
@@ -93,8 +98,8 @@ async function postReceipt(data, eventName) {
   try {
     await fetch(`/parent-portal/push/receipts/${targetId}/${eventName}`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({token})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
     });
   } catch (_) {
     // Receipt failure must not prevent notification navigation.

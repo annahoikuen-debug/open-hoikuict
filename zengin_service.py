@@ -311,6 +311,16 @@ def _create_zengin_export_uncommitted(
     if not claims:
         raise ZenginError("Zengin出力対象の請求がありません")
 
+    family_ids = [claim.family_id for claim in claims if claim.family_id is not None]
+    profiles_by_family: dict[int, FamilyBillingProfile] = {}
+    if family_ids:
+        all_profiles = session.exec(
+            select(FamilyBillingProfile).where(FamilyBillingProfile.family_id.in_(family_ids))
+        ).all()
+        for profile in all_profiles:
+            if profile.family_id is not None:
+                profiles_by_family[profile.family_id] = profile
+
     export = ZenginExport(
         billing_cycle_id=cycle.id,
         withdrawal_date=cycle.withdrawal_date,
@@ -326,9 +336,7 @@ def _create_zengin_export_uncommitted(
     session.flush()
 
     for claim in claims:
-        profile = session.exec(
-            select(FamilyBillingProfile).where(FamilyBillingProfile.family_id == claim.family_id)
-        ).first()
+        profile = profiles_by_family.get(claim.family_id) if claim.family_id is not None else None
         if profile is None:
             raise ZenginError(f"家族ID {claim.family_id} の口座振替情報が未登録です")
         validate_profile_for_zengin(profile)

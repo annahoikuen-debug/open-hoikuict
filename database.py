@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import date, timedelta
@@ -34,6 +35,8 @@ if _is_sqlite_url:
             cursor.execute("PRAGMA busy_timeout=15000")
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA cache_size = -64000")
+            cursor.execute("PRAGMA temp_store = MEMORY")
         finally:
             cursor.close()
 
@@ -43,10 +46,18 @@ DEFAULT_CLASSROOMS = [
     ("きりん組", 3),
 ]
 
-
 def get_session():
     with Session(engine) as session:
         yield session
+
+
+async def run_db_async(func, *args, **kwargs):
+    """非同期コンテキストから同期 DB 操作をスレッドプールで実行する。
+
+    SQLModel/SQLAlchemy の同期 Session はブロッキング I/O を含むため、
+    FastAPI イベントループをブロックしないよう asyncio.to_thread でオフロードする。
+    """
+    return await asyncio.to_thread(func, *args, **kwargs)
 
 
 # 組み込みマイグレーションの実行順序。適用済みのものは schema_migrations

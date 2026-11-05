@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_admin, require_can_edit
 from billing_calculation_service import BillingCalculationError, recalculate_claim_total, validate_charge_amount
-from database import get_session
+from database import get_session, run_db_async
 from models import (
     BillingChargeLine,
     BillingChargeSourceType,
@@ -524,52 +524,63 @@ def _recalculate_touched_claims(session: Session, *, cycle: BillingCycle, claims
 
 
 @router.get("/")
-def billing_dashboard(
+async def billing_dashboard(
     request: Request,
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    cycles = session.exec(select(BillingCycle).order_by(BillingCycle.year_month.desc())).all()
-    claims = session.exec(select(BillingClaim)).all()
-    exports = session.exec(select(ZenginExport).order_by(ZenginExport.created_at.desc())).all()
+    def _fetch_dashboard_data():
+        cycles = session.exec(select(BillingCycle).order_by(BillingCycle.year_month.desc())).all()
+        claims = session.exec(select(BillingClaim)).all()
+        exports = session.exec(select(ZenginExport).order_by(ZenginExport.created_at.desc())).all()
 
-    claims_by_cycle: dict[int, list[BillingClaim]] = {}
-    for claim in claims:
-        claims_by_cycle.setdefault(claim.billing_cycle_id, []).append(claim)
+        claims_by_cycle: dict[int, list[BillingClaim]] = {}
+        for claim in claims:
+            claims_by_cycle.setdefault(claim.billing_cycle_id, []).append(claim)
 
-    exports_by_cycle: dict[int, list[ZenginExport]] = {}
-    for export in exports:
-        exports_by_cycle.setdefault(export.billing_cycle_id, []).append(export)
+        exports_by_cycle: dict[int, list[ZenginExport]] = {}
+        for export in exports:
+            exports_by_cycle.setdefault(export.billing_cycle_id, []).append(export)
 
-    cycle_rows = []
-    for cycle in cycles:
-        cycle_claims = claims_by_cycle.get(cycle.id or 0, [])
-        cycle_exports = exports_by_cycle.get(cycle.id or 0, [])
-        cycle_rows.append(
-            {
-                "cycle": cycle,
-                "claims": cycle_claims,
-                "claim_count": len(cycle_claims),
-                "total_amount": sum(claim.total_amount for claim in cycle_claims),
-                "exports": cycle_exports,
-                "status_label": BILLING_CYCLE_STATUS_LABELS.get(cycle.status, cycle.status.value),
-            }
-        )
+        cycle_rows = []
+        for cycle in cycles:
+            cycle_claims = claims_by_cycle.get(cycle.id or 0, [])
+            cycle_exports = exports_by_cycle.get(cycle.id or 0, [])
+            cycle_rows.append(
+                {
+                    "cycle": cycle,
+                    "claims": cycle_claims,
+                    "claim_count": len(cycle_claims),
+                    "total_amount": sum(claim.total_amount for claim in cycle_claims),
+                    "exports": cycle_exports,
+                    "status_label": BILLING_CYCLE_STATUS_LABELS.get(cycle.status, cycle.status.value),
+                }
+            )
 
-    export_rows = []
-    for export in exports:
-        lines = session.exec(
-            select(ZenginExportLine).where(ZenginExportLine.zengin_export_id == export.id)
-        ).all()
-        export_rows.append(
-            {
-                "export": export,
-                "line_count": len(lines),
-                "status_label": ZENGIN_EXPORT_STATUS_LABELS.get(export.status, export.status.value),
-            }
-        )
+        export_rows = []
+        export_ids = [export.id for export in exports if export.id is not None]
+        lines_by_export: dict[int, list[ZenginExportLine]] = {}
+        if export_ids:
+            all_lines = session.exec(
+                select(ZenginExportLine).where(ZenginExportLine.zengin_export_id.in_(export_ids))
+            ).all()
+            for line in all_lines:
+                lines_by_export.setdefault(line.zengin_export_id, []).append(line)
+        for export in exports:
+            lines = lines_by_export.get(export.id or 0, [])
+            export_rows.append(
+                {
+                    "export": export,
+                    "line_count": len(lines),
+                    "status_label": ZENGIN_EXPORT_STATUS_LABELS.get(export.status, export.status.value),
+                }
+            )
 
-    setting = session.exec(select(BillingSetting).order_by(BillingSetting.id)).first()
+        setting = session.exec(select(BillingSetting).order_by(BillingSetting.id)).first()
+
+        return cycle_rows, export_rows, setting
+
+    cycle_rows, export_rows, setting = await run_db_async(_fetch_dashboard_data)
 
     return templates.TemplateResponse(
         request,

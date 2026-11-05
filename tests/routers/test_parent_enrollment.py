@@ -20,6 +20,10 @@ from models import (
     ParentRegistrationSession,
 )
 from parent_auth import dispatch_pending_parent_mail, token_hash
+from routers.parent_auth import (
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT,
+    PARENT_LOGIN_RATE_LIMITER_IP,
+)
 from time_utils import utc_now
 from test_guardian_account_sync import pilot as pilot_fixture
 import routers.parent_auth as routes
@@ -209,6 +213,8 @@ def test_two_fields_to_parent_input_review_and_login(pilot, monkeypatch):
     assert response.status_code == 303, response.text
     sent = []
     monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
+    PARENT_LOGIN_RATE_LIMITER_IP.reset_all()
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
     response = client.post(
         "/parent-portal/login",
         data={"login_id": "intake@example.test", "password": password},

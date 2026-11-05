@@ -56,7 +56,7 @@ from .prior_history import get_prior_month_duty_streaks
 from .solve_inputs import build_fixed_assignments
 
 # 統合提案 2.7: CBC はリクエスト経路で起動しない。専用ワーカー。
-_solve_executor = ThreadPoolExecutor(max_workers=1)
+_solve_executor = ThreadPoolExecutor(max_workers=min(4, (os.cpu_count() or 2)))
 _solve_lock = threading.Lock()
 _cbc_available: bool | None = None  # 起動時セルフチェック結果
 
