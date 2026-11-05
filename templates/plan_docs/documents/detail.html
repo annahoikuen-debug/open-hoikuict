@@ -72,6 +72,13 @@
       {% if can_edit_document and document.can_edit_body %}
         <a class="button button--primary" href="/plans/documents/{{ document.id }}/edit">修正</a>
       {% endif %}
+      {% if document.document_type.value == "weekly_plan" and can_edit_document and document.can_edit_body and document.week_start_date %}
+        <form method="post" action="/plans/daily-plans/bulk-from-weekly" style="display:inline-block;margin-left:6px">
+          <input type="hidden" name="target_week" value="{{ document.target_week }}">
+          <input type="hidden" name="classroom_ref" value="{{ document.classroom_label }}">
+          <button class="button button--secondary" type="submit">週から日案を一括作成</button>
+        </form>
+      {% endif %}
       <button class="button button--secondary" type="button" {% if monthly_boot %}data-monthly-print{% else %}onclick="window.print()"{% endif %}>印刷</button>
     </div>
   </section>

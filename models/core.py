@@ -2,12 +2,15 @@ from datetime import date, datetime
 from enum import Enum
 import uuid
 from uuid import UUID, uuid4
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from sqlalchemy import JSON, CheckConstraint, Index, LargeBinary, UniqueConstraint
 from sqlmodel import Column, Field, Relationship, SQLModel
 
 from time_utils import ensure_utc, local_naive_now, local_today, utc_now
+
+if TYPE_CHECKING:  # 領域別分割モジュールとの循環 import を避ける（文字列注釈用）
+    from models.notice import NoticeRead  # noqa: F401
 
 
 class ChildSex(str, Enum):
@@ -142,6 +145,11 @@ class ParentNotificationKind(str, Enum):
     attendance_confirmation_request = "attendance_confirmation_request"
     fever_notification = "fever_notification"
     push_test = "push_test"
+    notice_published = "notice_published"
+    survey_published = "survey_published"
+    closure_notice = "closure_notice"  # 休園のお知らせ
+    emergency_notice = "emergency_notice"  # 緊急連絡
+    punch_correction_notice = "punch_correction_notice"  # 打刻訂正の報告
 
 
 class NotificationDeliveryChannel(str, Enum):
@@ -245,46 +253,6 @@ class ChildProfileChangeRequestStatus(str, Enum):
             self.pending: "承認待ち",
             self.approved: "承認済み",
             self.rejected: "差し戻し",
-        }[self]
-
-
-class NoticeStatus(str, Enum):
-    draft = "draft"
-    pending_approval = "pending_approval"
-    published = "published"
-
-    @property
-    def label(self) -> str:
-        return {
-            self.draft: "下書き",
-            self.pending_approval: "承認待ち",
-            self.published: "公開中",
-        }[self]
-
-
-class NoticePriority(str, Enum):
-    normal = "normal"
-    high = "high"
-
-    @property
-    def label(self) -> str:
-        return {
-            self.normal: "通常",
-            self.high: "重要",
-        }[self]
-
-
-class NoticeTargetType(str, Enum):
-    all = "all"
-    classroom = "classroom"
-    child = "child"
-
-    @property
-    def label(self) -> str:
-        return {
-            self.all: "全保護者",
-            self.classroom: "クラス",
-            self.child: "園児",
         }[self]
 
 
@@ -1462,6 +1430,66 @@ class DailyContactEntry(SQLModel, table=True):
     child: Optional[Child] = Relationship(back_populates="daily_contact_entries")
     parent_account: Optional[ParentAccount] = Relationship(back_populates="daily_contact_entries")
 
+    @property
+    def home_care_details(self) -> list[tuple[str, str]]:
+        from home_care_details import care_display_items
+        return care_display_items(self.extra_data)
+
+    @property
+    def is_present_contact(self) -> bool:
+        return self.contact_type == ParentContactType.present
+
+    @property
+    def is_absent_contact(self) -> bool:
+        return self.contact_type in {ParentContactType.absent_private, ParentContactType.absent_sick}
+
+    @property
+    def absence_reason_label(self) -> str:
+        if self.contact_type == ParentContactType.absent_private:
+            return "私用"
+        if self.contact_type == ParentContactType.absent_sick:
+            return "病気"
+        return ""
+
+
+class MedicationAdministration(SQLModel, table=True):
+    """与薬記録（改善案8）。
+
+    保護者が連絡帳で申告した与薬指示を、園が実際に与薬した記録として
+    二重確認（与薬実施者 + 確認者）つきで残す。薬機法ではなく園内運用の
+    記録であり、確定後の削除は不可（訂正は無効化のみ）。
+    """
+    __tablename__ = "medication_administrations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    child_id: int = Field(foreign_key="children.id", index=True)
+    target_date: date = Field(index=True)
+    medication_name: str = Field(max_length=100)
+    dosage: Optional[str] = Field(default=None, max_length=100)  # 「5ml」「1包」など
+    administration_time: str = Field(max_length=5)  # HH:MM
+    note: Optional[str] = None
+
+    # 保護者申告（連絡帳と紐付け）
+    daily_contact_entry_id: Optional[int] = Field(
+        default=None, foreign_key="daily_contact_entries.id", index=True,
+    )
+    requested_by_parent_account_id: Optional[int] = Field(
+        default=None, foreign_key="parent_accounts.id", index=True,
+    )
+
+    status: str = Field(default="requested", index=True)  # requested / administered / void
+    administered_at: Optional[datetime] = None
+    administered_by_name: Optional[str] = None
+    administered_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
+    confirmed_by_name: Optional[str] = None  # 二重確認（第2職員）
+    confirmed_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
+    confirmed_at: Optional[datetime] = None
+    voided_at: Optional[datetime] = None
+    voided_by_name: Optional[str] = None
+    void_reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
 
     @property
     def home_care_details(self) -> list[tuple[str, str]]:
@@ -1871,69 +1899,6 @@ class ZenginExportLine(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
-class Notice(SQLModel, table=True):
-    __tablename__ = "notices"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    title: str
-    body: str
-    body_html: Optional[str] = None
-    priority: NoticePriority = Field(default=NoticePriority.normal)
-    status: NoticeStatus = Field(default=NoticeStatus.draft)
-    publish_start_at: Optional[datetime] = None
-    publish_end_at: Optional[datetime] = None
-    created_by: Optional[str] = None
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-    lock_version: int = Field(default=1)
-
-    targets: List["NoticeTarget"] = Relationship(back_populates="notice")
-    reads: List["NoticeRead"] = Relationship(back_populates="notice")
-    attachments: List["NoticeAttachment"] = Relationship(back_populates="notice")
-    workflow_actions: List["NoticeWorkflowAction"] = Relationship(back_populates="notice")
-
-
-class NoticeAttachment(SQLModel, table=True):
-    __tablename__ = "notice_attachments"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    notice_id: int = Field(foreign_key="notices.id", index=True)
-    original_filename: str
-    storage_path: str
-    content_type: str
-    file_size: int = Field(default=0)
-    is_image: bool = Field(default=False)
-    display_size: str = Field(default="medium", max_length=16)
-    display_order: int = Field(default=0)
-    created_at: datetime = Field(default_factory=utc_now)
-
-    notice: Optional[Notice] = Relationship(back_populates="attachments")
-
-
-class NoticeWorkflowAction(SQLModel, table=True):
-    __tablename__ = "notice_workflow_actions"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    notice_id: int = Field(foreign_key="notices.id", index=True)
-    action: str = Field(index=True, max_length=32)
-    actor_ref: Optional[str] = Field(default=None, max_length=64)
-    actor_name: str = Field(max_length=100)
-    comment: Optional[str] = None
-    created_at: datetime = Field(default_factory=utc_now, index=True)
-
-    notice: Optional[Notice] = Relationship(back_populates="workflow_actions")
-
-    @property
-    def action_label(self) -> str:
-        return {
-            "submitted": "承認申請",
-            "approved": "承認・公開",
-            "rejected": "差戻し",
-            "cancelled": "申請取消",
-            "unpublished": "公開停止・下書き化",
-        }.get(self.action, self.action)
-
-
 class MeetingNote(SQLModel, table=True):
     __tablename__ = "meeting_notes"
 
@@ -1945,31 +1910,6 @@ class MeetingNote(SQLModel, table=True):
     updated_by: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
-
-
-class NoticeTarget(SQLModel, table=True):
-    __tablename__ = "notice_targets"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    notice_id: int = Field(foreign_key="notices.id", index=True)
-    target_type: NoticeTargetType = Field(default=NoticeTargetType.all)
-    target_value: Optional[str] = None
-    created_at: datetime = Field(default_factory=utc_now)
-
-    notice: Optional[Notice] = Relationship(back_populates="targets")
-
-
-class NoticeRead(SQLModel, table=True):
-    __tablename__ = "notice_reads"
-    __table_args__ = (UniqueConstraint("notice_id", "parent_account_id", name="uq_notice_parent_read"),)
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    notice_id: int = Field(foreign_key="notices.id", index=True)
-    parent_account_id: int = Field(foreign_key="parent_accounts.id", index=True)
-    read_at: datetime = Field(default_factory=utc_now)
-
-    notice: Optional[Notice] = Relationship(back_populates="reads")
-    parent_account: Optional[ParentAccount] = Relationship(back_populates="notice_reads")
 
 
 class Survey(SQLModel, table=True):
@@ -2202,6 +2142,10 @@ class ParentPushPreference(SQLModel, table=True):
     parent_account_id: int = Field(foreign_key="parent_accounts.id", index=True)
     push_enabled: bool = Field(default=True)
     attendance_confirmation_enabled: bool = Field(default=True)
+    # 通知種別ミュート（改善案6の後続）: True で受け取る
+    closure_notice_enabled: bool = Field(default=True)
+    emergency_notice_enabled: bool = Field(default=True)
+    punch_correction_notice_enabled: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -2931,6 +2875,26 @@ class StaffMfaPending(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class ParentMfaPending(SQLModel, table=True):
+    """パスワード認証済み・MFA未完了の保護者保留状態。
+
+    保護者ログインでパスワード検証後、メールOTP検証前に一時的な保留レコードを
+    作成する。pending_reference はクッキー経由でクライアントに渡され、OTP 検証時に
+    照合してセッションを発行する。構造は StaffMfaPending と同じ。
+    """
+
+    __tablename__ = "parent_mfa_pending"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    parent_account_id: int = Field(foreign_key="parent_accounts.id", index=True)
+    credential_id: uuid.UUID = Field(foreign_key="password_credentials.id", index=True)
+    pending_reference: str = Field(index=True, max_length=64)
+    code_hash: str = Field(max_length=64)
+    expires_at: datetime = Field(index=True)
+    attempt_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class StaffSessionTimeout(SQLModel, table=True):
     """Only new staff sessions get a timeout snapshot; legacy sessions use the environment."""
     __tablename__ = "staff_session_timeouts"
@@ -3309,7 +3273,24 @@ class FacilitySettings(SQLModel, table=True):
     final_pickup_time: str = Field(default="19:00")
     supplementary_meal_time: str = Field(default="18:00")
     supplementary_meal_fee: int = Field(default=100)
+    fever_return_days: int = Field(default=2)  # 解熱後の登園目安日数（改善案8）
+    fever_caution_c: str = Field(default="37.5", max_length=4)
+    fever_review_c: str = Field(default="38.0", max_length=4)
     updated_at: datetime = Field(default_factory=utc_now)
+    updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
+    updated_by_name: Optional[str] = None
+
+
+class FacilitySettingsHistory(SQLModel, table=True):
+    __tablename__ = "facility_settings_history"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    field_name: str = Field(index=True)
+    old_value: str = Field(default="")
+    new_value: str = Field(default="")
+    changed_by_name: Optional[str] = None
+    changed_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
+    changed_at: datetime = Field(default_factory=utc_now, index=True)
 
 
 class StaffPaidLeave(SQLModel, table=True):

@@ -12,10 +12,26 @@
       <label>年齢クラス <select id="age" {% if detail_mode %}disabled{% endif %}>{% for age in range(6) %}<option value="{{ age }}">{{ age }}歳児</option>{% endfor %}</select></label>
       <strong id="scope"></strong>
     </div></div>
-    <div class="actions"><button type="button" id="print-monthly">印刷用PDF</button><button type="button" id="excel-monthly">Excel出力</button><button type="button" id="undo" disabled>ひとつ戻す</button><button type="button" id="save" class="primary">下書きを保存</button>
+    <div class="actions"><button type="button" id="print-monthly">印刷用PDF</button><button type="button" id="excel-monthly">Excel出力</button><button type="button" id="undo" disabled>ひとつ戻す</button><button type="button" id="carry-over" {% if not boot.carry_over or not boot.carry_over.available %}hidden{% endif %}>前月から引き継ぐ（{{ boot.carry_over.from_month }}）</button><button type="button" id="save" class="primary">下書きを保存</button>
       <small class="export-note">対象の月・年齢の全園児を出力。{% if detail_mode or not boot.editable %}保存済みの内容を出力します。{% else %}保存前の入力も含みます。{% endif %}</small>
     </div>
   </div>
+
+  <dialog id="dlg-carry-over">
+    <div style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff">
+      <h3 style="margin:0 0 8px 0;font-size:1rem;font-weight:700">前月から引き継ぎますか？</h3>
+      <p id="carry-over-from" style="font-size:0.875rem;color:#4b5563;margin:0 0 8px 0"></p>
+      <ul style="font-size:0.8rem;color:#6b7280;margin:0 0 10px 0;padding-left:18px;list-style:disc">
+        <li>・コピー対象：すべてのセルの本文と文例の出典（origins）</li>
+        <li>・前月の文書は変更されません</li>
+        <li>・各セルに「前月から」バッジがつき、後からいつでも編集できます</li>
+      </ul>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button type="button" onclick="document.getElementById('dlg-carry-over').close()" style="padding:4px 12px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer">キャンセル</button>
+        <button type="button" id="carry-over-confirm" style="padding:4px 12px;border:1px solid #2563eb;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer">引き継ぐ</button>
+      </div>
+    </div>
+  </dialog>
   <div class="context"><label id="child-wrap">入力する園児 <select id="child"></select></label><label id="page-wrap">帳票ページ <select id="page"></select></label><button type="button" id="history-toggle" aria-expanded="false" aria-controls="past-plans">過去3か月を表示</button><span id="count"></span></div>
   <div class="workspace">
     <div class="paper" aria-label="原本に合わせた月案の帳票"><div class="sheet-scroll"><div id="form"></div></div><footer><a id="template" target="_blank" rel="noopener noreferrer"></a><span id="save-state"></span><button type="button" id="revert" class="text-button">保存した内容に戻す</button></footer></div>

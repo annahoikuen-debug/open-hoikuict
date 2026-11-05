@@ -71,6 +71,49 @@ class AgeClass(str, Enum):
         return cls.from_years(max(years, 0))
 
 
+@dataclass(frozen=True)
+class ClassRoom:
+    """保育クラス・保育室の定義。"""
+
+    class_id: str
+    name: str
+    age_class: AgeClass
+    capacity: int = 0
+    """クラス定員"""
+    min_staff: int = 1
+    """保育時間帯の最低常駐保育士数"""
+    lead_staff_id: str | None = None
+    """主担任の職員ID"""
+
+
+@dataclass(frozen=True)
+class ClassCapacity:
+    """クラスごとの定員と標準/短時間認定の内訳。"""
+
+    age_class: AgeClass
+    class_name: str
+    total_capacity: int
+    standard_time_count: int
+    short_time_count: int
+
+    @property
+    def total_enrolled(self) -> int:
+        return self.standard_time_count + self.short_time_count
+
+
+@dataclass(frozen=True)
+class FacilityCapacity:
+    """園全体の定員構成モデル（園児個別CSVなしでの自動需要展開用）。"""
+
+    classes: tuple[ClassCapacity, ...]
+
+    def total_capacity(self) -> int:
+        return sum(c.total_capacity for c in self.classes)
+
+    def total_enrolled(self) -> int:
+        return sum(c.total_enrolled for c in self.classes)
+
+
 class Role(str, Enum):
     """職員の職種。基準ごとに換算の扱いが異なる。"""
 
@@ -363,6 +406,16 @@ def daily_cap_minutes(contract: Contract) -> int:
     return int(min(base * config.STATUTORY_OVERTIME_MULTIPLIER, legal_cap))
 
 
+# ---------------------------------------------------------------------------
+# スキル・役割定数
+# ---------------------------------------------------------------------------
+SKILL_OPENING = "開所可能"  # 早番・開所・鍵開け資格
+SKILL_CLOSING = "閉所可能"  # 遅番・閉所・戸締まり資格
+SKILL_LEADER = "リーダー可"  # 日次当番リーダー・主任業務
+SKILL_ALLERGY = "アレルギー対応"  # アレルギー対応研修修了
+SKILL_FIRST_AID = "応急手当"  # 救命救急・応急処置講習修了
+
+
 @dataclass(frozen=True)
 class StaffMember:
     """職員1名。"""
@@ -375,10 +428,24 @@ class StaffMember:
     """例: '乳幼児研修修了', '応急処置資格', 'ピアノ指導可'"""
     home_ward: str = ""
     memo: str = ""
+    assigned_class_id: str | None = None
+    """担当クラスID（0歳児クラス、1歳児クラス等の担任指定）"""
+    can_lead: bool = False
+    """日次当番リーダーを務められるか"""
 
     def __post_init__(self) -> None:
         if not self.roles:
             raise ValueError(f"{self.staff_id}: roles が空です")
+
+    @property
+    def can_open(self) -> bool:
+        """開所（鍵開け・早朝対応）を担当できるか。"""
+        return SKILL_OPENING in self.skills or self.can_lead
+
+    @property
+    def can_close(self) -> bool:
+        """閉所（施錠・延長対応）を担当できるか。"""
+        return SKILL_CLOSING in self.skills or self.can_lead
 
     @property
     def primary_role(self) -> Role:
@@ -520,6 +587,21 @@ class StaffPreferences:
 
     def preferred_slots_for(self, day: date) -> tuple[Slot, ...]:
         return self.preferred_slots.get(day, ())
+
+
+@dataclass(frozen=True)
+class PairingRule:
+    """職員ペアリング（相性・OJT指導）制約の定義。
+
+    - ``kind='require_together'``: staff_a が出勤している時間帯（スロット）には staff_b も必ず同席・出勤する（OJT・新人指導必須）
+    - ``kind='avoid_together'``: staff_a と staff_b を同じ時間帯（スロット）に同時配置しない（相性配慮・同一家族など）
+    """
+
+    staff_a_id: str
+    staff_b_id: str
+    kind: str = "require_together"  # "require_together" | "avoid_together"
+    is_hard: bool = True  # True: ハード制約, False: 違反ペナルティ
+    penalty: float = 300.0  # is_hard=False 時の目的関数ペナルティ
 
 
 # ---------------------------------------------------------------------------
@@ -1154,13 +1236,13 @@ class ObjectiveWeights:
     実測: 通勤ペナルティ（``split_duty_penalty``）と区別されていないと、
     総休憩時間が 137.5h → 54.5h まで削られ ``BREAK_INSUFFICIENT`` が
     13 → 24 件に劣化した。"""
-    split_duty_penalty: float = 120.0
+    split_duty_penalty: float = 300.0
     """勤務ブロックを「下班（帰宅）を挟んで」再開する1セルあたりのペナルティ。
 
-    :func:`~shiftai.solver._add_commute_penalty` が使う。昼休みのような
-    短い穴はこの罰が効かない（下班の長さが閾値に満たないため）ので、
-    設定不足のときだけ効く。``break_conflict_penalty`` より大きく、
-    ``shortfall_penalty`` より小さくあることが運用上の狙い。"""
+    :func:`~shiftai.solver._add_commute_penalty` および
+    :func:`~shiftai.solver._add_block` の分割フォールバックで使う。
+    ``break_deficit_penalty``（600.0）未満、かつ ``break_conflict_penalty``（50.0）
+    より大きい値として、中抜け勤務（1日複数回出勤）を抑止する。"""
     consecutive_day_penalty: float = 8.0
     hours_imbalance_penalty: float = 4.0
     fairness_early_penalty: float = 4.0

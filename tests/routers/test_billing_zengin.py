@@ -60,9 +60,9 @@ class BillingZenginTests(unittest.TestCase):
         )
         SQLModel.metadata.create_all(self.engine)
         with Session(self.engine) as session:
-            admin_id = self._create_admin_user(session)
+            self.admin_id = self._create_admin_user(session)
             session.commit()
-        self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
+        self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=self.admin_id)
 
     def tearDown(self):
         self.engine.dispose()
@@ -228,7 +228,7 @@ class BillingZenginTests(unittest.TestCase):
             export = session.get(ZenginExport, export_id)
             self.assertEqual(export.status, ZenginExportStatus.created)
 
-        self.current_user = StaffUser(role=Role.ADMIN, name="園長")
+        self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=self.admin_id)
         allowed = client.get(f"/billing/zengin/exports/{export_id}/download")
         self.assertEqual(allowed.status_code, 200)
 

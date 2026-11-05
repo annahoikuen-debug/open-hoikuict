@@ -133,6 +133,15 @@ def kiosk_access_mode() -> str:
     return (os.getenv("HOIKUICT_KIOSK_ACCESS_MODE") or "disabled").strip().lower()
 
 
+def parent_login_mfa_enabled() -> bool:
+    """保護者ログインのメールOTP二段階認証（職員ログインと同じ方式）。
+
+    既定は有効。SMTP障害時などの緊急停止用に HOIKUICT_PARENT_LOGIN_MFA=0 で無効化できる。
+    """
+    raw = (os.getenv("HOIKUICT_PARENT_LOGIN_MFA") or "1").strip().lower()
+    return raw not in {"0", "false", "off", "no"}
+
+
 def websocket_runtime_available() -> bool:
     return find_spec("websockets") is not None or find_spec("wsproto") is not None
 

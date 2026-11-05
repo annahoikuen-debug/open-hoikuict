@@ -20,6 +20,7 @@ from models import (
     NoticeTarget,
     NoticeTargetType,
     NoticeWorkflowAction,
+    ParentNotificationKind,
 )
 from notice_content import (
     NoticeContentError,
@@ -673,6 +674,42 @@ def approve_notice(
         current_user=current_user,
         comment=comment,
     )
+    # 公開を保護者へ自動通知（改善案6: 通知イベントハブ）
+    targets = session.exec(
+        select(NoticeTarget).where(NoticeTarget.notice_id == notice_id)
+    ).all()
+    classroom_ids = [t.target_value for t in targets if t.target_type == NoticeTargetType.classroom and t.target_value]
+    child_ids = [t.target_value for t in targets if t.target_type == NoticeTargetType.child and t.target_value]
+    numeric_classroom_ids = [int(v) for v in classroom_ids if str(v).isdigit()]
+    numeric_child_ids = [int(v) for v in child_ids if str(v).isdigit()]
+    if notice.priority == NoticePriority.high:
+        # 重要（緊急・休園等）のお知らせは緊急通知として配信する（保護者のpushミュートを無視）。
+        from notification_hub import notify_families
+
+        notify_families(
+            session,
+            kind=ParentNotificationKind.emergency_notice,
+            source_type="notice",
+            source_id=str(notice.id),
+            title="緊急のお知らせ",
+            body=f"緊急のお知らせ「{notice.title}」が公開されました。保護者ポータルで内容を確認してください。",
+            action_url=f"/parent-portal/notices?notice_id={notice.id}",
+            target_classroom_ids=numeric_classroom_ids,
+            target_child_ids=numeric_child_ids,
+            created_by_name=current_user.name,
+            force_push=True,
+        )
+    else:
+        from notification_hub import notify_notice_published
+
+        notify_notice_published(
+            session,
+            notice_id=notice.id,
+            title=notice.title,
+            target_classroom_ids=numeric_classroom_ids,
+            target_child_ids=numeric_child_ids,
+            created_by_name=current_user.name,
+        )
     session.commit()
     return RedirectResponse(url=f"/notices/{notice.id}/preview", status_code=303)
 

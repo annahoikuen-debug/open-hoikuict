@@ -78,6 +78,9 @@ class AttendanceCheckRow:
     history_items: list[AttendanceVerificationHistory]
     contact_history: list[AttendanceContactConfirmation]
     contact_confirmation: Optional[AttendanceContactConfirmation]
+    # 登園可能判定（改善案8）: 欠席連絡の症状・診断名からの参考値
+    eligibility_level: str = "ok"
+    eligibility_messages: Optional[list[str]] = None
 
     @property
     def attendance_state(self) -> str:
@@ -234,6 +237,40 @@ def _load_rows(
     ).order_by(AttendanceContactConfirmation.id.desc())).all():
         contacts_by_child_id.setdefault(contact.child_id, []).append(contact)
 
+    # 登園可能判定（改善案8）: 欠席連絡の体温・診断名から参考判定を生成。
+    # 基準（解熱後日数・体温しきい値）は施設設定（FacilitySettings）で上書き可能。
+    from attendance_eligibility_service import judge_attendance
+    from facility_settings_service import get_facility_settings
+
+    settings = get_facility_settings(session)
+    try:
+        caution_c = float(settings.fever_caution_c)
+        review_c = float(settings.fever_review_c)
+    except ValueError:
+        caution_c, review_c = 37.5, 38.0
+    return_days = max(0, settings.fever_return_days)
+
+    eligibility_by_child_id: dict[int, dict[str, object]] = {}
+    for entry in entries:
+        is_sick = entry.contact_type.value == "absent_sick"
+        if not is_sick:
+            continue
+        temperature_c = None
+        if entry.absence_temperature:
+            try:
+                temperature_c = float(entry.absence_temperature)
+            except ValueError:
+                temperature_c = None
+        diagnosis = entry.absence_diagnosis if is_sick else None
+        result = judge_attendance(
+            target_date=target_day, temperature_c=temperature_c, diagnosis=diagnosis,
+            return_days=return_days, caution_c=caution_c, review_c=review_c,
+        )
+        eligibility_by_child_id[entry.child_id] = {
+            "level": result.level,
+            "messages": result.messages,
+        }
+
     rows: list[AttendanceCheckRow] = []
     for child in enrolled_children:
         child_id = child.id or 0
@@ -248,6 +285,8 @@ def _load_rows(
                 child=child,
                 classroom_name=child.classroom.name if child.classroom else "クラス未設定",
                 entry=entry_by_child_id.get(child_id),
+                eligibility_level=eligibility_by_child_id.get(child_id, {}).get("level", "ok"),
+                eligibility_messages=eligibility_by_child_id.get(child_id, {}).get("messages"),
                 verification=verification,
                 verification_key=status_key,
                 verification_label=attendance_verification_label(verification),

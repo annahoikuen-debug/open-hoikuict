@@ -49,6 +49,7 @@ class CellInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     body: str = Field(default="", max_length=20000)
     origins: list[OriginInput | AIOriginInput] = Field(default_factory=list, max_length=100)
+    carried_from: str | None = Field(default=None, max_length=7)
 
 
 class SaveInput(BaseModel):
@@ -235,5 +236,8 @@ def validated_fields(payload: SaveInput, sheet: dict, nursery_ref: str) -> dict:
                 raise HTTPException(422, "選択した文例の出典または対象欄を確認できません")
             if resolved not in origins:
                 origins.append(resolved)
-        result[key] = {"body": cell.body, "origins": origins}
+        result[key] = {
+            "body": cell.body, "origins": origins,
+            **({"carried_from": cell.carried_from} if cell.carried_from else {}),
+        }
     return result

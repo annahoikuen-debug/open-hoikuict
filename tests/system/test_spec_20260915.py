@@ -23,6 +23,7 @@ def staff():
     case.setUp()
     case._activate()
     case._login()
+    case._complete_mfa()
     try:
         yield case
     finally:

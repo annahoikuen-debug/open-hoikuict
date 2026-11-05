@@ -2,30 +2,47 @@
 {% set state_labels = {'present':'在園','departed':'降園','absent':'お休み','pending':'未登園'} %}
 <article id="attendance-check-row-{{ row.child.id }}" class="check-row {% if row.alarm_is_active %}alarm{% endif %}">
   <div class="check-summary">
-    <div class="check-name"><strong>{{ row.child.full_name }}</strong>{% if row.alarm_is_active %}<span class="alarm-dot" title="{{ row.alarm_reasons|join(' / ') }}">●</span>{% endif %}<small>{{ row.classroom_name }}</small></div>
+    <div class="check-name"><strong>{{ row.child.full_name }}</strong>{% if row.alarm_is_active %}<span
+        class="alarm-dot" title="{{ row.alarm_reasons|join(' / ') }}">●</span>{% endif %}<small>{{ row.classroom_name
+        }}</small></div>
     <span class="check-category state-{{ row.attendance_state }}">{{ state_labels[row.attendance_state] }}</span>
-    <div class="check-times">{{ row.check_in_at.strftime('%H:%M') if row.check_in_at else '―' }} / {{ row.check_out_at.strftime('%H:%M') if row.check_out_at else '―' }}</div>
-    <div class="check-parent">{% if row.entry %}{{ row.entry.contact_type.label }} / アプリ{% endif %}{% if row.contact_confirmation %} {{ '電話' if row.contact_confirmation.method == 'phone' else '口頭' }}連絡受付 / {{ row.contact_confirmation.status.label }}{% elif not row.entry %}連絡なし{% endif %}</div>
+    <div class="check-times">{{ row.check_in_at.strftime('%H:%M') if row.check_in_at else '―' }} / {{
+      row.check_out_at.strftime('%H:%M') if row.check_out_at else '―' }}</div>
+    <div class="check-parent">{% if row.entry %}{{ row.entry.contact_type.label }} / アプリ{% endif %}{% if
+      row.contact_confirmation %} {{ '電話' if row.contact_confirmation.method == 'phone' else '口頭' }}連絡受付 / {{
+      row.contact_confirmation.status.label }}{% elif not row.entry %}連絡なし{% endif %}</div>
     <div class="check-status">
       {% if current_user and current_user.can_manage_attendance_checks %}
       {% for option in verification_options %}
       <form method="post" action="/attendance-checks/{{ row.child.id }}/verification" data-verification-form>
-        <input type="hidden" name="date" value="{{ target_date_value }}"><input type="hidden" name="status" value="{{ option.value }}">
-        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter" value="{{ selected_filter }}"><input type="hidden" name="classroom_id" value="{{ selected_classroom_id_value }}">
+        <input type="hidden" name="date" value="{{ target_date_value }}"><input type="hidden" name="status"
+          value="{{ option.value }}">
+        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
+          value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
+          value="{{ selected_classroom_id_value }}">
         <input type="hidden" name="notify_parent" value="false"><input type="hidden" name="reason" value="">
-        <button type="button" data-status-key="{{ option.value }}" data-child-name="{{ row.child.full_name }}" data-requires-reason="{{ 'true' if row.verification else 'false' }}" aria-pressed="{{ 'true' if row.verification and row.verification_key == option.value else 'false' }}" onclick="openVerificationDialog(this)">{{ option.label }}</button>
+        <button type="button" data-status-key="{{ option.value }}" data-child-name="{{ row.child.full_name }}"
+          data-requires-reason="{{ 'true' if row.verification else 'false' }}"
+          aria-pressed="{{ 'true' if row.verification and row.verification_key == option.value else 'false' }}"
+          onclick="openVerificationDialog(this)">{{ option.label }}</button>
       </form>
       {% endfor %}
-      {% else %}<span data-readonly-status="{{ row.verification_key }}" class="border border-slate-200 bg-white rounded px-2 py-1">{{ row.verification_label }}</span>{% endif %}
+      {% else %}<span data-readonly-status="{{ row.verification_key }}"
+        class="border border-slate-200 bg-white rounded px-2 py-1">{{ row.verification_label }}</span>{% endif %}
     </div>
-    <button class="check-open" type="button" aria-controls="{{ detail_id }}" aria-expanded="false" onclick="const d=document.getElementById(this.getAttribute('aria-controls')); const open=d.classList.toggle('hidden')===false; this.setAttribute('aria-expanded',String(open)); this.textContent=open?'閉じる':'詳細';">詳細</button>
+    <button class="check-open" type="button" aria-controls="{{ detail_id }}" aria-expanded="false"
+      onclick="const d=document.getElementById(this.getAttribute('aria-controls')); const open=d.classList.toggle('hidden')===false; this.setAttribute('aria-expanded',String(open)); this.textContent=open?'閉じる':'詳細';">詳細</button>
   </div>
   <div id="{{ detail_id }}" class="mt-4 hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
-    {% if (row.has_check_in or row.check_out_at) and current_user.can_edit %}<a class="mb-3 inline-block text-sm text-rose-700 underline" href="/attendance/{{ row.child.id }}/correction?date={{ target_date_value }}&amp;return_to=checks&amp;return_query={{ return_query|urlencode }}">誤打刻を取り消す</a>{% endif %}
+    {% if (row.has_check_in or row.check_out_at) and current_user.can_edit %}<a
+      class="mb-3 inline-block text-sm text-rose-700 underline"
+      href="/attendance/{{ row.child.id }}/correction?date={{ target_date_value }}&amp;return_to=checks&amp;return_query={{ return_query|urlencode }}">誤打刻を取り消す</a>{%
+    endif %}
     <div class="grid gap-4 sm:grid-cols-2">
       <section class="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
         <h3 class="text-sm font-semibold text-slate-700">保護者連絡</h3>
-        <a href="/daily-contacts/{{ row.child.id }}?date={{ target_date_value }}" class="text-xs text-indigo-700 underline">保護者連絡の詳細へ</a>
+        <a href="/daily-contacts/{{ row.child.id }}?date={{ target_date_value }}"
+          class="text-xs text-indigo-700 underline">保護者連絡の詳細へ</a>
         <div class="text-sm text-slate-800">{{ row.entry.contact_type.label if row.entry else "なし" }}</div>
         {% if row.entry and row.entry.is_absent_contact %}
         <div class="space-y-1 text-xs text-slate-500">
@@ -34,6 +51,17 @@
           <div>体温: {{ row.entry.absence_temperature or "-" }}</div>
           <div>症状: {{ row.entry.absence_symptoms or "-" }}</div>
           <div>診断名: {{ row.entry.absence_diagnosis or "-" }}</div>
+          {% if row.eligibility_level and row.eligibility_level != "ok" %}
+          <div
+            class="mt-1 rounded px-2 py-1 text-xs {% if row.eligibility_level == 'blocked' %}bg-rose-100 text-rose-800{% elif row.eligibility_level == 'review' %}bg-amber-100 text-amber-800{% else %}bg-sky-100 text-sky-800{% endif %}">
+            登園判定（参考）:
+            {% if row.eligibility_messages %}
+            {% for message in row.eligibility_messages %}<div>{{ message }}</div>{% endfor %}
+            {% else %}
+            <div>要確認</div>
+            {% endif %}
+          </div>
+          {% endif %}
           {% endif %}
           <div>備考: {{ row.entry.absence_note or "-" }}</div>
         </div>
@@ -50,7 +78,8 @@
         <div class="text-sm text-slate-800">{{ row.verification_label }}</div>
         <div class="space-y-1 text-xs text-slate-500">
           <div>確認者: {{ row.verification_updated_by_name or "-" }}</div>
-          <div>確認時刻 (JST): {{ (row.verification_updated_at|jst_datetime("%H:%M:%S")) if row.verification_updated_at else "-" }}</div>
+          <div>確認時刻 (JST): {{ (row.verification_updated_at|jst_datetime("%H:%M:%S")) if row.verification_updated_at else
+            "-" }}</div>
         </div>
       </section>
 
@@ -73,10 +102,15 @@
         {% if row.history_items %}
         <ul class="space-y-2">
           {% for history in row.history_items %}
-          <li class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs" data-history-status="{{ history.status.value }}">
-            <span class="font-medium text-slate-700">{{ {"present":"出席","private_absent":"私用休み","sick_absent":"病欠","unknown":"不明"}.get(history.previous_status, "未記録") }} → {{ history.status.label }}</span>
-            <span class="text-slate-500">{{ history.updated_by_name or "-" }} / {{ history.created_at|jst_datetime("%H:%M:%S") }} JST</span>
-          <p class="w-full whitespace-pre-wrap">理由: {{ history.reason or "記録なし（過去の記録・初回確認）" }}</p></li>
+          <li class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
+            data-history-status="{{ history.status.value }}">
+            <span class="font-medium text-slate-700">{{
+              {"present":"出席","private_absent":"私用休み","sick_absent":"病欠","unknown":"不明"}.get(history.previous_status,
+              "未記録") }} → {{ history.status.label }}</span>
+            <span class="text-slate-500">{{ history.updated_by_name or "-" }} / {{
+              history.created_at|jst_datetime("%H:%M:%S") }} JST</span>
+            <p class="w-full whitespace-pre-wrap">理由: {{ history.reason or "記録なし（過去の記録・初回確認）" }}</p>
+          </li>
           {% endfor %}
         </ul>
         {% else %}
@@ -86,20 +120,36 @@
     </div>
     <section class="mt-4 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
       <h3 class="font-semibold text-slate-800">電話・口頭連絡の受付</h3>
-      <p class="text-sm text-slate-600">対象日 {{ target_date_value }}。目視確認と同じ欠席理由の受付がある場合、「保護者連絡なし」のアラームを解消します。打刻などの不一致は別途確認してください。</p>
+      <p class="text-sm text-slate-600">対象日 {{ target_date_value
+        }}。目視確認と同じ欠席理由の受付がある場合、「保護者連絡なし」のアラームを解消します。打刻などの不一致は別途確認してください。</p>
       {% if current_user.can_manage_attendance_checks %}
-      <form method="post" action="/attendance-checks/{{ row.child.id }}/contact-confirmation" class="flex flex-wrap items-end gap-3">
+      <form method="post" action="/attendance-checks/{{ row.child.id }}/contact-confirmation"
+        class="flex flex-wrap items-end gap-3">
         <input type="hidden" name="date" value="{{ target_date_value }}">
-        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter" value="{{ selected_filter }}"><input type="hidden" name="classroom_id" value="{{ selected_classroom_id_value }}">
-        <label class="text-sm">連絡方法<select name="method" required class="block rounded border p-2"><option value="phone">電話</option><option value="in_person">口頭</option></select></label>
-        <label class="text-sm">欠席理由<select name="status" required class="block rounded border p-2"><option value="">選択してください</option><option value="private_absent">私用休み</option><option value="sick_absent">病欠</option></select></label>
-        <label class="min-w-48 flex-1 text-sm">連絡内容<input name="note" required maxlength="1000" placeholder="誰から、どのような連絡を受けたか" class="block w-full rounded border p-2"></label>
+        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
+          value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
+          value="{{ selected_classroom_id_value }}">
+        <label class="text-sm">連絡方法<select name="method" required class="block rounded border p-2">
+            <option value="phone">電話</option>
+            <option value="in_person">口頭</option>
+          </select></label>
+        <label class="text-sm">欠席理由<select name="status" required class="block rounded border p-2">
+            <option value="">選択してください</option>
+            <option value="private_absent">私用休み</option>
+            <option value="sick_absent">病欠</option>
+          </select></label>
+        <label class="min-w-48 flex-1 text-sm">連絡内容<input name="note" required maxlength="1000"
+            placeholder="誰から、どのような連絡を受けたか" class="block w-full rounded border p-2"></label>
         <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-white">連絡受付を記録</button>
       </form>
       {% if row.contact_confirmation %}
-      <form method="post" action="/attendance-checks/{{ row.child.id }}/contact-confirmation" class="flex flex-wrap items-end gap-3">
-        <input type="hidden" name="date" value="{{ target_date_value }}"><input type="hidden" name="action" value="revoked"><input type="hidden" name="confirmation_id" value="{{ row.contact_confirmation.id }}">
-        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter" value="{{ selected_filter }}"><input type="hidden" name="classroom_id" value="{{ selected_classroom_id_value }}">
+      <form method="post" action="/attendance-checks/{{ row.child.id }}/contact-confirmation"
+        class="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="date" value="{{ target_date_value }}"><input type="hidden" name="action"
+          value="revoked"><input type="hidden" name="confirmation_id" value="{{ row.contact_confirmation.id }}">
+        <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
+          value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
+          value="{{ selected_classroom_id_value }}">
         <label class="text-sm">取消理由<input name="note" required maxlength="1000" class="ml-2 rounded border p-2"></label>
         <button type="submit" class="rounded border border-rose-300 px-4 py-2 text-rose-700">受付を取り消す</button>
       </form>
@@ -107,7 +157,9 @@
       {% endif %}
       <ul class="space-y-2 text-sm">
         {% for contact in row.contact_history %}
-        <li class="rounded bg-slate-50 p-3">{{ '受付' if contact.action == 'received' else '取消' }} / {{ '電話' if contact.method == 'phone' else '口頭' }} / {{ contact.status.label }} / {{ contact.recorded_by_name }} / {{ contact.created_at|jst_datetime('%Y-%m-%d %H:%M:%S') }} JST<br>{{ contact.note }}</li>
+        <li class="rounded bg-slate-50 p-3">{{ '受付' if contact.action == 'received' else '取消' }} / {{ '電話' if
+          contact.method == 'phone' else '口頭' }} / {{ contact.status.label }} / {{ contact.recorded_by_name }} / {{
+          contact.created_at|jst_datetime('%Y-%m-%d %H:%M:%S') }} JST<br>{{ contact.note }}</li>
         {% else %}<li class="text-slate-500">受付履歴はありません。</li>{% endfor %}
       </ul>
     </section>

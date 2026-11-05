@@ -6,10 +6,12 @@ from zipfile import ZipFile
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine, select
+
+import uuid as uuid_module
 
 from auth import Role, StaffUser
-from models import AttendanceRecord, Child, ChildStatus, Classroom
+from models import AttendanceRecord, Child, ChildStatus, Classroom, User
 from testing_helpers import authenticate_mock_staff
 import routers.attendance as attendance_module
 
@@ -30,7 +32,24 @@ class AttendanceReportTests(unittest.TestCase):
             with Session(self.engine) as session:
                 yield session
 
-        self.current_user = StaffUser(role=Role.ADMIN, name="園長")
+        self.admin_user_id = uuid_module.UUID("00000000-0000-0000-0000-000000000001")
+        with Session(self.engine) as session:
+            session.add(
+                User(
+                    id=self.admin_user_id,
+                    email="admin@example.test",
+                    display_name="園長",
+                    staff_role="admin",
+                    is_active=True,
+                )
+            )
+            session.add(User(email="staff@example.test", display_name="一般職員", staff_role="can_edit", is_active=True))
+            session.commit()
+        self.current_user = StaffUser(
+            role=Role.ADMIN,
+            name="園長",
+            user_id=self.admin_user_id,
+        )
 
         def override_get_current_staff_user():
             return self.current_user
@@ -274,7 +293,9 @@ class AttendanceReportTests(unittest.TestCase):
             self.app.dependency_overrides[attendance_module.get_current_staff_user] = lambda: self.current_user
 
     def test_non_admin_cannot_export_attendance(self):
-        self.current_user = StaffUser(role=Role.CAN_EDIT, name="一般職員")
+        with Session(self.engine) as session:
+            staff = session.exec(select(User).where(User.email == "staff@example.test")).one()
+            self.current_user = StaffUser(role=Role.CAN_EDIT, name="一般職員", user_id=staff.id)
 
         response = self.client.get("/attendance/export.csv?date=2026-02-15", follow_redirects=False)
 

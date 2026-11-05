@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_can_edit
 from audit_logger import record_audit_event
+from csrf import verify_csrf
 from child_health_service import (
     build_health_attention_labels,
     build_health_check_chart_records,
@@ -421,6 +422,133 @@ def health_summary(
                 "check_created": "健康診断記録を追加しました。",
             }.get(notice or "", ""),
         },
+    )
+
+
+@child_router.get("/medications", response_class=HTMLResponse)
+def medication_list(
+    request: Request,
+    child_id: int,
+    notice: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_can_edit(current_user)
+    child = _load_child(session, child_id)
+    from medication_service import load_medications_for_child_date
+    medications = load_medications_for_child_date(session, child_id, local_today())
+    csrf_token = getattr(request.state, "csrf_token", "")
+    return templates.TemplateResponse(
+        request,
+        "health/medications.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "child": child,
+            "medications": medications,
+            "csrf_token": csrf_token,
+            "today_date": local_today(),
+            "notice": {
+                "administered": "与薬実施を記録しました。第2職員の確認をお願いします。",
+                "confirmed": "与薬を確認しました。",
+                "voided": "与薬記録を無効化しました。",
+                "requested": "与薬依頼を登録しました。",
+            }.get(notice or "", ""),
+        },
+    )
+
+
+@child_router.post("/medications", dependencies=[Depends(verify_csrf)])
+def medication_add(
+    request: Request,
+    child_id: int,
+    medication_name: str = Form(...),
+    administration_time: str = Form(...),
+    dosage: str = Form(""),
+    note: str = Form(""),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_can_edit(current_user)
+    _load_child(session, child_id)
+    from medication_service import request_medication
+
+    record = request_medication(
+        session, child_id=child_id, target_date=local_today(),
+        medication_name=medication_name, administration_time=administration_time,
+        dosage=dosage, note=note,
+    )
+    session.commit()
+    return RedirectResponse(
+        url=f"/children/{child_id}/health/medications?notice=requested&record={record.id}",
+        status_code=303,
+    )
+
+
+@child_router.post("/medications/{medication_id}/administer", dependencies=[Depends(verify_csrf)])
+def medication_administer(
+    request: Request,
+    child_id: int,
+    medication_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_can_edit(current_user)
+    _load_child(session, child_id)
+    from medication_service import administer_medication
+
+    administer_medication(
+        session, medication_id=medication_id,
+        staff_name=current_user.name, staff_user_id=getattr(current_user, "user_id", None),
+    )
+    session.commit()
+    return RedirectResponse(
+        url=f"/children/{child_id}/health/medications?notice=administered", status_code=303,
+    )
+
+
+@child_router.post("/medications/{medication_id}/confirm", dependencies=[Depends(verify_csrf)])
+def medication_confirm(
+    request: Request,
+    child_id: int,
+    medication_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_can_edit(current_user)
+    _load_child(session, child_id)
+    from medication_service import confirm_medication
+
+    confirm_medication(
+        session, medication_id=medication_id,
+        staff_name=current_user.name, staff_user_id=getattr(current_user, "user_id", None),
+    )
+    session.commit()
+    return RedirectResponse(
+        url=f"/children/{child_id}/health/medications?notice=confirmed", status_code=303,
+    )
+
+
+@child_router.post("/medications/{medication_id}/void", dependencies=[Depends(verify_csrf)])
+def medication_void(
+    request: Request,
+    child_id: int,
+    medication_id: int,
+    void_reason: str = Form(...),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_can_edit(current_user)
+    _load_child(session, child_id)
+    from medication_service import void_medication
+
+    void_medication(
+        session, medication_id=medication_id,
+        staff_name=current_user.name, reason=void_reason,
+    )
+    session.commit()
+    return RedirectResponse(
+        url=f"/children/{child_id}/health/medications?notice=voided", status_code=303,
     )
 
 

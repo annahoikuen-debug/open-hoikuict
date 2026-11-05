@@ -117,6 +117,14 @@ def test_private_and_non_provider_endpoints_rejected(endpoint):
 
 @pytest.fixture
 def pilot(monkeypatch, key_settings):
+    # レートリミッタの状態が他テストから持ち越されないようリセットする
+    from routers.parent_auth import (
+        PARENT_LOGIN_RATE_LIMITER_ACCOUNT,
+        PARENT_LOGIN_RATE_LIMITER_IP,
+    )
+
+    PARENT_LOGIN_RATE_LIMITER_IP.reset_all()
+    PARENT_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
     fixture = base_pilot.__wrapped__(monkeypatch)
     context = next(fixture)
     _, engine, ids, _ = context

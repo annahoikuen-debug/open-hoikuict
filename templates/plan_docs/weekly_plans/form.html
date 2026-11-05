@@ -82,6 +82,9 @@
       <label>
         <span>前週の振り返り</span>
         <textarea name="previous_week_reflection" rows="4" placeholder="子どもが深めたこと、環境が働いた場面、次へ残したい問い">{{ form_values.get('previous_week_reflection', '') }}</textarea>
+        {% if form_values.get('previous_week_reflection') %}
+        <p class="field-note" style="font-size:0.8rem;color:#6b7280;margin-top:4px">出所：{{ form_values.get('previous_week_source','前週週案') }}「週の評価・反省」より事前入力。編集・クリアできます。</p>
+        {% endif %}
       </label>
       <label>
         <span>現在の子どもの姿</span>

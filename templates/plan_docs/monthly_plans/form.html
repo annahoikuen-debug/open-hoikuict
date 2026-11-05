@@ -52,7 +52,10 @@
       <h2>今月の入力</h2>
       <label>
         <span>前月の反省</span>
-        <textarea name="previous_reflection" rows="4"></textarea>
+        <textarea name="previous_reflection" rows="4">{{ form_values.get('previous_reflection', '') }}</textarea>
+        {% if form_values.get('previous_reflection') %}
+        <p class="field-note" style="font-size:0.8rem;color:#6b7280;margin-top:4px">出所：{{ form_values.get('previous_month_source','前月月案') }}「月末の振り返り観点」より事前入力。編集・クリアできます。</p>
+        {% endif %}
       </label>
       <label>
         <span>現在の子どもの姿</span>

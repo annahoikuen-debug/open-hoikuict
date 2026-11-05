@@ -47,6 +47,7 @@ from models import (
     ParentEnrollment,
     ParentCredentialProvisioningAudit,
     ParentMailDelivery,
+    ParentMfaPending,
     ParentPushSubscription,
     ParentPushSubscriptionStatus,
     ParentPublicRegistration,
@@ -67,6 +68,9 @@ REGISTRATION_SESSION_TTL = timedelta(minutes=15)
 PARENT_SESSION_IDLE = timedelta(hours=12)
 PARENT_SESSION_ABSOLUTE = timedelta(days=7)
 MAX_VERIFICATION_ATTEMPTS = 5
+PARENT_MFA_CODE_TTL_MINUTES = 5
+PARENT_MFA_CODE_TTL = timedelta(minutes=PARENT_MFA_CODE_TTL_MINUTES)
+PARENT_MFA_MAX_ATTEMPTS = 5
 PARENT_MAIL_LEASE = timedelta(minutes=2)
 PARENT_MAIL_RETRY_BASE = timedelta(seconds=30)
 PARENT_CODE_MAIL_TYPES = ("parent_activate", "parent_reset", "parent_resume")
@@ -1062,6 +1066,8 @@ def _create_parent_auth_session(
     account: ParentAccount,
     credential: PasswordCredential,
     now: datetime | None = None,
+    *,
+    mfa_satisfied_at: datetime | None = None,
 ) -> str:
     created_at = now or utc_now()
     raw = secrets.token_urlsafe(32)
@@ -1073,12 +1079,97 @@ def _create_parent_auth_session(
             credential_id=credential.id,
             parent_account_id=account.id,
             credential_version=credential.credential_version,
+            mfa_satisfied_at=mfa_satisfied_at,
             created_at=created_at,
             last_seen_at=created_at,
             idle_expires_at=min(created_at + PARENT_SESSION_IDLE, absolute),
             absolute_expires_at=absolute,
         )
     )
+    return raw
+
+
+def verify_parent_mfa_code(
+    session: Session,
+    *,
+    pending_reference: str,
+    code: str,
+) -> tuple[ParentAccount, PasswordCredential] | None:
+    """保護者ログインMFAのワンタイムコードを検証し、(account, credential) を返す。
+
+    不正なコード・試行回数超過・期限切れの場合は None を返す。
+    """
+    now = utc_now()
+    pending = session.exec(
+        select(ParentMfaPending).where(
+            ParentMfaPending.pending_reference == pending_reference,
+        )
+    ).first()
+    if pending is None:
+        return None
+    if pending.attempt_count >= PARENT_MFA_MAX_ATTEMPTS:
+        return None
+    if ensure_utc(pending.expires_at) <= now:
+        return None
+
+    if token_hash(code.strip()) != pending.code_hash:
+        pending.attempt_count += 1
+        session.add(pending)
+        session.commit()
+        return None
+
+    credential = session.get(PasswordCredential, pending.credential_id)
+    account = (
+        session.get(ParentAccount, pending.parent_account_id) if credential else None
+    )
+    if (
+        credential is None
+        or credential.principal_type != PRINCIPAL_PARENT
+        or credential.disabled_at is not None
+        or account is None
+        or account.status != ParentAccountStatus.active
+        or credential.credential_version
+        != (
+            session.exec(
+                select(PasswordCredential.credential_version).where(
+                    PasswordCredential.id == pending.credential_id
+                )
+            ).first()
+        )
+    ):
+        return None
+
+    # 使用済みにする
+    session.delete(pending)
+    session.commit()
+    return account, credential
+
+
+def create_parent_session_after_mfa(
+    session: Session,
+    *,
+    account: ParentAccount,
+    credential: PasswordCredential,
+    request: Request | None = None,
+) -> str:
+    """MFA検証後に保護者セッションを発行する（職員の mfa_verified 相当）。"""
+    now = utc_now()
+    raw = _create_parent_auth_session(
+        session, account, credential, now, mfa_satisfied_at=now
+    )
+    account.last_login_at = now
+    account.updated_at = now
+    session.add(account)
+    _event(
+        session,
+        event_type="login",
+        result="success",
+        reason_code="mfa_verified",
+        credential=credential,
+        parent_account_id=account.id,
+        request=request,
+    )
+    session.commit()
     return raw
 
 

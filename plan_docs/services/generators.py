@@ -411,10 +411,7 @@ def generate_monthly_plan(data: dict[str, str], user: StaffUser) -> PlanDocument
         ),
         _section(
             definitions["monthly_reflection_viewpoint"],
-            (
-                "月末には、ねらいに対する子どもの変化、環境の働き、保育者の関わり、家庭連携の手応えを確認する。"
-                " 次月へ残す課題は、具体的な場面とともに記録する。"
-            ),
+            previous_reflection or "月末には、ねらいに対する子どもの変化、環境の働き、保育者の関わり、家庭連携の手応えを確認する。\n次月へ残す課題は、具体的な場面とともに記録する。",
             ["monthly.reflection_viewpoint", "linking.next_month"],
         ),
     ]
@@ -533,10 +530,7 @@ def generate_weekly_plan(data: dict[str, str], user: StaffUser) -> PlanDocument:
         ),
         _section(
             definitions["weekly_reflection_viewpoint"],
-            (
-                "週末には、ねらいに対する子どもの変化、環境の働き、保育者の援助、家庭連携の手応えを振り返る。"
-                " 次週へ残す問いを、具体的な場面とともに記録する。"
-            ),
+            previous_week_reflection or "週末には、ねらいに対する子どもの変化、環境の働き、保育者の援助、家庭連携の手応えを振り返る。\n次週へ残す問いを、具体的な場面とともに記録する。",
             ["weekly.reflection_viewpoint", "linking.next_week"],
         ),
     ]
@@ -698,11 +692,15 @@ def generate_simple_daily_plan(data: dict[str, object], user: StaffUser) -> Plan
     content = clean_text(str(data.get("daily_content") or ""))
     example_id = clean_text(str(data.get("example_id") or ""))
     example_source_ref = clean_text(str(data.get("example_source_ref") or ""))
+    parent_document_id = _to_int(data.get("parent_document_id"))
+    weekly_source_ref = clean_text(str(data.get("weekly_source_ref") or ""))
     base_source_refs = (
         [example_source_ref or f"corpus.{example_id}", "form.daily_simple"]
         if example_id
         else ["form.daily_simple"]
     )
+    if weekly_source_ref:
+        base_source_refs.append(weekly_source_ref)
     raw_rows = data.get("timeline_rows")
     timeline_rows = raw_rows if isinstance(raw_rows, list) else []
     required = [] if timeline_rows else ["1日の流れ"]
@@ -733,6 +731,7 @@ def generate_simple_daily_plan(data: dict[str, object], user: StaffUser) -> Plan
         confirmation_items=required,
         target_date=target_date,
         age_class=age_class or None,
+        parent_document_id=parent_document_id,
     )
     rows: list[ScheduleRow] = []
     for position, raw_row in enumerate(timeline_rows):

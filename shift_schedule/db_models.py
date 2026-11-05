@@ -32,6 +32,24 @@ class ShiftFacilitySettings(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ShiftDutyPatterns(SQLModel, table=True):
+    """園定義勤務パターンマスタ（早番/日勤/遅番/延長/短時間等）。"""
+
+    __tablename__ = "shift_duty_patterns"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    setting_id: int = Field(default=1, foreign_key="shift_facility_settings.id", index=True)
+    name: str = Field(max_length=64)
+    symbol: str = Field(max_length=8)
+    start_time: str = Field(max_length=5)
+    end_time: str = Field(max_length=5)
+    break_minutes: int = Field(default=60)
+    is_opening: bool = Field(default=False)
+    is_closing: bool = Field(default=False)
+    color: Optional[str] = Field(default=None, max_length=16)
+    is_active: bool = Field(default=True)
+
+
 class ShiftFacilityClosedDays(SQLModel, table=True):
     """休園日・祝日。"""
 

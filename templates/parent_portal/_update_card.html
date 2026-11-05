@@ -5,7 +5,17 @@
     <span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">未回答</span>
     {% endif %}
     {% if update.kind == "parent_notification" %}
-    <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">出欠確認</span>
+    {% set notification_kind_labels = {
+      "attendance_confirmation_request": "出欠確認",
+      "fever_notification": "健康",
+      "push_test": "通知テスト",
+      "notice_published": "お知らせ",
+      "survey_published": "アンケート",
+      "closure_notice": "休園のお知らせ",
+      "emergency_notice": "緊急連絡",
+      "punch_correction_notice": "打刻訂正",
+    } %}
+    <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">{{ notification_kind_labels.get(update.notification.kind.value, "お知らせ") }}</span>
     {% if update.is_unread %}<span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">未読</span>{% endif %}
     {% endif %}
     {% if update.is_important %}

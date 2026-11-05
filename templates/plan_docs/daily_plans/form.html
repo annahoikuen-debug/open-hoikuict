@@ -16,6 +16,25 @@
     </section>
   {% endif %}
 
+  {% if weekly_parent_id %}
+  <section class="notice" style="background:#eff6ff;border:1px solid #bfdbfe;">
+    <strong>週案から事前入力しました</strong>
+    <span>「{{ weekly_source_ref }}」の主な活動を1行目の「子どもの様子」に充填しました。時間・援助・配慮は空です。必要に応じて修正・追加してください。</span>
+  </section>
+  {% endif %}
+
+  {% if previous_day_reflection %}
+  <section class="notice" style="background:#e0e7ff;border:1px solid #c7d2fe;">
+    <strong>前日の振り返り（{{ previous_day_date }} / 提出済み）</strong>
+    <span style="display:block;margin-top:4px;white-space:pre-wrap;">{{ previous_day_reflection }}</span>
+    <button type="button" class="button button--secondary" onclick="insertPreviousDayReflection()" style="margin-top:6px">第1行の「子どもの様子」へ挿入</button>
+    <span class="field-note" style="font-size:0.8rem;color:#6b7280;margin-top:4px">出所：日案 {{ previous_day_date }} の振り返り。挿入はクライアント側のみ・送信契約は変わりません。</span>
+  </section>
+  {% endif %}
+  {% if previous_day_reflection %}
+  <div id="previous-day-reflection" style="display:none" data-reflection="{{ previous_day_reflection }}"></div>
+  {% endif %}
+
   <section class="form-panel">
     <h2>匿名化された過去の日案例から選ぶ</h2>
     <p class="field-note">候補DBは読み取り専用です。選択した内容は独立した下書きになるため、その後は自由に書き換えられます。</p>
@@ -94,6 +113,9 @@
   </section>
 
   <form class="form-layout" method="post" action="/plans/daily-plans" id="daily-draft">
+    {% if weekly_parent_id %}
+    <input name="parent_document_id" type="hidden" value="{{ weekly_parent_id }}">
+    {% endif %}
     <input name="example_id" type="hidden" value="{{ form_values.get('example_id', '') }}">
     <input name="example_source_ref" type="hidden" value="{{ form_values.get('example_source_ref', '') }}">
 
@@ -231,6 +253,19 @@
         removeButton.closest(".daily-timeline-row")?.remove();
         if (!body.querySelector(".daily-timeline-row")) addButton.click();
       });
+      const refEl = document.getElementById("previous-day-reflection");
+      if (refEl) {
+        window.insertPreviousDayReflection = () => {
+          const text = refEl.dataset.reflection || "";
+          if (!text) return;
+          const firstChild = body.querySelector(".daily-timeline-row");
+          if (!firstChild) return;
+          const ta = firstChild.querySelector('[name="timeline_children"]');
+          if (!ta) return;
+          ta.value = text;
+          ta.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+      }
     })();
   </script>
 {% endblock %}

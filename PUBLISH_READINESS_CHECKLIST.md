@@ -91,6 +91,6 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
 ---
 
-## 修正適用ファイル
+- `tests/routers/test_billing_zengin.py` - `setUp()` で admin User レコード作成、`user_id` 設定を追加
 
 - `tests/routers/test_billing_zengin.py` - `setUp()` で admin User レコード作成、`user_id` 設定を追加

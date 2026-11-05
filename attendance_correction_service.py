@@ -11,6 +11,7 @@ from models import (
     AttendanceRecord,
     ExtendedCareCharge,
     ExtendedCareChargeStatus,
+    ParentNotificationKind,
 )
 from time_utils import utc_now
 
@@ -100,4 +101,29 @@ def cancel_punch(
         target_date=record.attendance_date,
         record=record,
     )
+    _notify_punch_correction(session, record=record, history=history, actor=actor)
     session.commit()
+
+
+def _notify_punch_correction(
+    session: Session, *, record: AttendanceRecord, history: AttendanceCorrection, actor
+) -> None:
+    """打刻取消を家庭へ通知する（ミュート設定は in_app 配信にのみ影響）。"""
+    from notification_hub import notify_families
+
+    if record.child_id is None or history.id is None:
+        return
+    day = record.attendance_date
+    notify_families(
+        session,
+        kind=ParentNotificationKind.punch_correction_notice,
+        source_type="attendance_correction",
+        source_id=str(history.id),
+        title="打刻訂正のお知らせ",
+        body=(
+            f"{day.month}月{day.day}日の登降園打刻を園で取り消しました。"
+            "ご不明な点は園までお問い合わせください。"
+        ),
+        target_child_ids=[record.child_id],
+        created_by_name=actor.name,
+    )

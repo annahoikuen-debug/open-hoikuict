@@ -79,7 +79,7 @@ def login(session, actor):
     return authenticate_staff(session, login_id="settings", password=PASSWORD, request=request)
 
 
-@pytest.mark.parametrize("role,count", [(Role.ADMIN, 10), (Role.CAN_EDIT, 2), (Role.VIEW_ONLY, 2)])
+@pytest.mark.parametrize("role,count", [(Role.ADMIN, 11), (Role.CAN_EDIT, 2), (Role.VIEW_ONLY, 2)])
 def test_hub_respects_roles_and_opening_does_not_save(setup, role, count):
     app, client, session, actor, principal = setup
     principal.role = role
@@ -97,7 +97,7 @@ def test_hub_respects_roles_and_opening_does_not_save(setup, role, count):
 def test_disabled_parent_registration_link_hidden(setup, monkeypatch):
     monkeypatch.setenv("HOIKUICT_PARENT_AUTH_MODE", "disabled")
     response = setup[1].get("/settings")
-    assert response.text.count('class="settings-item ') == 9
+    assert response.text.count('class="settings-item ') == 10
     assert 'href="/parent-accounts/registration-qr"' not in response.text
 
 
@@ -180,12 +180,15 @@ def test_new_login_uses_policy_for_both_deadlines_and_cookie(setup):
     response = Response()
     set_local_staff_session_cookie(response, result.session_token, max_age=result.cookie_max_age)
     assert "Max-Age=43200" in response.headers.getlist("set-cookie")[0]
-    client.get("/staff/login")
-    response = client.post("/staff/login", data={"login_id": "settings", "password": PASSWORD,
-                          "csrf_token": client.cookies[CSRF_COOKIE_NAME]}, follow_redirects=False)
-    assert response.status_code == 303
+    # 再ログイン（MFA は別テストで検証するため authenticate_staff を直接利用）
+    request = Request({"type": "http", "method": "POST", "path": "/staff/login",
+                       "headers": [], "client": ("127.0.0.1", 1234)})
+    result2 = authenticate_staff(session, login_id="settings", password=PASSWORD, request=request)
+    assert result2.cookie_max_age == 7200
+    response = Response()
+    set_local_staff_session_cookie(response, result2.session_token, max_age=result2.cookie_max_age)
     assert any("Max-Age=7200" in value and LOCAL_STAFF_SESSION_COOKIE in value
-               for value in response.headers.get_list("set-cookie"))
+               for value in response.headers.getlist("set-cookie"))
 
 
 @pytest.mark.parametrize("legacy", [False, True])

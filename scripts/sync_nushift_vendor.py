@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = ROOT / "vendor" / "nushift"
 DEST_SHIFTAI = VENDOR_DIR / "shiftai"
 README_FILE = VENDOR_DIR / "README.md"
+MANIFEST_FILE = VENDOR_DIR / "VENDOR.json"
 TEST_FILE = ROOT / "tests" / "services" / "test_shiftai_vendor.py"
 
 DEFAULT_SOURCE = Path(r"E:\nushift\nushift")
@@ -115,12 +117,30 @@ def sync(source_repo: Path) -> None:
         TEST_FILE.write_text(t_content, encoding="utf-8")
         print(f"Updated {TEST_FILE} with commit {commit_hash}")
 
+    write_manifest(source_repo, commit_hash)
+
     print("Running verification test...")
     res = subprocess.run([sys.executable, "-m", "pytest", str(TEST_FILE)])
     if res.returncode != 0:
         print("Vendor smoke tests failed!", file=sys.stderr)
         sys.exit(res.returncode)
     print("Sync and verification successful!")
+
+
+def write_manifest(source_repo: Path, commit_hash: str) -> None:
+    """VENDOR.json に同期元とファイルハッシュを記録する。"""
+    files = {
+        str(p.relative_to(DEST_SHIFTAI).as_posix()): compute_file_hash(p)
+        for p in sorted(DEST_SHIFTAI.rglob("*.py"))
+        if "__pycache__" not in p.parts
+    }
+    manifest = {
+        "source_repo": str(source_repo),
+        "source_commit": commit_hash,
+        "files": files,
+    }
+    MANIFEST_FILE.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Wrote {MANIFEST_FILE} ({len(files)} files)")
 
 
 def main() -> None:

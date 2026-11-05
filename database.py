@@ -91,6 +91,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("034_paid_leave_tables", _migrate_paid_leave_tables),
         ("035_document_export_permissions", _migrate_document_export_permissions),
         ("036_document_export_history", _migrate_document_export_history),
+        ("037_medication_administrations", _migrate_medication_administrations),
     ]
 
 
@@ -146,9 +147,21 @@ def create_db_and_tables() -> None:
 
 
 def _migrate_facility_settings() -> None:
-    from models import FacilitySettings
+    from models import FacilitySettings, FacilitySettingsHistory
     with engine.begin() as conn:
-        FacilitySettings.metadata.create_all(conn, tables=[FacilitySettings.__table__])
+        FacilitySettings.metadata.create_all(
+            conn, tables=[FacilitySettings.__table__, FacilitySettingsHistory.__table__]
+        )
+    # 追加カラム（updated_by_* / 履歴テーブル）を冪等に追加
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(facility_settings)")}
+        if columns:
+            if "updated_by_user_id" not in columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE facility_settings ADD COLUMN updated_by_user_id CHAR(32) REFERENCES users(id)"
+                )
+            if "updated_by_name" not in columns:
+                conn.exec_driver_sql("ALTER TABLE facility_settings ADD COLUMN updated_by_name VARCHAR")
 
 
 def _migrate_paid_leave_tables() -> None:
@@ -158,6 +171,30 @@ def _migrate_paid_leave_tables() -> None:
             conn,
             tables=[StaffPaidLeave.__table__, StaffPaidLeaveRequest.__table__],
         )
+
+
+def _migrate_medication_administrations() -> None:
+    from models import MedicationAdministration
+    with engine.begin() as conn:
+        MedicationAdministration.metadata.create_all(
+            conn, tables=[MedicationAdministration.__table__],
+        )
+    # 登園判定の施設別基準（改善案8）＋通知種別ミュート（改善案6 後続）
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(facility_settings)")}
+        if columns:
+            for name, kind in {
+                "fever_return_days": "INTEGER DEFAULT 2 NOT NULL",
+                "fever_caution_c": "VARCHAR(4) DEFAULT '37.5'",
+                "fever_review_c": "VARCHAR(4) DEFAULT '38.0'",
+            }.items():
+                if name not in columns:
+                    conn.exec_driver_sql(f"ALTER TABLE facility_settings ADD COLUMN {name} {kind}")
+        pref_columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(parent_push_preferences)")}
+        if pref_columns:
+            for name in ("closure_notice_enabled", "emergency_notice_enabled", "punch_correction_notice_enabled"):
+                if name not in pref_columns:
+                    conn.exec_driver_sql(f"ALTER TABLE parent_push_preferences ADD COLUMN {name} BOOLEAN DEFAULT 1 NOT NULL")
 
 
 def _migrate_observation_sharing_columns() -> None:

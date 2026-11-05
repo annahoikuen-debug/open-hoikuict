@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import secrets
 import time
 from uuid import UUID
 
@@ -16,8 +17,15 @@ from auth import (
     require_local_parent_auth,
     set_local_parent_session_cookie,
 )
+from auth_mail import send_auth_mail
 from database import get_session
-from local_auth import AuthenticationFailed, LoginThrottled, PasswordPolicyError
+from local_auth import (
+    AuthenticationFailed,
+    LoginThrottled,
+    PasswordPolicyError,
+    issue_credential_action_token,
+    revoke_session_token,
+)
 from models import (
     AuthSession,
     Child,
@@ -25,6 +33,7 @@ from models import (
     ParentAccount,
     ParentCredentialProvisioningAudit,
     ParentEnrollment,
+    ParentMfaPending,
     ParentMailDelivery,
     ParentPublicRegistration,
     ParentPublicRegistrationSettings,
@@ -35,11 +44,14 @@ from models import (
 from parent_auth import (
     MAX_VERIFICATION_ATTEMPTS,
     PARENT_LOGIN_FAILURE_MESSAGE,
+    PARENT_MFA_CODE_TTL,
+    PARENT_MFA_CODE_TTL_MINUTES,
     authenticate_parent,
     change_parent_login_id_by_admin,
     change_parent_password,
     complete_parent_action_password,
     complete_parent_registration,
+    create_parent_session_after_mfa,
     exchange_completion_token,
     exchange_invitation_token,
     exchange_parent_action_code,
@@ -49,9 +61,11 @@ from parent_auth import (
     review_parent_registration,
     registration_token_from_input,
     submit_parent_identity,
+    token_hash as parent_auth_token_hash,
+    verify_parent_mfa_code,
 )
 from rate_limiter import RateLimiter
-from security_config import secure_cookie_enabled
+from security_config import parent_login_mfa_enabled, secure_cookie_enabled
 from time_utils import utc_now
 from parent_account_lifecycle import (
     ACTIONS, StaleParentLifecycle, change_parent_lifecycle, parent_lifecycle_state,
@@ -88,6 +102,11 @@ REGISTRATION_STATUS_LABELS = {
 # IP単位・アカウント単位で保護者ログインのレート制限
 PARENT_LOGIN_RATE_LIMITER_IP = RateLimiter(max_requests=10, window_seconds=60)
 PARENT_LOGIN_RATE_LIMITER_ACCOUNT = RateLimiter(max_requests=5, window_seconds=60)
+
+# 保護者ログインMFA（職員ログインのメールOTPと同じ方式）
+PARENT_MFA_PENDING_COOKIE = "hoikuict_parent_mfa_pending"
+PARENT_MFA_SEND_RATE_LIMITER = RateLimiter(max_requests=5, window_seconds=3600)
+PARENT_MFA_VERIFY_RATE_LIMITER = RateLimiter(max_requests=5, window_seconds=300)
 
 
 def _no_store(response):
@@ -222,8 +241,145 @@ def parent_login(
     target = safe_internal_redirect(redirect_to, "/parent-portal/")
     if not target.startswith("/parent-portal/"):
         target = "/parent-portal/"
+
+    if not parent_login_mfa_enabled():
+        response = RedirectResponse(target, status_code=303)
+        set_local_parent_session_cookie(response, result.session_token)
+        return _no_store(response)
+
+    # パスワード検証済み。セッションはまだ発行せず、MFAコードをメール送信する。
+    # authenticate_parent で作成済みのセッションは無効化する。
+    revoke_session_token(session, result.session_token, reason="parent_mfa_started")
+
+    # MFA OTP送信レート制限: アカウント単位で1時間に最大5回
+    mfa_send_key = f"parent_mfa_send:{result.credential.login_id.strip().lower()}"
+    mfa_allowed, mfa_retry_after = PARENT_MFA_SEND_RATE_LIMITER.check(mfa_send_key)
+    if not mfa_allowed:
+        return _render(
+            request,
+            "parent_auth/login.html",
+            {
+                "login_id": login_id,
+                "form_error": "認証コードの送信回数が上限に達しました。しばらくお待ちください。",
+                "password_changed": False,
+                "redirect_to": redirect_to,
+            },
+            429,
+        )
+
+    raw_code = issue_credential_action_token(
+        session,
+        credential=result.credential,
+        action="mfa_verify",
+        expires_in=PARENT_MFA_CODE_TTL,
+    )
+    pending_reference = secrets.token_urlsafe(32)
+    session.add(
+        ParentMfaPending(
+            parent_account_id=result.account.id,
+            credential_id=result.credential.id,
+            pending_reference=pending_reference,
+            code_hash=parent_auth_token_hash(raw_code),
+            expires_at=utc_now() + PARENT_MFA_CODE_TTL,
+        )
+    )
+    session.commit()
+
+    send_auth_mail(
+        recipient=result.account.email,
+        subject="open-hoikuict ログイン認証コード",
+        body=(
+            f"ログイン認証コード: {raw_code}\n"
+            f"このコードは {PARENT_MFA_CODE_TTL_MINUTES} 分間有効です。\n"
+            "ご自身でログインした覚えがない場合は、このメールを無視してください。\n"
+        ),
+    )
+
+    response = RedirectResponse(url="/parent-portal/mfa/verify", status_code=303)
+    response.set_cookie(
+        PARENT_MFA_PENDING_COOKIE,
+        pending_reference,
+        max_age=int(PARENT_MFA_CODE_TTL.total_seconds()),
+        httponly=True,
+        secure=secure_cookie_enabled(),
+        samesite="lax",
+        path="/parent-portal",
+    )
+    return _no_store(response)
+
+
+@router.get("/parent-portal/mfa/verify", response_class=HTMLResponse)
+def parent_mfa_verify_page(request: Request):
+    target = safe_internal_redirect(
+        request.query_params.get("redirect", "/parent-portal/"),
+        "/parent-portal/",
+    )
+    if not target.startswith("/parent-portal/"):
+        target = "/parent-portal/"
+    return _render(
+        request,
+        "parent_auth/mfa_verify.html",
+        {
+            "form_error": "",
+            "redirect_to": target,
+        },
+    )
+
+
+@router.post("/parent-portal/mfa/verify")
+def parent_mfa_verify_submit(
+    request: Request,
+    code: str = Form(""),
+    redirect_to: str = Form("/parent-portal/"),
+    session: Session = Depends(get_session),
+):
+    target = safe_internal_redirect(redirect_to, "/parent-portal/")
+    if not target.startswith("/parent-portal/"):
+        target = "/parent-portal/"
+
+    pending_reference = request.cookies.get(PARENT_MFA_PENDING_COOKIE)
+
+    def _fail(message: str, status_code: int = 400):
+        return _render(
+            request,
+            "parent_auth/mfa_verify.html",
+            {"form_error": message, "redirect_to": target},
+            status_code,
+        )
+
+    # MFA 検証レート制限: pending_referenceクッキー値またはIPベースでキー生成
+    mfa_verify_key = pending_reference or (
+        request.client.host if request.client else "unknown"
+    )
+    allowed, retry_after = PARENT_MFA_VERIFY_RATE_LIMITER.check(mfa_verify_key)
+    if not allowed:
+        response = _fail(
+            "認証試行回数を超えました。しばらく待ってから再度お試しください。", 429
+        )
+        response.headers["Retry-After"] = str(retry_after or 300)
+        return response
+
+    if not pending_reference:
+        return _fail("認証セッションが失効しました。再度ログインしてください。")
+
+    result = verify_parent_mfa_code(
+        session,
+        pending_reference=pending_reference,
+        code=code,
+    )
+    if result is None:
+        return _fail("認証コードが正しくありません。")
+
+    account, credential = result
+    raw_session_token = create_parent_session_after_mfa(
+        session,
+        account=account,
+        credential=credential,
+        request=request,
+    )
     response = RedirectResponse(target, status_code=303)
-    set_local_parent_session_cookie(response, result.session_token)
+    set_local_parent_session_cookie(response, raw_session_token)
+    response.delete_cookie(PARENT_MFA_PENDING_COOKIE, path="/parent-portal")
     return _no_store(response)
 
 

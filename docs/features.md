@@ -29,13 +29,13 @@
 | 通知 | 出欠確認依頼のアプリ内通知、Web Push、任意のメール併用、本人端末へのテスト通知 | [通知ガイド](notifications.md) |
 | キオスク監視 | 専用端末の応答、監視時間・名称設定、管理者ホームの無応答警告 | [端末設定](chromebook-guardian-kiosk.md)・[日常運用](operations.md) |
 
-Web Pushのブラウザー購読、Service Worker、実送信、再試行、表示・クリック報告は実装されています。OSごとの確認は[実機確認手順](parent-push-real-device-test.md)に沿って別途記録します。お知らせ・アンケートなどすべての更新を自動通知する機能はありません。
+Web Pushのブラウザー購読、Service Worker、実送信、再試行、表示・クリック報告は実装されています。OSごとの確認は[実機確認手順](parent-push-real-device-test.md)に沿って別途記録します。お知らせの公開（管理者承認時）と保護者向けアンケートの公開は、[通知イベントハブ](notification_hub.py)経由で対象保護者へアプリ内通知とWeb Pushが自動配信されます。休園・緊急連絡・打刻訂正はハブの汎用関数 `notify_families()` で配信でき、保護者ごとに `ParentPushPreference` で種別ミュートが可能（緊急連絡は force_push でミュートを無視、2026-11-05実装）。
 
 ## 記録・保育計画・職員の情報共有
 
 | 機能 | 現在の範囲 | 制限・後続計画 |
 | --- | --- | --- |
-| 健康管理 | 健康プロフィール、アレルギー、優先管理事項、健診・成長記録 | 感染症・与薬の専用管理などは後続 |
+| 健康管理 | 健康プロフィール、アレルギー、優先管理事項、健診・成長記録。与薬記録（職員画面 `/children/{id}/health/medications`：依頼→実施→第2職員確認の二重確認、無効化のみ訂正可）と登園可能判定（[attendance_eligibility_service](attendance_eligibility_service.py)）は2026-11-05実装。出欠確認画面に判定の参考値を表示。判定基準（解熱後日数・体温しきい値）は[施設設定](facility-settings-spec.md)で変更可能 | 感染症基準の診断名別詳細設定などは後続 |
 | 子どもの記録 | 観察ログ、訂正・無効化、タイムライン、設定の版管理 | 個別指導計画との双方向参照などは後続 |
 | 児童票 | 作成、根拠参照、進捗一覧、保育計画の文書基盤との連携 | 保育要録、送付管理などは後続 |
 | 指導計画 | 年案・月案・週案・日案、文例、版管理、状態変更、日案カレンダー・振り返り | 日案文例は別途コーパスを配置。[サンプルDBの任意導入](daily-plan-sample-db-spec.md)は計画。各仕様に後続フェーズあり |
@@ -54,6 +54,6 @@ Web Pushのブラウザー購読、Service Worker、実送信、再試行、表�
 
 ## 未実装の計画
 
-- [施設設定](facility-settings-spec.md): `FacilitySettings` と `/settings/facility`。
+- [施設設定](facility-settings-spec.md): Phase 1（`FacilitySettings`・`/settings/facility`・変更履歴・キオスクのお迎え上限検証・補食自動判定）は実装済み。補食費の請求明細自動反映などは後続。
 - [職員有給管理](paid-leave-management-spec.md): 有給台帳、申請、承認。
 - [一括データ移行](beta-production-data-migration-spec.md): 移行元ID・マニフェストを使う複数CSV一括検証・一括確定。現在の家庭CSV取り込みとは別の計画。

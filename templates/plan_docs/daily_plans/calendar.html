@@ -10,6 +10,24 @@
     {% if user.can_edit %}
       <a class="button button--primary" href="/plans/daily-plans/new">日案を作成</a>
     {% endif %}
+    {% if created %}
+    <section class="notice" style="background:#dcfce7;border:1px solid #bbf7d0;">
+      <strong>週から日案を作成しました</strong>
+      <span>{{ created }} 日分の下書きを作成しました。</span>
+    </section>
+    {% endif %}
+    {% if skipped %}
+    <section class="notice" style="background:#fffbeb;border:1px solid #fde68a;">
+      <strong>スキップ</strong>
+      <span>{{ skipped }} 日は既に日案が存在するため作成しませんでした。</span>
+    </section>
+    {% endif %}
+    {% if failed %}
+    <section class="notice" style="background:#fef2f2;border:1px solid #fecaca;">
+      <strong>作成失敗</strong>
+      <span>{{ failed }} 日の作成に失敗しました。</span>
+    </section>
+    {% endif %}
   </section>
 
   <section class="form-panel daily-calendar-toolbar no-print">
@@ -79,6 +97,11 @@
                           {% endif %}
                         </a>
                       {% endfor %}
+                      {% if not day.entries and selected_classroom_ref and day.date.isoformat() in weekly_plan_dates %}
+                        <a class="button button--secondary daily-calendar-entry--missing" href="/plans/daily-plans/new?target_date={{ day.date.isoformat() }}&classroom_ref={{ selected_classroom_ref }}&month={{ calendar_month }}">
+                          週案から作成
+                        </a>
+                      {% endif %}
                     </div>
                   {% endif %}
                 </td>

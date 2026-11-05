@@ -19,6 +19,7 @@ from time_utils import local_naive_now, local_today, utc_now
 from pickup_plan_service import pickup_revision, save_pickup_plan
 from guardian_terminal import GuardianRoute, TERMINAL_START, is_terminal, remember_terminal, render_guardian
 from guardian_hours import closing_time, kiosk_is_closed
+from facility_settings_service import auto_snack_required, latest_pickup_time
 from guardian_arrival import issue_arrival_draft, read_arrival_draft
 from kiosk_security import (
     KIOSK_DEVICE_COOKIE,
@@ -110,6 +111,10 @@ def _validate_pickup_inputs(raw_time: str, raw_person: str, session: Session) ->
     if not pickup_person:
         raise HTTPException(status_code=400, detail="お迎え予定者を入力してください")
 
+    # 施設設定のお迎え最終時刻を上限として検証する
+    latest = latest_pickup_time(session)
+    if planned_pickup_time >= latest:
+        raise HTTPException(400, f"お迎え予定時刻は {latest} より前に選んでください。")
     if planned_pickup_time >= closing_time(session):
         raise HTTPException(400, f"閉園時刻（{closing_time(session)}）より前のお迎え予定時刻を選んでください。")
     return planned_pickup_time, pickup_person
@@ -362,6 +367,9 @@ def guardian_pickup_commit(
             raise HTTPException(409, "すでに打刻されています。最初の画面から確認してください。")
         if snack_required not in {"0", "1"}:
             raise HTTPException(400, "補食の必要・不要を選んでください。")
+    # 補食が未選択の場合、施設設定の補食判定時刻から自動判定する
+    if snack_required not in {"0", "1"}:
+        snack_required = "1" if auto_snack_required(session, normalized_time or "") else "0"
     record = save_pickup_plan(session, child_id=child_id, day=day, revision=revision,
         planned_pickup_time=normalized_time, pickup_person=normalized_person,
         snack_required=_is_truthy(snack_required), actor_name="保護者（KIOSK）", source="kiosk")

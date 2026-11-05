@@ -2,11 +2,12 @@
 
 既存の ShiftPlanCells （指定セル・ピン留めセル）を shiftai.solver が受け付ける
 fixed_assignments 辞書 ((staff_id, target_date, slot_label) -> CellState) に正規化・変換する。
+園定義勤務パターン（ShiftDutyPatterns）の動的解決に対応。
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -14,7 +15,7 @@ from uuid import UUID
 from shiftai.domain import CellState
 
 if TYPE_CHECKING:
-    from ..db_models import ShiftFacilitySettings, ShiftPlanCells
+    from ..db_models import ShiftDutyPatterns, ShiftFacilitySettings, ShiftPlanCells
 
 
 def normalize_staff_id(raw_id: str | int | UUID) -> str:
@@ -26,11 +27,16 @@ def normalize_staff_id(raw_id: str | int | UUID) -> str:
         return sid_str
 
 
-def resolve_slot_to_time_window(slot_label: str, settings: ShiftFacilitySettings | None = None) -> list[str]:
-    """スロットラベル（区分名または "HH:MM-HH:MM"）を時間帯ラベルのリストに解決する。
+def resolve_slot_to_time_window(
+    slot_label: str,
+    settings: ShiftFacilitySettings | None = None,
+    duty_patterns: Sequence[ShiftDutyPatterns] | None = None,
+) -> list[str]:
+    """スロットラベル（区分名・記号または "HH:MM-HH:MM"）を時間帯ラベルのリストに解決する。
 
-    すでに "HH:MM-HH:MM" 形式ならそのまま返す。
-    "EARLY" / "NORMAL" / "LATE" などの区分名の場合は施設設定の開閉所時間および一般的な標準時間帯に展開する。
+    1. すでに "HH:MM-HH:MM" 形式ならそのまま返す。
+    2. 園定義勤務パターン（ShiftDutyPatterns）の名前や記号に一致する場合はその開始〜終了に展開。
+    3. 後方互換性として "EARLY" / "NORMAL" / "LATE" も解決。
     """
     cleaned = (slot_label or "").strip()
     if not cleaned:
@@ -39,29 +45,30 @@ def resolve_slot_to_time_window(slot_label: str, settings: ShiftFacilitySettings
         return [cleaned]
 
     upper = cleaned.upper()
-    # 区分名マッピング（U2推奨案: 区分名も許可しソルバー直前で展開）
-    # 粒度30分換算の標準的な区分時間帯（例）
-    if upper == "EARLY":
-        # 施設開所 07:00〜09:00 想定
-        open_time = getattr(settings, "day_open", "07:00") if settings else "07:00"
-        return [f"{open_time}-09:00"]
-    if upper == "NORMAL":
-        return ["09:00-17:00"]
-    if upper == "LATE":
-        close_time = getattr(settings, "day_close", "19:00") if settings else "19:00"
-        return [f"17:00-{close_time}"]
-    if upper == "OFF":
-        # 公休の場合は特定スロットではなく全スロットOFFとして扱えるが、ラベルとしては空
+    if upper in ("OFF", "休", "公休", "休暇"):
         return []
+
+    # 1. 園定義勤務パターンとの照合
+    if duty_patterns:
+        for dp in duty_patterns:
+            if cleaned == dp.name or cleaned == dp.symbol or upper == dp.name.upper():
+                return [f"{dp.start_time}-{dp.end_time}"]
+
+    # 2. 既定区分名マッピング（後方互換）
+    if upper == "EARLY":
+        open_time = getattr(settings, "day_open", "07:30") if settings else "07:30"
+        return [f"{open_time}-16:30"]
+    if upper == "NORMAL":
+        return ["08:30-17:30"]
+    if upper == "LATE":
+        close_time = getattr(settings, "day_close", "19:30") if settings else "19:30"
+        return [f"10:30-{close_time}"]
 
     return [cleaned]
 
 
 def parse_cell_state_value(state_val: str | None) -> CellState:
-    """cell_state（'pinned', 'WORK', 'BREAK', 'OFF' など）を CellState 列挙型にマッピングする。
-
-    U1推奨案: 既存の 'pinned' または 'specified' は WORK（勤務）とみなす。
-    """
+    """cell_state（'pinned', 'WORK', 'BREAK', 'OFF' など）を CellState 列挙型にマッピングする。"""
     if not state_val:
         return CellState.WORK
     val_upper = state_val.strip().upper()
@@ -69,7 +76,7 @@ def parse_cell_state_value(state_val: str | None) -> CellState:
         return CellState.WORK
     if val_upper in ("BREAK", "休憩"):
         return CellState.BREAK
-    if val_upper in ("OFF", "公休", "オフ"):
+    if val_upper in ("OFF", "公休", "オフ", "休"):
         return CellState.OFF
     return CellState.WORK
 
@@ -77,6 +84,7 @@ def parse_cell_state_value(state_val: str | None) -> CellState:
 def build_fixed_assignments(
     cells: Iterable[ShiftPlanCells],
     settings: ShiftFacilitySettings | None = None,
+    duty_patterns: Sequence[ShiftDutyPatterns] | None = None,
 ) -> dict[tuple[str, date, str], CellState]:
     """ShiftPlanCells リストからソルバー用の fixed_assignments マッピングを構築する。
 
@@ -93,7 +101,7 @@ def build_fixed_assignments(
         d = cell.target_date
         state = parse_cell_state_value(getattr(cell, "cell_state", "WORK"))
 
-        slot_labels = resolve_slot_to_time_window(cell.slot_label, settings)
+        slot_labels = resolve_slot_to_time_window(cell.slot_label, settings, duty_patterns=duty_patterns)
         for sl in slot_labels:
             fixed[(sid, d, sl)] = state
 

@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 import re
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from sqlmodel import select
 
 from ..auth_adapter import CurrentUser, require_can_edit, require_classroom_access
 from ..auth_adapter import DEFAULT_CLASSROOM_REFS
 from ..contracts import AGE_CLASS_OPTIONS, DocumentStatus, DocumentType
+from ..db_models import PlanDocumentRow
+from ..services.continuity import iso_week_monday, previous_business_day, previous_month
 from ..services.generators import (
     generate_annual_plan,
     generate_monthly_plan,
@@ -216,6 +219,31 @@ def daily_plan_calendar(
         if any(day["in_month"] for day in days):
             weeks.append(days)
 
+    # 週案保有週の日付を集約（未作成セルに「週案から作成」を表示するため）。
+    weekly_plan_dates: set[str] = set()
+    if selected_classroom_ref:
+        month_first = date(selected_year, selected_month, 1)
+        if selected_month == 12:
+            month_last = date(selected_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            month_last = date(selected_year, selected_month + 1, 1) - timedelta(days=1)
+        weekly_rows = repository.session.exec(select(PlanDocumentRow).where(
+            PlanDocumentRow.document_type == DocumentType.WEEKLY_PLAN.value,
+            PlanDocumentRow.nursery_ref == user.nursery_ref,
+            PlanDocumentRow.classroom_ref == selected_classroom_ref,
+        )).all()
+        for w in weekly_rows:
+            if w.status == DocumentStatus.ARCHIVED.value or not w.week_start_date:
+                continue
+            try:
+                ws = date.fromisoformat(w.week_start_date)
+            except ValueError:
+                continue
+            for offset in range(5):
+                d = ws + timedelta(days=offset)
+                if month_first <= d <= month_last:
+                    weekly_plan_dates.add(d.isoformat())
+
     previous_year, previous_month = _adjacent_month(selected_year, selected_month, -1)
     next_year, next_month = _adjacent_month(selected_year, selected_month, 1)
     classroom_query = (
@@ -233,6 +261,7 @@ def daily_plan_calendar(
         weekday_labels=("月", "火", "水", "木", "金"),
         classroom_refs=accessible_classrooms,
         selected_classroom_ref=selected_classroom_ref,
+        weekly_plan_dates=weekly_plan_dates,
         previous_month_url=(
             f"/plans/daily-plans/?year={previous_year}&month={previous_month}{classroom_query}"
         ),
@@ -304,13 +333,56 @@ def create_annual_plan(
 
 
 @router.get("/monthly-plans/new")
-def new_monthly_plan(request: Request, user: CurrentUser, repository: DocumentRepositoryDep):
+def new_monthly_plan(
+    request: Request,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+    target_month: str = "",
+    classroom_ref: str = "",
+):
+    default_classroom_ref = (
+        classroom_ref
+        if classroom_ref in user.classroom_refs
+        else (user.classroom_refs[0] if user.classroom_refs else DEFAULT_CLASSROOM_REFS[0])
+    )
+    previous_reflection = ""
+    previous_month_source = ""
+    if target_month:
+        try:
+            prev = previous_month(target_month)
+        except ValueError:
+            prev = None
+        if prev:
+            monthly_rows = repository.session.exec(select(PlanDocumentRow).where(
+                PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN.value,
+                PlanDocumentRow.nursery_ref == user.nursery_ref,
+                PlanDocumentRow.classroom_ref == default_classroom_ref,
+                PlanDocumentRow.target_month == prev,
+            )).all()
+            prev_monthly_doc = None
+            for candidate in monthly_rows:
+                if candidate.status != DocumentStatus.ARCHIVED.value and candidate.sections:
+                    prev_monthly_doc = candidate
+                    break
+            if prev_monthly_doc:
+                for section in prev_monthly_doc.sections:
+                    if section.get("section_key") == "monthly_reflection_viewpoint":
+                        previous_reflection = section.get("body", "") or ""
+                        previous_month_source = prev_monthly_doc.title or prev
+                        break
+    form_values = {
+        "target_month": target_month,
+        "classroom_ref": default_classroom_ref,
+        "previous_reflection": previous_reflection,
+        "previous_month_source": previous_month_source,
+    }
     return render_template(
         request,
         "monthly_plans/form.html",
         user=user,
         annual_documents=_annual_documents_for_user(user, repository),
-        default_classroom_ref=user.classroom_refs[0] if user.classroom_refs else DEFAULT_CLASSROOM_REFS[0],
+        default_classroom_ref=default_classroom_ref,
+        form_values=form_values,
     )
 
 
@@ -356,8 +428,51 @@ def create_monthly_plan(
 
 
 @router.get("/weekly-plans/new")
-def new_weekly_plan(request: Request, user: CurrentUser, repository: DocumentRepositoryDep):
-    default_classroom_ref = user.classroom_refs[0] if user.classroom_refs else DEFAULT_CLASSROOM_REFS[0]
+def new_weekly_plan(
+    request: Request,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+    target_week: str = "",
+    classroom_ref: str = "",
+):
+    default_classroom_ref = (
+        classroom_ref
+        if classroom_ref in user.classroom_refs
+        else (user.classroom_refs[0] if user.classroom_refs else DEFAULT_CLASSROOM_REFS[0])
+    )
+    previous_week_reflection = ""
+    previous_week_source = ""
+    if target_week:
+        try:
+            week_start = week_start_date_from_target_week(target_week)
+        except ValueError:
+            week_start = None
+        if week_start:
+            prev_monday = week_start - timedelta(weeks=1)
+            prev_week_start = prev_monday.isoformat()
+            weekly_rows = repository.session.exec(select(PlanDocumentRow).where(
+                PlanDocumentRow.document_type == DocumentType.WEEKLY_PLAN.value,
+                PlanDocumentRow.nursery_ref == user.nursery_ref,
+                PlanDocumentRow.classroom_ref == default_classroom_ref,
+                PlanDocumentRow.week_start_date == prev_week_start,
+            )).all()
+            prev_weekly_doc = None
+            for candidate in weekly_rows:
+                if candidate.status != DocumentStatus.ARCHIVED.value and candidate.sections:
+                    prev_weekly_doc = candidate
+                    break
+            if prev_weekly_doc:
+                for section in prev_weekly_doc.sections:
+                    if section.get("section_key") == "weekly_reflection_viewpoint":
+                        previous_week_reflection = section.get("body", "") or ""
+                        previous_week_source = prev_weekly_doc.title or prev_weekly_doc.week_start_date or ""
+                        break
+    form_values = {
+        "target_week": target_week,
+        "classroom_ref": default_classroom_ref,
+        "previous_week_reflection": previous_week_reflection,
+        "previous_week_source": previous_week_source,
+    }
     return render_template(
         request,
         "weekly_plans/form.html",
@@ -366,7 +481,7 @@ def new_weekly_plan(request: Request, user: CurrentUser, repository: DocumentRep
         age_class_options=AGE_CLASS_OPTIONS,
         monthly_documents=_monthly_documents_for_user(user, repository, classroom_ref=default_classroom_ref),
         errors=[],
-        form_values={},
+        form_values=form_values,
     )
 
 
@@ -484,6 +599,74 @@ def new_daily_plan(
         if age_class in AGE_CLASS_OPTIONS
         else _age_class_from_classroom_ref(default_classroom_ref)
     )
+    weekly_prefill_rows: list[dict[str, str]] = []
+    weekly_parent_id: int | None = None
+    weekly_source_ref: str | None = None
+    if target_date and classroom_ref:
+        try:
+            target_d = date.fromisoformat(target_date)
+        except ValueError:
+            target_d = None
+        if target_d and 0 <= target_d.weekday() <= 4:
+            monday = iso_week_monday(target_d)
+            weekday_key = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][target_d.weekday()]
+            weekly_rows = repository.session.exec(select(PlanDocumentRow).where(
+                PlanDocumentRow.document_type == DocumentType.WEEKLY_PLAN.value,
+                PlanDocumentRow.nursery_ref == user.nursery_ref,
+                PlanDocumentRow.classroom_ref == classroom_ref,
+                PlanDocumentRow.week_start_date == monday.isoformat(),
+            )).all()
+            weekly_doc = None
+            for candidate in weekly_rows:
+                if candidate.status != DocumentStatus.ARCHIVED.value and candidate.schedule:
+                    weekly_doc = candidate
+                    break
+            if weekly_doc and weekly_doc.schedule:
+                for row in weekly_doc.schedule.get("rows", []):
+                    if row.get("row_key") != weekday_key:
+                        continue
+                    cells = row.get("cells", {})
+                    activity = (cells.get("activity") or {}).get("body", "") if isinstance(cells.get("activity"), dict) else ""
+                    support = (cells.get("support") or {}).get("body", "") if isinstance(cells.get("support"), dict) else ""
+                    if activity or support:
+                        weekly_parent_id = int(weekly_doc.id or 0)
+                        weekly_source_ref = f"weekly.document:{weekly_doc.id}"
+                        weekly_prefill_rows = [{
+                            "row_key": "row_1",
+                            "time_label": "",
+                            "activity_name": activity,
+                            "child_state": "",
+                            "support": support,
+                            "considerations": "",
+                        }]
+                        break
+    previous_day_reflection = ""
+    previous_day_date = ""
+    if target_date and classroom_ref:
+        try:
+            target_d = date.fromisoformat(target_date)
+        except ValueError:
+            target_d = None
+        if target_d:
+            prev_business = previous_business_day(target_d)
+            prev_daily_rows = repository.session.exec(select(PlanDocumentRow).where(
+                PlanDocumentRow.document_type == DocumentType.DAILY_PLAN.value,
+                PlanDocumentRow.nursery_ref == user.nursery_ref,
+                PlanDocumentRow.classroom_ref == classroom_ref,
+                PlanDocumentRow.target_date == prev_business.isoformat(),
+            )).all()
+            prev_daily_doc = None
+            for candidate in prev_daily_rows:
+                if candidate.status != DocumentStatus.ARCHIVED.value:
+                    prev_daily_doc = candidate
+                    break
+            if prev_daily_doc:
+                refl_map = reflections_by_document_id(repository.session, [int(prev_daily_doc.id or 0)])
+                refl_rows = list(refl_map.values())
+                submitted = [r for r in refl_rows if r.status == "submitted"]
+                if submitted:
+                    previous_day_reflection = submitted[0].body or ""
+                    previous_day_date = prev_business.isoformat()
     selected_example = None
     examples = []
     corpus_info: dict[str, str] = {}
@@ -522,7 +705,7 @@ def new_daily_plan(
             for block in selected_example.activity_blocks
         ]
         if selected_example
-        else [
+        else weekly_prefill_rows or [
             {
                 "row_key": "row_1",
                 "time_label": "",
@@ -533,6 +716,10 @@ def new_daily_plan(
             }
         ],
     }
+    values["weekly_parent_id"] = weekly_parent_id
+    values["weekly_source_ref"] = weekly_source_ref
+    values["previous_day_reflection"] = previous_day_reflection
+    values["previous_day_date"] = previous_day_date
     return render_template(
         request,
         "daily_plans/form.html",
@@ -547,6 +734,10 @@ def new_daily_plan(
         search_query=q,
         corpus_info=corpus_info,
         corpus_error=corpus_error,
+        weekly_parent_id=weekly_parent_id,
+        weekly_source_ref=weekly_source_ref,
+        previous_day_reflection=previous_day_reflection,
+        previous_day_date=previous_day_date,
     )
 
 
@@ -569,6 +760,7 @@ def create_daily_plan(
     timeline_considerations: Annotated[list[str], Form()] = [],
     example_id: Annotated[str, Form()] = "",
     example_source_ref: Annotated[str, Form()] = "",
+    parent_document_id: Annotated[str, Form()] = "",
 ):
     require_can_edit(user, request)
     selected_classroom_ref = classroom_ref or (user.classroom_refs[0] if user.classroom_refs else DEFAULT_CLASSROOM_REFS[0])
@@ -584,6 +776,40 @@ def create_daily_plan(
             errors.append("対象日を正しい形式で選択してください。")
     if not age_class:
         errors.append("年齢を選択してください。")
+    resolved_parent_id: int | None = None
+    weekly_source_ref: str | None = None
+    if parent_document_id:
+        try:
+            candidate_id = int(parent_document_id)
+        except ValueError:
+            candidate_id = None
+        if candidate_id is None:
+            errors.append("週案の指定が不正です。")
+        else:
+            weekly_doc = repository.session.get(PlanDocumentRow, candidate_id)
+            if (
+                weekly_doc is None
+                or weekly_doc.document_type != DocumentType.WEEKLY_PLAN.value
+                or weekly_doc.nursery_ref != user.nursery_ref
+                or weekly_doc.classroom_ref != selected_classroom_ref
+                or weekly_doc.status == DocumentStatus.ARCHIVED.value
+                or not weekly_doc.schedule
+            ):
+                errors.append("週案が見つかりません。")
+            else:
+                try:
+                    target_d = date.fromisoformat(target_date)
+                except ValueError:
+                    target_d = None
+                if target_d is None:
+                    errors.append("対象日を正しい形式で選択してください。")
+                else:
+                    monday = iso_week_monday(target_d)
+                    if weekly_doc.week_start_date != monday.isoformat():
+                        errors.append("週案の対象週と日案の対象日が一致しません。")
+                    else:
+                        resolved_parent_id = candidate_id
+                        weekly_source_ref = f"weekly.document:{candidate_id}"
     row_count = max(
         len(timeline_row_key),
         len(timeline_time),
@@ -623,6 +849,8 @@ def create_daily_plan(
         daily_content=daily_content,
         example_id=selected_example.id if selected_example else "",
         example_source_ref=(selected_example.source_ref if selected_example else example_source_ref),
+        parent_document_id=str(resolved_parent_id) if resolved_parent_id is not None else "",
+        weekly_source_ref=weekly_source_ref or "",
     )
     values["timeline_rows"] = timeline_rows or [
         {
@@ -654,8 +882,97 @@ def create_daily_plan(
         {
             **values,
             "class_name": selected_class_name,
+            "parent_document_id": str(resolved_parent_id) if resolved_parent_id is not None else "",
+            "weekly_source_ref": weekly_source_ref or "",
         },
         user,
     )
     created = repository.create(document)
     return RedirectResponse(url=f"/plans/documents/{created.id}", status_code=303)
+
+
+@router.post("/daily-plans/bulk-from-weekly")
+def bulk_daily_from_weekly(
+    request: Request,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+    target_week: Annotated[str, Form()] = "",
+    classroom_ref: Annotated[str, Form()] = "",
+):
+    """週案グリッドから、その週の日案を下書き一括作成する。"""
+    require_can_edit(user, request)
+    require_classroom_access(user, classroom_ref)
+    if not target_week:
+        raise HTTPException(status_code=400, detail="対象週を指定してください。")
+    try:
+        week_start = week_start_date_from_target_week(target_week)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="対象週の形式が不正です。")
+
+    weekly_rows = repository.session.exec(select(PlanDocumentRow).where(
+        PlanDocumentRow.document_type == DocumentType.WEEKLY_PLAN.value,
+        PlanDocumentRow.nursery_ref == user.nursery_ref,
+        PlanDocumentRow.classroom_ref == classroom_ref,
+        PlanDocumentRow.week_start_date == week_start.isoformat(),
+    )).all()
+    weekly_doc = None
+    for candidate in weekly_rows:
+        if candidate.status != DocumentStatus.ARCHIVED.value and candidate.schedule:
+            weekly_doc = candidate
+            break
+    if weekly_doc is None:
+        raise HTTPException(status_code=404, detail="週案が見つかりません。")
+
+    offset_map = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+    weekly_parent_id = str(int(weekly_doc.id or 0))
+    weekly_source_ref = f"weekly.document:{weekly_doc.id}"
+    age_class = weekly_doc.age_class or ""
+    created = 0
+    skipped = 0
+    failed = 0
+    for row in weekly_doc.schedule.get("rows", []):
+        row_key = row.get("row_key", "")
+        offset = offset_map.get(row_key)
+        if offset is None:
+            continue
+        target_d = week_start + timedelta(days=offset)
+        existing = repository.session.exec(select(PlanDocumentRow).where(
+            PlanDocumentRow.document_type == DocumentType.DAILY_PLAN.value,
+            PlanDocumentRow.nursery_ref == user.nursery_ref,
+            PlanDocumentRow.classroom_ref == classroom_ref,
+            PlanDocumentRow.target_date == target_d.isoformat(),
+        )).first()
+        if existing is not None:
+            skipped += 1
+            continue
+        cells = row.get("cells", {})
+        activity_cell = cells.get("activity")
+        support_cell = cells.get("support")
+        activity = activity_cell.get("body", "") if isinstance(activity_cell, dict) else ""
+        support = support_cell.get("body", "") if isinstance(support_cell, dict) else ""
+        timeline_rows = [{
+            "row_key": f"row_{row_key}",
+            "time_label": "",
+            "activity_name": activity,
+            "child_state": "",
+            "support": support,
+            "considerations": "",
+        }]
+        try:
+            document = generate_simple_daily_plan({
+                "target_date": target_d.isoformat(),
+                "classroom_ref": classroom_ref,
+                "age_class": age_class,
+                "owner_name": user.name,
+                "timeline_rows": timeline_rows,
+                "parent_document_id": weekly_parent_id,
+                "weekly_source_ref": weekly_source_ref,
+                "class_name": weekly_doc.classroom_ref,
+            }, user)
+            repository.create(document)
+            created += 1
+        except Exception:
+            repository.session.rollback()
+            failed += 1
+    query = urlencode({"created": created, "skipped": skipped, "failed": failed})
+    return RedirectResponse(url=f"/plans/daily-plans/?{query}", status_code=303)

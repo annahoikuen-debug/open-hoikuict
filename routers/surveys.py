@@ -494,6 +494,8 @@ def create_survey(
     session.flush()
     replace_survey_target(session, survey, normalized_target_type, target_value)
     replace_survey_questions(session, survey, question_specs)
+    _maybe_notify_survey_published(session, survey, normalized_audience,
+                                   normalized_status, actor_name=current_user.name)
     session.commit()
     return RedirectResponse(url="/surveys/", status_code=303)
 
@@ -574,8 +576,37 @@ def update_survey(
     survey.updated_by = current_user.name
     survey.updated_at = utc_now()
     session.add(survey)
+    _maybe_notify_survey_published(session, survey, survey.audience_type,
+                                   normalized_status, actor_name=current_user.name)
     session.commit()
     return RedirectResponse(url="/surveys/", status_code=303)
+
+
+def _maybe_notify_survey_published(session, survey, audience_type, new_status, *, actor_name):
+    """保護者向けアンケートが新たに公開されたときだけ通知する（改善案6）。"""
+    from models import SurveyAudienceType, SurveyStatus, SurveyTarget, SurveyTargetType
+    from notification_hub import notify_survey_published
+
+    if audience_type != SurveyAudienceType.parent or new_status != SurveyStatus.published:
+        return
+    child_ids: list[int] = []
+    classroom_ids: list[int] = []
+    for target in session.exec(
+        select(SurveyTarget).where(SurveyTarget.survey_id == survey.id)
+    ).all():
+        if target.target_type == SurveyTargetType.child and str(target.target_value or "").isdigit():
+            child_ids.append(int(target.target_value))
+        elif target.target_type == SurveyTargetType.classroom and str(target.target_value or "").isdigit():
+            classroom_ids.append(int(target.target_value))
+    notify_survey_published(
+        session,
+        survey_id=survey.id,
+        title=survey.title,
+        closes_at=survey.closes_at,
+        audience_child_ids=child_ids,
+        audience_classroom_ids=classroom_ids,
+        created_by_name=actor_name,
+    )
 
 
 @router.get("/{survey_id}/answers.csv")

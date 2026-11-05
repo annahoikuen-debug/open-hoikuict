@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from database import create_db_and_tables
+from version import __version__
 from routers.children import router as children_router
 
-app = FastAPI(title="open-hoikuict", version="0.1.0")
+app = FastAPI(title="open-hoikuict", version=__version__)
 app.include_router(children_router)
 
 

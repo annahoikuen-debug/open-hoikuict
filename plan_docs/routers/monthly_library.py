@@ -21,6 +21,7 @@ from ..services.monthly_library import (
     field_definitions, month_date, new_sheet, previous_months, search_phrases,
     validated_fields,
 )
+from ..services.continuity import common_field_keys_for_template, monthly_sheet_key, previous_month
 from ..store import ConcurrentUpdateError, DocumentRepositoryDep
 from ..services.monthly_ai import GenerateInput, availability, generate
 from ..services.monthly_export import ExportInput, export_context, render_export
@@ -66,6 +67,16 @@ def _scope(user, repository, classroom_id, target_month, age, document_id=None):
 
 def _context(user, repository, classroom_id, target_month, age, document_id=None):
     classroom, document, sheet = _scope(user, repository, classroom_id, target_month, age, document_id)
+    prev = previous_month(target_month)
+    carry_over = None
+    if document is None and document_id is None:
+        prev_key = monthly_sheet_key(user.nursery_ref, classroom_id, prev, age)
+        prev_exists = bool(repository.session.exec(select(PlanDocumentRow).where(
+            PlanDocumentRow.monthly_sheet_key == prev_key,
+            PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN.value,
+        )).first())
+        if prev_exists:
+            carry_over = {"available": True, "from_month": prev}
     return {"document_id": document.id if document else None,
             "lock_version": repository.lock_version(document.id) if document else 0,
             "classroom_id": classroom.id, "classroom_name": classroom.name,
@@ -76,7 +87,8 @@ def _context(user, repository, classroom_id, target_month, age, document_id=None
             "definitions": field_definitions(sheet, target_month),
             "ai": availability(user.nursery_ref),
             "template": TEMPLATES[min(age, 3)],
-            "personal": PERSONAL, "columns": COLUMNS, "domains": DOMAINS}
+            "personal": PERSONAL, "columns": COLUMNS, "domains": DOMAINS,
+            "carry_over": carry_over}
 
 
 @router.get("")
@@ -204,6 +216,79 @@ def save(payload: SaveInput, request: Request, user: CurrentUser, repository: Do
         repository.session.rollback()
         raise HTTPException(409, "他の職員の保存と競合しました。入力内容を保持しています。別画面で最新版を確認してください") from exc
     return _context(user, repository, payload.classroom_id, payload.target_month, payload.age, document.id)
+
+
+@router.post("/carry-over")
+def carry_over(request: Request, user: CurrentUser, repository: DocumentRepositoryDep,
+               classroom_id: int = Form(...), target_month: str = Form(...),
+               age: int = Form(...)):
+    """前月の保存済み月案から下書きを作成して引き継ぐ。"""
+    require_can_edit(user, request)
+    month_date(target_month)
+    if age not in range(6):
+        raise HTTPException(422, "年齢クラスは0〜5歳で指定してください")
+    classroom = repository.session.get(Classroom, classroom_id)
+    if classroom is None:
+        raise HTTPException(404, "クラスが見つかりません")
+    require_classroom_access(user, classroom.name)
+
+    # 対象月の文書が既に存在すれば競合（既存文書を上書きしない）。
+    target_key = monthly_sheet_key(user.nursery_ref, classroom_id, target_month, age)
+    existing = repository.session.exec(select(PlanDocumentRow).where(
+        PlanDocumentRow.monthly_sheet_key == target_key)).first()
+    if existing is not None:
+        raise HTTPException(409, "対象月の文書が既に存在します。別の月を選択してください")
+
+    # 引き継ぎ元：直前月の同クラス保存済み月案（最新・非アーカイブ）。
+    prev = previous_month(target_month)
+    prev_docs = repository.session.exec(select(PlanDocumentRow).where(
+        PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN.value,
+        PlanDocumentRow.nursery_ref == user.nursery_ref,
+        PlanDocumentRow.classroom_ref == classroom.name,
+        PlanDocumentRow.target_month == prev,
+    )).all()
+    prev_doc = None
+    for candidate in prev_docs:
+        if candidate.monthly_sheet and candidate.status != DocumentStatus.ARCHIVED.value:
+            prev_doc = candidate
+            break
+    if prev_doc is None or not prev_doc.monthly_sheet:
+        raise HTTPException(404, "引き継ぎ元の保存済み月案が見つかりません")
+
+    prev_sheet = deepcopy(prev_doc.monthly_sheet)
+    prev_age = int(prev_doc.monthly_sheet.get("age", age) or age)
+    cross_template = prev_age != age
+
+    sheet = new_sheet(repository.session, classroom, target_month, age)
+    if cross_template:
+        # 年齢跨ぎ：共通欄のみコピー。
+        common = common_field_keys_for_template(age)
+        source_fields = {k: v for k, v in prev_sheet.get("fields", {}).items() if k in common}
+    else:
+        source_fields = prev_sheet.get("fields", {})
+
+    for key, cell in source_fields.items():
+        sheet["fields"][key] = {
+            "body": cell.get("body", ""),
+            "origins": cell.get("origins", []),
+            "carried_from": prev,
+        }
+
+    target = month_date(target_month)
+    title = f"{target_month} 月案（{classroom.name}・{age}歳児）"
+    try:
+        document = repository.create(PlanDocument(
+            id=0, document_type=DocumentType.MONTHLY_PLAN, title=title,
+            status=DocumentStatus.DRAFT, nursery_ref=user.nursery_ref,
+            classroom_ref=classroom.name, actor_ref=user.actor_ref,
+            owner_name=user.name, sections=[], monthly_sheet=sheet,
+            target_month=target_month, age_class=f"{age}歳児",
+            school_year=target.year - (target.month < 4),
+        ))
+    except IntegrityError as exc:
+        repository.session.rollback()
+        raise HTTPException(409, "他の職員の保存と競合しました。別の月を選択してください") from exc
+    return _context(user, repository, classroom_id, target_month, age, document.id)
 
 
 @router.get("/history")

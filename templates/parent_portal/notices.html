@@ -14,9 +14,19 @@
   {% for update in updates %}
   {% if update.kind == "parent_notification" %}
   {% set notification = update.notification %}
+  {% set notification_kind_labels = {
+    "attendance_confirmation_request": "出欠確認",
+    "fever_notification": "健康",
+    "push_test": "通知テスト",
+    "notice_published": "お知らせ",
+    "survey_published": "アンケート",
+    "closure_notice": "休園のお知らせ",
+    "emergency_notice": "緊急連絡",
+    "punch_correction_notice": "打刻訂正",
+  } %}
   <a href="/parent-portal/notifications/{{ notification.id }}" class="block rounded-xl border border-rose-200 bg-white p-5 shadow-sm hover:border-rose-400">
     <div class="mb-2 flex items-center gap-2">
-      <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">出欠確認</span>
+      <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">{{ notification_kind_labels.get(notification.kind.value, "お知らせ") }}</span>
       {% if not notification.is_read %}
       <span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">未読</span>
       {% else %}

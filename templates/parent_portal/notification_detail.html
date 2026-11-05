@@ -1,12 +1,24 @@
 {% extends "base.html" %}
 {% block title %}通知詳細 | open-hoikuict{% endblock %}
 
+{% set notification_kind_labels = {
+  "attendance_confirmation_request": "出欠確認",
+  "fever_notification": "健康",
+  "push_test": "通知テスト",
+  "notice_published": "お知らせ",
+  "survey_published": "アンケート",
+  "closure_notice": "休園のお知らせ",
+  "emergency_notice": "緊急連絡",
+  "punch_correction_notice": "打刻訂正",
+} %}
+{% set kind_label = notification_kind_labels.get(notification.kind.value, "お知らせ") %}
+
 {% block content %}
 <div class="mx-auto max-w-3xl">
   <div class="mb-5 flex items-center justify-between gap-4">
     <div>
       <div class="mb-2 flex items-center gap-2">
-        <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">出欠確認</span>
+        <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">{{ kind_label }}</span>
         <span class="text-sm text-gray-500">{{ notification.created_at|jst_datetime("%Y-%m-%d %H:%M") }} JST</span>
       </div>
       <h1 class="text-2xl font-bold text-gray-800">{{ notification.title }}</h1>
@@ -19,7 +31,7 @@
     <div class="whitespace-pre-wrap text-gray-700">{{ notification.body }}</div>
     {% if notification.action_url %}
     <a href="{{ notification.action_url }}" class="mt-6 inline-flex rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white hover:bg-indigo-500">
-      出席・欠席を連絡する
+      {% if notification.kind.value == "attendance_confirmation_request" %}出席・欠席を連絡する{% else %}内容を確認する{% endif %}
     </a>
     {% endif %}
   </article>

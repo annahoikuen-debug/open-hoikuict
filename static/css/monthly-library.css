@@ -37,7 +37,8 @@
 #drive-monthly-plan .export-note {font-size:11px;color:var(--p-muted);flex-basis:100%;text-align:right;}
 
 #monthly-print-root {display:none;}
-  #drive-monthly-plan .export-note {font-size:11px;color:var(--p-muted);flex-basis:100%;text-align:right;}
+#drive-monthly-plan .export-note {font-size:11px;color:var(--p-muted);flex-basis:100%;text-align:right;}
+#drive-monthly-plan .carry-badge{display:inline-block;margin-top:4px;padding:1px 6px;border-radius:3px;background:var(--p-active);color:var(--p-accent);font-size:10px;font-weight:600;border:1px solid var(--p-accent);white-space:nowrap;}
   @page {size:A4 landscape;margin:10mm;}
   @media print {
     html,body {margin:0!important;padding:0!important;background:white!important;min-width:0!important;}

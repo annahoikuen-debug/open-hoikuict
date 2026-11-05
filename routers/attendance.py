@@ -19,7 +19,7 @@ from attendance_checks_service import sync_attendance_alarm
 from attendance_correction_service import cancel_punch, correction_revision
 from database import get_session
 from models import AttendanceCorrection
-from staff_permissions import require_document_exporter
+from staff_permissions import can_export_documents
 from extended_care_fee_service import charge_status_label, recalculate_attendance_charge, calculation_issues_for_records
 from models import AttendanceRecord, AttendancePickupHistory, Child, ChildStatus, Classroom, ExtendedCareCharge, ExtendedCareChargeStatus
 from time_utils import local_naive_now, local_today, utc_now
@@ -746,7 +746,8 @@ def export_attendance_csv(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_document_exporter(session, current_user)
+    if not can_export_documents(session, current_user):
+        return _redirect_with_notice(request, "export_admin_required")
 
     filters = _build_filters(
         target_date=target_date,
@@ -788,7 +789,8 @@ def export_attendance_xlsx(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    require_document_exporter(session, current_user)
+    if not can_export_documents(session, current_user):
+        return _redirect_with_notice(request, "export_admin_required")
 
     filters = _build_filters(
         target_date=target_date,

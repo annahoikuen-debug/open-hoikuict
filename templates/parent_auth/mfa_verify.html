@@ -1,0 +1,14 @@
+{% extends "parent_auth/base.html" %}
+{% block title %}多要素認証{% endblock %}
+{% block content %}
+<h1>認証コードを入力</h1>
+<p class="muted">登録メールアドレスに送信した 6 桁の認証コードを入力してください。</p>
+{% if form_error %}<p class="error">{{ form_error }}</p>{% endif %}
+<form method="post" action="/parent-portal/mfa/verify">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+  <input type="hidden" name="redirect_to" value="{{ redirect_to }}">
+  <label>認証コード<input name="code" required autofocus autocomplete="off" inputmode="numeric" maxlength="6" style="text-align:center;font-size:1.4rem;letter-spacing:.3em"></label>
+  <button type="submit">認証する</button>
+</form>
+<p class="muted">メールが届かない場合は、迷惑メールフォルダを確認してください。<a href="/parent-portal/login">ログイン画面に戻る</a></p>
+{% endblock %}

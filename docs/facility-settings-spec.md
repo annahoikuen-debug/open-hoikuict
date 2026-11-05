@@ -4,10 +4,10 @@
 - ステータス: Draft revised
 - 作成日: 2026-07-05
 - 現況再確認: 2026-08-11
-- 実装状況: 未実装（計画）
+- 実装状況: Phase 1 実装済み（2026-11-05）
 - 関連: 保護者キオスクUI、延長保育料金設定、補食判定、請求
 
-> `FacilitySettings`、`FacilitySettingsHistory`、`/settings/facility`は現在のコードには存在しない。本書のURL・モデル・画面は現行構成ではなく実装案である。
+> Phase 1（`FacilitySettings`・`FacilitySettingsHistory`・`/settings/facility`・変更履歴・キオスクのお迎え上限検証・補食自動判定）は実装済み。実装詳細は `facility_settings_service.py` と `routers/facility_settings.py` を参照。補食費の請求明細自動反映は後続フェーズ。
 
 ---
 

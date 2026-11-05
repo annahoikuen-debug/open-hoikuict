@@ -68,7 +68,8 @@
   function autosize(el) { el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, parseFloat(getComputedStyle(el).minHeight) || 0)}px`; }
   function cell(key) {
     const target = key.startsWith('child:') ? childName(key.split(':').slice(0,2).join(':')) : ctx().classroom_name;
-    return `<textarea rows="1" class="cell" data-cell="${esc(key)}" aria-label="${esc(target+' / '+label(key))}" data-active="${key === current.field}" ${editable() ? '' : 'readonly'} spellcheck="false">${esc(body(key))}</textarea>`;
+    const carried = fields()[key]?.carried_from;
+    return `<textarea rows="1" class="cell" data-cell="${esc(key)}" aria-label="${esc(target+' / '+label(key))}" data-active="${key === current.field}" ${editable() ? '' : 'readonly'} spellcheck="false">${esc(body(key))}</textarea>${carried ? `<span class="carry-badge" title="前月（${esc(carried)}）から引き継ぎ">前月から</span>` : ''}`;
   }
   function common(keys) { return `<table class="common" aria-label="クラス共通欄"><thead><tr>${keys.map(k=>`<th>${esc(label(k))}</th>`).join('')}</tr></thead><tbody><tr>${keys.map(k=>`<td>${cell(k)}</td>`).join('')}</tr></tbody></table>`; }
   const monthLabel = () => `${ctx().target_month.slice(0,4)}年${Number(ctx().target_month.slice(5))}月`;
@@ -262,6 +263,34 @@
     } catch(error) { pickers(); announce(error.message,true); panel(); }
     finally { switching=false; all('#classroom,#month,#age').forEach(el=>el.disabled=false); }
   }
+  async function carryOver() {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    try {
+      const data = await api('carry-over', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': token },
+        body: new URLSearchParams({
+          classroom_id: ctx().classroom_id,
+          target_month: ctx().target_month,
+          age: ctx().age,
+        }),
+      });
+      // 新規作成された文書のスコープへ切替。
+      const key = scopeKey({ classroom_id: data.classroom_id, target_month: data.target_month, age: data.age });
+      let next = cache.get(key);
+      if (!next) {
+        next = entry(await api('context?' + new URLSearchParams({
+          classroom_id: data.classroom_id,
+          target_month: data.target_month,
+          age: data.age,
+        })));
+        cache.set(key, next);
+      }
+      current = next; before = null; historyData = null;
+      render(); loadHistory();
+      announce('前月から引き継ぎました。各セルは自由に編集・保存できます。');
+    } catch (error) { announce(error.message, true); }
+  }
   async function save() {
     if(saving || !editable())return;
     commitEdit();
@@ -305,6 +334,8 @@
     if(!button)return;
     if(button.id==='print-monthly'){exportMonthly('pdf');return;}
     if(button.id==='excel-monthly'){exportMonthly('xlsx');return;}
+    if(button.id==='carry-over'){commitEdit();document.getElementById('dlg-carry-over').showModal();return;}
+    if(button.id==='carry-over-confirm'){document.getElementById('dlg-carry-over').close();carryOver();return;}
     if(button.id==='save'){save();return;}
     if(button.id==='generate'){generateAI();return;}
     if(button.id==='history-toggle'){commitEdit();showHistory=!showHistory;loadHistory();return;}
