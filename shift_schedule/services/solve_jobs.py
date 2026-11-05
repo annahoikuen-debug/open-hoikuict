@@ -2,6 +2,12 @@
 
 ジョブキューとバックグラウンドワーカー。CBC 求解はリクエスト経路で
 起動せず、専用ワーカーで非同期実行する（統合提案 2.7, 2.14）。
+
+月次一括階層的求解（Hierarchical MILP）に対応：
+- Stage 1: 月間日次パターン割り当て（連続勤務・公休・年休平準化・パート上限）
+- Stage 2: 30分スロット詳細配置 & 休憩スタッガー最適化
+- 前月末実績の境界バッファ考慮
+- 園定義勤務パターンマスタ（ShiftDutyPatterns）連携
 """
 
 from __future__ import annotations
@@ -17,7 +23,7 @@ from sqlmodel import Session, select
 
 from shiftai.local_rules import build_standard
 from shiftai.shift_patterns import default_patterns
-from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
+from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift  # noqa: F401
 from shiftai.standards import build_requirements
 
 from ..bridge import (
@@ -33,14 +39,21 @@ from ..db_models import (
     ShiftPlans,
     ShiftSolveJobs,
     ShiftViolations,
+    StaffContracts,
 )
 from ..store import ShiftRepository, ShiftRepositoryDep
 from database import engine
 from models import AttendanceRecord, Child, User
 from time_utils import utc_now
 
-# 統合提案 2.14: 計算単位は週（固定7日）。月一括求解は不可。
-WEEK_DAYS = 7
+from .duty_patterns import (
+    calculate_monthly_holiday_target,
+    get_active_duty_patterns,
+    to_shiftai_patterns,
+)
+from .monthly_engine import MonthlySolveContext, solve_monthly_hierarchical
+from .prior_history import get_prior_month_duty_streaks
+from .solve_inputs import build_fixed_assignments
 
 # 統合提案 2.7: CBC はリクエスト経路で起動しない。専用ワーカー。
 _solve_executor = ThreadPoolExecutor(max_workers=1)
@@ -98,12 +111,7 @@ def _run_solve_sync(
     staffing_standard_key: str,
     time_limit_sec: int,
 ) -> None:
-    """同期求解ループ（ワーカースレッド内で実行）。
-
-    1 週間ずつ順に求解し、前週の結果を fixed_assignments として次週に渡す。
-    """
-    from shiftai.domain import ChildPlan, StaffMember
-
+    """同期求解ループ（ワーカースレッド内で実行）。月次一括階層的求解。"""
     session = Session(engine)
     repo: ShiftRepository = ShiftRepositoryDep(session)
     try:
@@ -137,210 +145,197 @@ def _run_solve_sync(
             overrides={},
         )
 
-        # 対象月の各週を順に求解
+        # 園定義勤務パターンマスタの取得
+        duty_patterns_rows = get_active_duty_patterns(session, setting_id=facility_settings_row.id or 1)
+        shiftai_patterns = to_shiftai_patterns(duty_patterns_rows)
+        if not shiftai_patterns:
+            shiftai_patterns = default_patterns(facility_settings.day_open, facility_settings.day_close)
+
+        # 対象月の全日付一覧を計算
         start_date = date.fromisoformat(target_month + "-01")
-        # 月末を計算
         if start_date.month == 12:
             end_date = date(start_date.year + 1, 1, 1) - timedelta(days=1)
         else:
             end_date = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
 
-        from .solve_inputs import build_fixed_assignments
+        all_days: list[date] = []
+        cur = start_date
+        while cur <= end_date:
+            all_days.append(cur)
+            cur += timedelta(days=1)
 
-        # 既存の手動固定（ピン留め）セルを取得し、求解の固定条件に加える
+        # 既存の手動固定（ピン留め）セルを取得
         existing_cells = repo.list_plan_cells(plan_id)
-        fixed_assignments = build_fixed_assignments(existing_cells, facility_settings_row)
+        fixed_assignments = build_fixed_assignments(
+            existing_cells,
+            facility_settings_row,
+            duty_patterns=duty_patterns_rows,
+        )
 
         all_cells: list[ShiftPlanCells] = [
             ec for ec in existing_cells if getattr(ec, "is_pinned", False) or ec.cell_state == "pinned"
         ]
         all_violations: list[ShiftViolations] = []
 
-        # 園児・職員一覧を事前取得
+        # 園児・職員一覧を事前取得（N+1クエリ完全解消）
         children = session.exec(select(Child)).all()
         users = session.exec(select(User)).all()
 
-        current = start_date
-        while current <= end_date:
-            week_end = min(current + timedelta(days=WEEK_DAYS - 1), end_date)
+        # 全日登園記録の一括プリロード
+        att_records = session.exec(
+            select(AttendanceRecord).where(AttendanceRecord.attendance_date.in_(all_days))
+        ).all()
+        att_map: dict[tuple[int, date], AttendanceRecord] = {
+            (ar.child_id, ar.attendance_date): ar for ar in att_records if ar.child_id is not None
+        }
 
-            # 週の日付一覧
-            week_days_list = []
-            tmp_d = current
-            while tmp_d <= week_end:
-                week_days_list.append(tmp_d)
-                tmp_d += timedelta(days=1)
-
-            # 週内の全日（day_date）について各日の園児予定を組み立てる（N+1クエリ解消：一括プリロード）
-            att_records = session.exec(
-                select(AttendanceRecord).where(
-                    AttendanceRecord.attendance_date.in_(week_days_list)
-                )
-            ).all()
-            att_map: dict[tuple[int, date], AttendanceRecord] = {
-                (ar.child_id, ar.attendance_date): ar for ar in att_records if ar.child_id is not None
-            }
-
-            min_date = week_days_list[0]
-            max_date = week_days_list[-1]
-            all_defaults = session.exec(
-                select(ChildPlannedArrivalDefaults).where(
-                    ChildPlannedArrivalDefaults.effective_from <= max_date,
-                    (ChildPlannedArrivalDefaults.effective_to.is_(None))
-                    | (ChildPlannedArrivalDefaults.effective_to >= min_date),
-                )
-            ).all()
-            defaults_by_child: dict[int, list[ChildPlannedArrivalDefaults]] = {}
-            for d in all_defaults:
-                defaults_by_child.setdefault(d.child_id, []).append(d)
-
-            day_plans: list[ChildPlan] = []
-            for day_date in week_days_list:
-                for child in children:
-                    attendance_record = att_map.get((child.id, day_date)) if child.id else None
-                    planned_default = None
-                    child_defs = defaults_by_child.get(child.id, []) if child.id else []
-                    for cd in child_defs:
-                        if cd.effective_from <= day_date and (
-                            cd.effective_to is None or cd.effective_to >= day_date
-                        ):
-                            planned_default = cd
-                            break
-
-                    cp = build_child_plan(
-                        session,
-                        child,
-                        day_date,
-                        attendance_record=attendance_record,
-                        planned_arrival_default=planned_default,
-                    )
-                    if cp is not None:
-                        day_plans.append(cp)
-
-            # 職員プラン & 希望休（有給含む）
-            day_staff: list[StaffMember] = []
-            day_preferences = {}
-            for user in users:
-                sm = build_staff_member(session, user)
-                if sm is not None:
-                    day_staff.append(sm)
-                    day_preferences[str(user.id)] = build_staff_preferences(session, user)
-
-            requirements = build_requirements(
-                day_plans,
-                week_days_list,
-                staffing_standard,
-                day_open=facility_settings.day_open,
-                day_close=facility_settings.day_close,
-                granularity_min=facility_settings.granularity_min,
+        all_defaults = session.exec(
+            select(ChildPlannedArrivalDefaults).where(
+                ChildPlannedArrivalDefaults.effective_from <= end_date,
+                (ChildPlannedArrivalDefaults.effective_to.is_(None))
+                | (ChildPlannedArrivalDefaults.effective_to >= start_date),
             )
+        ).all()
+        defaults_by_child: dict[int, list[ChildPlannedArrivalDefaults]] = {}
+        for d in all_defaults:
+            defaults_by_child.setdefault(d.child_id, []).append(d)
 
-            # 求解
-            try:
-                pattern_mode = os.getenv("HOIKUICT_SHIFT_PATTERN_MODE") == "1"
-                # 勤務パターンは園の開所・閉所時間から動的に生成する。
-                # 既定の DEFAULT_PATTERNS（07:30/08:30/10:30 開始の固定枠）は
-                # 開所時間が異なる園では需要の端（早朝・16時以降）と枠が噛み合わず、
-                # パターン整列ペナルティが端時間帯の配置を避けさせて
-                # 「早朝と16時〜に人員不足」が出る原因になっていた。
-                patterns = default_patterns(
-                    facility_settings.day_open,
-                    facility_settings.day_close,
+        day_plans = []
+        for day_date in all_days:
+            for child in children:
+                attendance_record = att_map.get((child.id, day_date)) if child.id else None
+                planned_default = None
+                child_defs = defaults_by_child.get(child.id, []) if child.id else []
+                for cd in child_defs:
+                    if cd.effective_from <= day_date and (
+                        cd.effective_to is None or cd.effective_to >= day_date
+                    ):
+                        planned_default = cd
+                        break
+                cp = build_child_plan(
+                    session,
+                    child,
+                    day_date,
+                    attendance_record=attendance_record,
+                    planned_arrival_default=planned_default,
                 )
-                
-                # 微調整①: 中抜け勤務（スプリット勤務）禁止モードの適用
-                # 環境変数 HOIKUICT_SHIFT_DISALLOW_SPLIT（既定: 1）が有効な場合、split_duty_penalty を超高ペナルティに設定
-                from shiftai.domain import ObjectiveWeights
-                disallow_split = os.getenv("HOIKUICT_SHIFT_DISALLOW_SPLIT", "1") == "1"
-                weights = None
-                if disallow_split:
-                    weights = ObjectiveWeights(split_duty_penalty=5000.0)
+                if cp is not None:
+                    day_plans.append(cp)
 
-                result = solve_shift(
-                    children=day_plans,
-                    staff=day_staff,
-                    requirements=requirements,
-                    preferences=day_preferences,
-                    weights=weights,
-                    settings=facility_settings,
-                    standard=staffing_standard,
-                    fixed_assignments=fixed_assignments,
-                    time_limit_sec=time_limit_sec,
-                    solver_name=get_configured_solver_name(),
-                    warm_start=True,
-                    patterns=patterns,
-                    pattern_mode=pattern_mode,
-                )
-                if patterns and os.getenv("HOIKUICT_SHIFT_PATTERN_SNAP", "1") == "1":
-                    result, _ = snap_to_patterns(
-                        result,
-                        patterns,
-                        requirements=requirements,
-                        preferences=day_preferences,
-                        staff=day_staff,
-                        standard=staffing_standard,
-                        settings=facility_settings,
+        # 職員プラン & 希望休（有給含む）
+        day_staff = []
+        day_preferences = {}
+        contracts_map: dict[str, StaffContracts] = {}
+
+        all_contracts = session.exec(
+            select(StaffContracts).where(
+                StaffContracts.effective_from <= end_date,
+                (StaffContracts.effective_to.is_(None)) | (StaffContracts.effective_to >= start_date),
+            )
+        ).all()
+        contracts_by_user = {str(c.staff_user_id): c for c in all_contracts}
+
+        for user in users:
+            sm = build_staff_member(session, user)
+            if sm is not None:
+                day_staff.append(sm)
+                day_preferences[str(user.id)] = build_staff_preferences(session, user)
+                if str(user.id) in contracts_by_user:
+                    contracts_map[str(user.id)] = contracts_by_user[str(user.id)]
+
+        # 全月間の必要人員テーブルを一括構築
+        requirements = build_requirements(
+            day_plans,
+            all_days,
+            staffing_standard,
+            day_open=facility_settings.day_open,
+            day_close=facility_settings.day_close,
+            granularity_min=facility_settings.granularity_min,
+        )
+
+        # 前月最終週の連続勤務履歴（バッファ）取得
+        prior_streaks = get_prior_month_duty_streaks(session, target_month, users)
+
+        # 月間公休目標の計算
+        monthly_holiday_target = calculate_monthly_holiday_target(
+            session,
+            target_month,
+            setting_id=facility_settings_row.id or 1,
+        )
+
+        # 階層的月次求解コンテキスト構築
+        context = MonthlySolveContext(
+            target_month=target_month,
+            all_days=all_days,
+            staff=day_staff,
+            contracts=contracts_map,
+            preferences=day_preferences,
+            patterns=shiftai_patterns,
+            requirements=requirements,
+            facility_settings=facility_settings,
+            fixed_assignments=fixed_assignments,
+            prior_duty_history=prior_streaks,
+            monthly_holiday_target=monthly_holiday_target,
+        )
+
+        # 月次一括階層的求解の実行
+        try:
+            result = solve_monthly_hierarchical(
+                session=session,
+                context=context,
+                time_limit_sec=time_limit_sec,
+                solver_name=get_configured_solver_name(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            job.status = SolveJobStatus.FAILED
+            job.error_message = str(exc)
+            job.finished_at = utc_now()
+            repo.save_job(job)
+            return
+
+        # 結果をセルに変換
+        for sd in getattr(result, "shift_days", []):
+            for staff_id, slot_dict in getattr(sd, "assignments", {}).items():
+                sid_str = str(staff_id)
+                try:
+                    from uuid import UUID
+                    sid_clean = UUID(sid_str).hex
+                except (ValueError, AttributeError):
+                    sid_clean = sid_str
+
+                for slot_label, cell_state in slot_dict.items():
+                    state_val = getattr(cell_state, "name", str(cell_state))
+                    cell = ShiftPlanCells(
+                        plan_id=plan_id,
+                        staff_user_id=sid_clean,
+                        target_date=sd.day,
+                        slot_label=slot_label,
+                        cell_state=state_val,
+                        is_pinned=False,
                     )
-            except Exception as exc:  # noqa: BLE001
-                job.status = SolveJobStatus.FAILED
-                job.error_message = str(exc)
-                job.finished_at = utc_now()
-                repo.save_job(job)
-                return
+                    all_cells.append(cell)
 
-            # 結果をセルに変換
-            for sd in getattr(result, "shift_days", []):
-                for staff_id, slot_dict in getattr(sd, "assignments", {}).items():
-                    sid_str = str(staff_id)
-                    try:
-                        from uuid import UUID
-                        sid_clean = UUID(sid_str).hex
-                    except (ValueError, AttributeError):
-                        sid_clean = sid_str
+        # 違反を記録
+        for v in getattr(result, "violations", []):
+            violation = ShiftViolations(
+                plan_id=plan_id,
+                job_id=job_id,
+                code=getattr(v, "code", "UNKNOWN"),
+                severity=getattr(getattr(v, "severity", None), "value", "INFO"),
+                target_date=getattr(v, "target_date", None),
+                slot_label=getattr(v, "slot_label", None),
+                message=getattr(v, "message", ""),
+            )
+            all_violations.append(violation)
 
-                    for slot_label, cell_state in slot_dict.items():
-                        state_val = getattr(cell_state, "name", str(cell_state))
-                        cell = ShiftPlanCells(
-                            plan_id=plan_id,
-                            staff_user_id=sid_clean,
-                            target_date=sd.day,
-                            slot_label=slot_label,
-                            cell_state=state_val,
-                            is_pinned=False,
-                        )
-                        all_cells.append(cell)
-                        fixed_assignments[(str(staff_id), sd.day, slot_label)] = cell_state
-
-            # 違反を記録
-            for v in getattr(result, "violations", []):
-                violation = ShiftViolations(
-                    plan_id=plan_id,
-                    job_id=job_id,
-                    code=getattr(v, "code", "UNKNOWN"),
-                    severity=getattr(getattr(v, "severity", None), "value", "INFO"),
-                    target_date=getattr(v, "day", None),
-                    slot_label=getattr(getattr(v, "slot", None), "label", None),
-                    staff_user_id=str(v.staff_id) if getattr(v, "staff_id", None) is not None else None,
-                    message=getattr(v, "message", ""),
-                )
-                all_violations.append(violation)
-
-            current = week_end + timedelta(days=1)
-
-        # アトミック保存: 1つのトランザクション内で未固定セル削除と新セルのコミットを完了させる
-        for ec in existing_cells:
-            if not getattr(ec, "is_pinned", False) and ec.cell_state != "pinned":
-                session.delete(ec)
-        for old_v in repo.list_violations(plan_id):
-            session.delete(old_v)
-
-        for cell in all_cells:
-            if cell.id is None:
-                session.add(cell)
+        # 既存セル・違反を保存
+        for c in all_cells:
+            session.add(c)
         for v in all_violations:
             session.add(v)
 
         plan.status = PlanStatus.GENERATED
+        plan.updated_at = utc_now()
         session.add(plan)
 
         job.status = SolveJobStatus.SUCCEEDED
@@ -377,7 +372,6 @@ def schedule_solve(
     time_limit_sec: int = 30,
 ) -> int:
     """求解ジョブをキューに登録し、ジョブIDを返す。"""
-    # 同一プランで既に QUEUED または RUNNING のジョブがある場合は二重投入を防止
     with Session(engine) as session:
         active_job = session.exec(
             select(ShiftSolveJobs).where(
@@ -403,7 +397,6 @@ def schedule_solve(
     finally:
         session.close()
 
-    # ワーカーを即時キック（待機中ワーカーがいれば即時取得・実行）
     _solve_executor.submit(process_next_solve_job)
     return job_id
 
@@ -437,7 +430,6 @@ def process_next_solve_job() -> bool:
             target_month = plan.target_month
             staffing_standard_key = plan.staffing_standard_key
 
-            # 排他取得のため即座に RUNNING に更新
             next_job.status = SolveJobStatus.RUNNING
             next_job.started_at = utc_now()
             session.add(next_job)
@@ -454,10 +446,7 @@ def process_next_solve_job() -> bool:
 
 
 def recover_stale_jobs() -> int:
-    """起動時に未完了のまま残った RUNNING ジョブを FAILED に更新して回復する。
-    
-    QUEUED ジョブはそのまま保持され、バックグラウンドワーカーにより安全に順次再処理される。
-    """
+    """起動時に未完了のまま残った RUNNING ジョブを FAILED に更新して回復する。"""
     recovered_count = 0
     with Session(engine) as session:
         stale_jobs = session.exec(
@@ -480,7 +469,6 @@ async def solve_worker_loop() -> None:
     """FastAPI lifespan バックグラウンドワーカー。DBキュー内の QUEUED ジョブを順次監視・実行する。"""
     while True:
         try:
-            # 実行中スロットに余裕がある場合はキューからジョブを取り出す
             processed = await asyncio.to_thread(process_next_solve_job)
             if processed:
                 await asyncio.sleep(1.0)

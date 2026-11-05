@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import re
+
 import pytest
 from sqlmodel import Session, select
 
@@ -106,7 +108,7 @@ def review(client, account_id, registration_id, **extra):
     )
 
 
-def test_two_fields_to_parent_input_review_and_login(pilot):
+def test_two_fields_to_parent_input_review_and_login(pilot, monkeypatch):
     client, engine, ids, _ = pilot
     page = client.get("/parent-accounts/enrollment/new?mode=new")
     assert page.status_code == 200
@@ -205,9 +207,20 @@ def test_two_fields_to_parent_input_review_and_login(pilot):
         follow_redirects=False,
     )
     assert response.status_code == 303, response.text
+    sent = []
+    monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
     response = client.post(
         "/parent-portal/login",
         data={"login_id": "intake@example.test", "password": password},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303, response.text
+    assert response.headers["location"] == "/parent-portal/mfa/verify"
+    match = re.search(r"([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6})", sent[-1])
+    assert match is not None
+    response = client.post(
+        "/parent-portal/mfa/verify",
+        data={"code": match.group(1), "redirect_to": "/parent-portal/children/profile"},
         follow_redirects=False,
     )
     assert response.status_code == 303, response.text

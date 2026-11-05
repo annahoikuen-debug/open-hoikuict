@@ -85,13 +85,11 @@ def to_shiftai_patterns(duty_patterns: Sequence[ShiftDutyPatterns]) -> list[Shif
 
         res.append(
             ShiftPattern(
-                name=dp.name,
-                symbol=dp.symbol,
+                key=dp.symbol or dp.name,
+                label=dp.name,
                 start=start_t,
                 end=end_t,
-                break_minutes=dp.break_minutes,
-                is_opening=dp.is_opening,
-                is_closing=dp.is_closing,
+                symbol=dp.symbol or "",
             )
         )
     return res
@@ -138,8 +136,6 @@ def calculate_monthly_holiday_target(
     holidays = 0
     for day in range(1, num_days + 1):
         d = date(year, month, day)
-        # 日曜(6) または休園日
         if d.weekday() == 6 or d in closed_set:
             holidays += 1
-    # 労働基準法および保育園の一般的な週休2日換算（最低でも月8〜9日）
     return max(holidays, 8)

@@ -1,15 +1,12 @@
 import datetime as dt
-from unittest.mock import MagicMock
 from sqlmodel import Session, SQLModel, create_engine
 import models  # noqa: F401 - registers core tables including children and users
 from shift_schedule.db_models import ShiftDutyPatterns, ShiftFacilitySettings, StaffContracts
 from shift_schedule.services.duty_patterns import (
-    calculate_monthly_holiday_target,
     get_active_duty_patterns,
     match_staff_patterns,
-    to_shiftai_patterns,
 )
-from shift_schedule.services.solve_inputs import build_fixed_assignments, resolve_slot_to_time_window
+from shift_schedule.services.solve_inputs import resolve_slot_to_time_window
 
 
 class TestDutyPatternsService:

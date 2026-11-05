@@ -21,6 +21,11 @@ from models import (
     NoticeTarget,
     NoticeTargetType,
     NoticeWorkflowAction,
+    ParentAccount,
+    ParentChildLink,
+    ParentNotification,
+    ParentNotificationKind,
+    PasswordCredential,
 )
 import notice_content
 import routers.notices as notices_module
@@ -554,6 +559,80 @@ class NoticeRouterTests(unittest.TestCase):
             session.commit()
             loaded = session.get(Notice, notice.id)
             self.assertEqual(loaded.lock_version, 1)
+
+    def test_important_notice_is_delivered_as_emergency_notification(self):
+        with Session(self.engine) as session:
+            parent = ParentAccount(
+                display_name="保護 者",
+                email="parent@example.test",
+                status=ParentAccountStatus.active,
+            )
+            child = Child(
+                last_name="保護",
+                first_name="子一",
+                last_name_kana="ホゴ",
+                first_name_kana="コイチ",
+                birth_date=date(2021, 4, 1),
+                enrollment_date=date(2026, 4, 1),
+                status=ChildStatus.enrolled,
+                family_id=None,
+                classroom_id=None,
+                registration_verification_name="ホゴ コイチ",
+                registration_verification_name_type="kana",
+            )
+            session.add_all([parent, child])
+            session.flush()
+            session.add(
+                ParentChildLink(parent_account_id=parent.id, child_id=child.id)
+            )
+            session.add(
+                PasswordCredential(
+                    principal_type="parent",
+                    parent_account_id=parent.id,
+                    login_id="parent@example.test",
+                    login_id_normalized="parent@example.test",
+                    password_hash="x",
+                    hash_scheme="argon2id",
+                    credential_version=1,
+                )
+            )
+            session.commit()
+            parent_id = parent.id
+
+        created = self.client.post(
+            "/notices/",
+            data={
+                "title": "台風による休園",
+                "body": "本日は休園です。",
+                "priority": "high",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(created.status_code, 303, created.text)
+        notice_id = int(created.headers["location"].split("/")[2])
+        self.client.post(f"/notices/{notice_id}/submit", follow_redirects=False)
+        authenticate_mock_staff(self.client, role=Role.ADMIN, name="園長")
+        with Session(self.engine) as session:
+            notice = session.get(Notice, notice_id)
+            lock_version = notice.lock_version
+        approved = self.client.post(
+            f"/notices/{notice_id}/approve",
+            data={"comment": "公開", "lock_version": lock_version},
+            follow_redirects=False,
+        )
+        self.assertEqual(approved.status_code, 303, approved.text)
+
+        with Session(self.engine) as session:
+            notifs = session.exec(
+                select(ParentNotification).where(
+                    ParentNotification.kind == ParentNotificationKind.emergency_notice,
+                    ParentNotification.source_type == "notice",
+                    ParentNotification.source_id == str(notice_id),
+                )
+            ).all()
+            self.assertEqual(len(notifs), 1)
+            self.assertEqual(notifs[0].parent_account_id, parent_id)
+            self.assertEqual(notifs[0].title, "緊急のお知らせ")
 
 
 if __name__ == "__main__":

@@ -56,13 +56,13 @@ def resolve_slot_to_time_window(
 
     # 2. 既定区分名マッピング（後方互換）
     if upper == "EARLY":
-        open_time = getattr(settings, "day_open", "07:30") if settings else "07:30"
-        return [f"{open_time}-16:30"]
+        open_time = getattr(settings, "day_open", "07:00") if settings else "07:00"
+        return [f"{open_time}-09:00"]
     if upper == "NORMAL":
-        return ["08:30-17:30"]
+        return ["09:00-17:00"]
     if upper == "LATE":
-        close_time = getattr(settings, "day_close", "19:30") if settings else "19:30"
-        return [f"10:30-{close_time}"]
+        close_time = getattr(settings, "day_close", "19:00") if settings else "19:00"
+        return [f"17:00-{close_time}"]
 
     return [cleaned]
 

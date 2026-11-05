@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import re
+
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -41,7 +43,7 @@ def prepare_completion(pilot):
 
 
 @pytest.mark.parametrize("use_link", [False, True])
-def test_fragment_lost_during_access_can_finish_both_mail_steps(pilot, use_link):
+def test_fragment_lost_during_access_can_finish_both_mail_steps(pilot, use_link, monkeypatch):
     client = pilot[0]
     registration_id, account_id, _ = invite(pilot)
     code, link = mail_code(pilot, "invitation")
@@ -70,9 +72,21 @@ def test_fragment_lost_during_access_can_finish_both_mail_steps(pilot, use_link)
     assert client.post("/parent-portal/register/complete", data={
         "password": password, "password_confirmation": password
     }, follow_redirects=False).status_code == 303
-    assert client.post("/parent-portal/login", data={
+    sent = []
+    monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
+    response = client.post("/parent-portal/login", data={
         "login_id": "intake@example.test", "password": password
-    }, follow_redirects=False).status_code == 303
+    }, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/parent-portal/mfa/verify"
+    match = re.search(r"([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6})", sent[-1])
+    assert match is not None
+    response = client.post(
+        "/parent-portal/mfa/verify",
+        data={"code": match.group(1), "redirect_to": "/parent-portal/"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
 
 
 @pytest.mark.parametrize("value", [

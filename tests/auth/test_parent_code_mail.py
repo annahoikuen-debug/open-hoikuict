@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 import pytest
+import re
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import event, inspect, text
@@ -80,7 +81,18 @@ def test_issued_code_mail_has_both_urls_and_can_set_password_then_login(pilot, m
     password = "Maple!5938Long-Phrase"
     response = client.post(f"/parent-portal/{action}/complete", data={"password": password, "password_confirmation": password}, follow_redirects=False)
     assert response.status_code == 303
+    sent = []
+    monkeypatch.setattr(routes, "send_auth_mail", lambda **kw: sent.append(kw.get("body", "")))
     response = client.post("/parent-portal/login", data={"login_id": "parent@example.test", "password": password}, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/parent-portal/mfa/verify"
+    match = re.search(r"([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6})", sent[-1])
+    assert match is not None
+    response = client.post(
+        "/parent-portal/mfa/verify",
+        data={"code": match.group(1), "redirect_to": "/parent-portal/"},
+        follow_redirects=False,
+    )
     assert response.status_code == 303
 
 
