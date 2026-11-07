@@ -634,6 +634,7 @@ class NoticeRouterTests(unittest.TestCase):
             self.assertEqual(len(notifs), 1)
             self.assertEqual(notifs[0].parent_account_id, parent_id)
             self.assertEqual(notifs[0].title, "緊急のお知らせ")
+            self.assertEqual(notifs[0].action_url, f"/parent-portal/notices/{notice_id}")
 
 
 if __name__ == "__main__":

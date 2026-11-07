@@ -69,6 +69,7 @@ def key_settings(tmp_path):
         "HOIKUICT_PUBLIC_ORIGIN": "https://parents.example.jp",
         "HOIKUICT_ALLOWED_ORIGINS": "https://parents.example.jp",
         "HOIKUICT_PASSWORD_BLOCKLIST_PATH": str(blocklist),
+        "HOIKUICT_PARENT_LOGIN_MFA": "0",
     }
 
 
@@ -121,10 +122,14 @@ def pilot(monkeypatch, key_settings):
     from routers.parent_auth import (
         PARENT_LOGIN_RATE_LIMITER_ACCOUNT,
         PARENT_LOGIN_RATE_LIMITER_IP,
+        PARENT_MFA_SEND_RATE_LIMITER,
+        PARENT_MFA_VERIFY_RATE_LIMITER,
     )
 
     PARENT_LOGIN_RATE_LIMITER_IP.reset_all()
     PARENT_LOGIN_RATE_LIMITER_ACCOUNT.reset_all()
+    PARENT_MFA_SEND_RATE_LIMITER.reset_all()
+    PARENT_MFA_VERIFY_RATE_LIMITER.reset_all()
     fixture = base_pilot.__wrapped__(monkeypatch)
     context = next(fixture)
     _, engine, ids, _ = context

@@ -116,7 +116,7 @@
   <script src="/guardian/assets/terminal.js?v=20260924" defer></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/guardian-service-worker.js', { scope: '/guardian/' })
+      navigator.serviceWorker.register('/guardian/guardian-service-worker.js', { scope: '/guardian/' })
         .then(reg => console.log('Guardian SW registered:', reg.scope))
         .catch(err => console.error('Guardian SW registration failed:', err));
     }

@@ -693,7 +693,7 @@ def approve_notice(
             source_id=str(notice.id),
             title="緊急のお知らせ",
             body=f"緊急のお知らせ「{notice.title}」が公開されました。保護者ポータルで内容を確認してください。",
-            action_url=f"/parent-portal/notices?notice_id={notice.id}",
+            action_url=f"/parent-portal/notices/{notice.id}",
             target_classroom_ids=numeric_classroom_ids,
             target_child_ids=numeric_child_ids,
             created_by_name=current_user.name,

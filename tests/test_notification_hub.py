@@ -83,6 +83,7 @@ class NotificationHubTests(unittest.TestCase):
                 self.assertEqual(notification.kind, ParentNotificationKind.notice_published)
                 self.assertEqual(notification.source_type, "notice")
                 self.assertEqual(notification.source_id, "1")
+                self.assertEqual(notification.action_url, "/parent-portal/notices/1")
                 self.assertIn("運動会のお知らせ", notification.body)
                 self.assertFalse(notification.is_read)
             # 2件目の呼び出しでは冪等に排除される

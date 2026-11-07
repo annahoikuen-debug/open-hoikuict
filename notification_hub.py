@@ -177,7 +177,7 @@ def notify_notice_published(
     from time_utils import utc_now
 
     created_at = now or utc_now()
-    action_url = f"/parent-portal/notices?notice_id={notice_id}"
+    action_url = f"/parent-portal/notices/{notice_id}"
     body = f"新しいお知らせ「{title}」が公開されました。"
 
     parents = _linked_active_parents(

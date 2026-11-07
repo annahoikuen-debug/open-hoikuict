@@ -64,7 +64,8 @@
             <tbody class="divide-y divide-slate-100">
                 {% for log in logs %}
                 <tr class="hover:bg-slate-50">
-                    <td class="px-5 py-3 text-slate-700">{{ log.created_at[:16] }}</td>
+                    <td class="px-5 py-3 text-slate-700">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at
+                        else '-' }}</td>
                     <td class="px-5 py-3 text-slate-700">{{ export_type_labels.get(log.export_type, log.export_type) }}
                     </td>
                     <td class="px-5 py-3 text-slate-700">{{ export_format_labels.get(log.export_format,

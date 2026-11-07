@@ -20,10 +20,11 @@ from auth import (
 from auth_mail import send_auth_mail
 from database import get_session
 from local_auth import (
+    ACTION_CODE_ALPHABET,
+    ACTION_CODE_LENGTH,
     AuthenticationFailed,
     LoginThrottled,
     PasswordPolicyError,
-    issue_credential_action_token,
     revoke_session_token,
 )
 from models import (
@@ -267,33 +268,52 @@ def parent_login(
             429,
         )
 
-    raw_code = issue_credential_action_token(
-        session,
-        credential=result.credential,
-        action="mfa_verify",
-        expires_in=PARENT_MFA_CODE_TTL,
+    raw_code = "".join(
+        secrets.choice(ACTION_CODE_ALPHABET) for _ in range(ACTION_CODE_LENGTH)
     )
     pending_reference = secrets.token_urlsafe(32)
-    session.add(
-        ParentMfaPending(
-            parent_account_id=result.account.id,
-            credential_id=result.credential.id,
-            pending_reference=pending_reference,
-            code_hash=parent_auth_token_hash(raw_code),
-            expires_at=utc_now() + PARENT_MFA_CODE_TTL,
+    # 同一アカウントの未検証保留をすべて削除し、有効なコードは最新1件に絞る
+    for pending in session.exec(
+        select(ParentMfaPending).where(
+            ParentMfaPending.parent_account_id == result.account.id
         )
+    ).all():
+        session.delete(pending)
+    pending = ParentMfaPending(
+        parent_account_id=result.account.id,
+        credential_id=result.credential.id,
+        pending_reference=pending_reference,
+        code_hash=parent_auth_token_hash(raw_code),
+        expires_at=utc_now() + PARENT_MFA_CODE_TTL,
     )
+    session.add(pending)
     session.commit()
 
-    send_auth_mail(
-        recipient=result.account.email,
-        subject="open-hoikuict ログイン認証コード",
-        body=(
-            f"ログイン認証コード: {raw_code}\n"
-            f"このコードは {PARENT_MFA_CODE_TTL_MINUTES} 分間有効です。\n"
-            "ご自身でログインした覚えがない場合は、このメールを無視してください。\n"
-        ),
-    )
+    try:
+        send_auth_mail(
+            recipient=result.account.email,
+            subject="open-hoikuict ログイン認証コード",
+            body=(
+                f"ログイン認証コード: {raw_code}\n"
+                f"このコードは {PARENT_MFA_CODE_TTL_MINUTES} 分間有効です。\n"
+                "ご自身でログインした覚えがない場合は、このメールを無視してください。\n"
+            ),
+        )
+    except Exception:
+        # 送信に失敗した場合は保留を削除し、生の500にせず再試行を促す
+        session.delete(pending)
+        session.commit()
+        return _render(
+            request,
+            "parent_auth/login.html",
+            {
+                "login_id": login_id,
+                "form_error": "認証コードのメール送信に失敗しました。しばらくしてから再度お試しください。",
+                "password_changed": False,
+                "redirect_to": redirect_to,
+            },
+            503,
+        )
 
     response = RedirectResponse(url="/parent-portal/mfa/verify", status_code=303)
     response.set_cookie(

@@ -1112,7 +1112,7 @@ def verify_parent_mfa_code(
     if ensure_utc(pending.expires_at) <= now:
         return None
 
-    if token_hash(code.strip()) != pending.code_hash:
+    if token_hash(code.strip().upper()) != pending.code_hash:
         pending.attempt_count += 1
         session.add(pending)
         session.commit()
@@ -1128,14 +1128,6 @@ def verify_parent_mfa_code(
         or credential.disabled_at is not None
         or account is None
         or account.status != ParentAccountStatus.active
-        or credential.credential_version
-        != (
-            session.exec(
-                select(PasswordCredential.credential_version).where(
-                    PasswordCredential.id == pending.credential_id
-                )
-            ).first()
-        )
     ):
         return None
 

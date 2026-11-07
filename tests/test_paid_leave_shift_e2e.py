@@ -81,8 +81,8 @@ def test_paid_leave_results_in_off_slot_in_generated_shift(client):
         fs = repo.facility_settings()
         if fs is None:
             fs = ShiftFacilitySettings(
-                day_open=time(7, 0),
-                day_close=time(19, 0),
+                day_open="07:00",
+                day_close="19:00",
                 granularity_min=30,
                 capacity=30,
                 staffing_standard_key="全国基準（厚労省）",

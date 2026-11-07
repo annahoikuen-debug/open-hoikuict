@@ -1,6 +1,6 @@
 {
   "source_repo": "E:\\nushift\\nushift",
-  "source_commit": "1bd656a",
+  "source_commit": "3984f2c",
   "files": {
     "__init__.py": "3edc9adda0a19af2fe46d64f5f70c69bf10e0b82ea70914d17194eefc7c4341e",
     "__main__.py": "3bba8da58a3af23419b00011d8f2b630b68fdc15ae167b5b398f3773eeb0a7eb",
@@ -22,7 +22,7 @@
     "relaxation.py": "252dc6e9ac5ed78d7b21831f54643d3559a5959a6438ef2285a9d0132de3f2ec",
     "sample_data.py": "1c46df471c8a43d03174e173395922d0df1b0fa7cf4b387548a8063922a5d049",
     "shift_patterns.py": "091071a20c7168fef3e7357cf84407d17cfa0740aa2f9b4a663260780cd86d96",
-    "solver.py": "d50e666671aa1f802469b27c0a34e29353549e206b9c5c078ad08c0de64ff71e",
+    "solver.py": "4af90476409157a1dbc2cad60726a15c8b9d5775a5cbc86359dc7619aaeba359",
     "solver_core/__init__.py": "e973b37976fbbd26a745ad6a85491d5c207d627d0cbdff20331a16fa6fb44fdd",
     "solver_core/constraints/blocks.py": "90fc6e6b5dccd62a88f79f39f0cf8523f3a64a1eaef671a657049fff97724026",
     "solver_core/constraints/breaks.py": "1b345f544bc3b26eaa7239d34816b6e68a7bcca1067806a541ca361f818abc4b",

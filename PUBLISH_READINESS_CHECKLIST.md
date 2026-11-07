@@ -81,6 +81,7 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 - [ ] ログインスロットリング (throttling) が有効であること
 - [ ] MFA コード検証が正しく動作すること
 - [ ] セッショントークンの失効が正しく動作すること
+- [ ] 保護者MFA（`HOIKUICT_PARENT_LOGIN_MFA`）を無効から有効に変更した場合、切替前に発行された保護者セッションが残存するため、`revoke_parent_sessions`（`parent_auth.py`）で一括失効させる運用手順を文書化すること
 
 ### ドキュメント項目
 

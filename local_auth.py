@@ -775,7 +775,7 @@ def verify_mfa_code(
     if _as_utc(pending.expires_at) <= now:
         return None
 
-    code_hash = _token_hash(code.strip())
+    code_hash = _token_hash(code.strip().upper())
     if code_hash != pending.code_hash:
         pending.attempt_count += 1
         session.add(pending)

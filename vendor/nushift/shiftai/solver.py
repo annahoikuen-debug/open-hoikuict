@@ -115,7 +115,7 @@ _DEFAULT_BREAK_MINUTES = config.DEFAULT_BREAK_MINUTES
 #: 時間帯数 n に対して候補は O(n²) なので、n を大きくするとこの上限に
 #: 先に当たり、:func:`_add_interval_block` は ``False`` を返して
 #: ソフトペナルティにフォールバックする。
-_MAX_INTERVAL_CANDIDATES = 150
+_MAX_INTERVAL_CANDIDATES = 100
 _DEFAULT_STAGGER_SLOTS = 1
 _EPS = config.FLOAT_TOLERANCE
 _INFEASIBLE_FALLBACK_MESSAGE = "PuLP では解なし。貪欲法による暫定シフトを生成しました"
@@ -2028,8 +2028,13 @@ def solve_shift(
 
     # ウォームスタート（初期解投入）
     if payload.warm_start:
-        warm_assignments = payload.warm_start_assignments
-        if warm_assignments is None:
+        warm_assignments = dict(payload.warm_start_assignments or {})
+        # 手動確定セルを優先的にウォームスタートにマージ（探索空間削減）
+        if payload.fixed:
+            for key, state in payload.fixed.items():
+                if key not in warm_assignments:
+                    warm_assignments[key] = state
+        if not warm_assignments:
             try:
                 g_res = solve_shift_greedy(
                     children=payload.children,
@@ -2046,6 +2051,7 @@ def solve_shift(
             applied_count = apply_warm_start(ctx, slots, warm_assignments)
             stats["warm_start_applied"] = applied_count > 0
             stats["warm_start_vars"] = applied_count
+            stats["warm_start_fixed_merged"] = len(payload.fixed or {}) > 0
 
     status, raw, actual_solver = _run_solver(
         ctx,

@@ -104,6 +104,7 @@ def solve_monthly_hierarchical(
     weights = ObjectiveWeights(split_duty_penalty=5000.0)
 
     final_result = solve_shift(
+        getattr(context, "children", ()),
         staff=context.staff,
         requirements=context.requirements,
         preferences=context.preferences,
@@ -113,7 +114,7 @@ def solve_monthly_hierarchical(
         time_limit_sec=max(time_limit_sec - 30, 30),
         solver_name=solver_name,
         warm_start=True,
-        warm_assignments=warm_starts,
+        warm_start_assignments=warm_starts,
         patterns=context.patterns,
         pattern_mode=True,
     )
@@ -180,7 +181,7 @@ def _solve_stage1_daily_patterns(
             elif has_pinned_off:
                 prob += duty_vars[(sid, d)] == 0
 
-            if pref and d in pref.unavailable_days:
+            if pref and d in (pref.unavailable_days() if callable(pref.unavailable_days) else pref.unavailable_days):
                 prob += duty_vars[(sid, d)] == 0
 
         # 2. 連続勤務日数制限（前月末の連続勤務履歴を考慮）

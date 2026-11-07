@@ -7,7 +7,7 @@
 <form method="post" action="/parent-portal/mfa/verify">
   <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
   <input type="hidden" name="redirect_to" value="{{ redirect_to }}">
-  <label>認証コード<input name="code" required autofocus autocomplete="off" inputmode="numeric" maxlength="6" style="text-align:center;font-size:1.4rem;letter-spacing:.3em"></label>
+  <label>認証コード<input name="code" required autofocus autocomplete="one-time-code" autocapitalize="characters" maxlength="6" style="text-align:center;text-transform:uppercase;font-size:1.4rem;letter-spacing:.3em"></label>
   <button type="submit">認証する</button>
 </form>
 <p class="muted">メールが届かない場合は、迷惑メールフォルダを確認してください。<a href="/parent-portal/login">ログイン画面に戻る</a></p>
