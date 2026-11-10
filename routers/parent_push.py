@@ -196,56 +196,21 @@ def parent_portal_icon_512():
 
 
 def _generate_png_icon(size: int) -> bytes:
-    import struct, zlib
-    # 最小構成のPNG（単色の角丸正方形、背景透過）
-    width = height = size
-    # 背景色 #4338ca (67, 56, 202)
-    r, g, b = 67, 56, 202
-    # フィルタバイト付きRGBAデータ（単純な全塗り）
-    raw = bytearray()
-    for y in range(height):
-        raw.append(0)  # filter type: none
-        for x in range(width):
-            raw.extend([r, g, b, 255])
-    # 角を丸める（簡易：四隅を透過にする）
-    corner = 16
-    for y in range(corner):
-        for x in range(corner):
-            dist2 = (corner - 1 - x) ** 2 + (corner - 1 - y) ** 2
-            if dist2 > corner ** 2:
-                idx = (y * width + x) * 4 + 4  # +4 for filter byte
-                raw[idx:idx + 4] = [0, 0, 0, 0]
-    for y in range(corner):
-        for x in range(width - corner, width):
-            dist2 = (x - (width - corner)) ** 2 + (corner - 1 - y) ** 2
-            if dist2 > corner ** 2:
-                idx = (y * width + x) * 4 + 4
-                raw[idx:idx + 4] = [0, 0, 0, 0]
-    for y in range(height - corner, height):
-        for x in range(corner):
-            dist2 = (corner - 1 - x) ** 2 + (y - (height - corner)) ** 2
-            if dist2 > corner ** 2:
-                idx = (y * width + x) * 4 + 4
-                raw[idx:idx + 4] = [0, 0, 0, 0]
-    for y in range(height - corner, height):
-        for x in range(width - corner, width):
-            dist2 = (x - (width - corner)) ** 2 + (y - (height - corner)) ** 2
-            if dist2 > corner ** 2:
-                idx = (y * width + x) * 4 + 4
-                raw[idx:idx + 4] = [0, 0, 0, 0]
+    from io import BytesIO
+    from PIL import Image, ImageDraw
 
-    # PNGチャンク構築
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
-    idat = zlib.compress(bytes(raw))
-    def chunk(ctype, data):
-        c = ctype + data
-        crc = struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
-        return struct.pack(">I", len(data)) + c + crc
-    png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", ihdr)
-    png += chunk(b"IDAT", idat)
-    png += chunk(b"IEND", b"")
-    return png
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    corner_radius = max(8, size // 12)
+    # 背景色 #4338ca (67, 56, 202) の角丸四角形
+    draw.rounded_rectangle(
+        [(0, 0), (size - 1, size - 1)],
+        radius=corner_radius,
+        fill=(67, 56, 202, 255),
+    )
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 @settings_router.get("/push-service-worker.js")

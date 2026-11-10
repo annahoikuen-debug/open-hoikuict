@@ -25,6 +25,7 @@ from models import AttendanceRecord, AttendancePickupHistory, Child, ChildStatus
 from time_utils import local_naive_now, local_today, utc_now
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
+from routers.document_exports import log_export
 from template_utils import create_templates
 
 templates = create_templates()
@@ -764,9 +765,22 @@ def export_attendance_csv(
     )
     rows = _build_report_rows(session, filters)
     filename = _export_filename(filters, "csv")
+    content_bytes = _build_csv_content(rows)
+
+    log_export(
+        session,
+        export_type="attendance",
+        export_format="csv",
+        target_month=target_date[:7] if target_date else None,
+        exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+        exported_by_name=current_user.name,
+        record_count=len(rows),
+        file_size_bytes=len(content_bytes),
+        status="success",
+    )
 
     return Response(
-        content=_build_csv_content(rows),
+        content=content_bytes,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -807,9 +821,22 @@ def export_attendance_xlsx(
     )
     rows = _build_report_rows(session, filters)
     filename = _export_filename(filters, "xlsx")
+    content_bytes = _build_xlsx_content(rows)
+
+    log_export(
+        session,
+        export_type="attendance",
+        export_format="xlsx",
+        target_month=target_date[:7] if target_date else None,
+        exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+        exported_by_name=current_user.name,
+        record_count=len(rows),
+        file_size_bytes=len(content_bytes),
+        status="success",
+    )
 
     return Response(
-        content=_build_xlsx_content(rows),
+        content=content_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

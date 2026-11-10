@@ -6,6 +6,8 @@ from sqlmodel import Session, select
 
 from main import app
 from database import engine
+from auth import Role
+from testing_helpers import authenticate_mock_staff
 from shift_schedule.contracts import PlanStatus
 from shift_schedule.db_models import ShiftPlans, ShiftPlanCells, ShiftViolations
 from shift_schedule.store import SqlModelShiftRepository
@@ -14,7 +16,9 @@ from shift_schedule.services.gap_detector import GapWarning
 
 @pytest.fixture
 def client():
-    return TestClient(app, base_url="https://testserver")
+    c = TestClient(app, base_url="https://testserver")
+    authenticate_mock_staff(c, role=Role.ADMIN)
+    return c
 
 
 def _ensure_test_user():

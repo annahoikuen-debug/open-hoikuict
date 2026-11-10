@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import select
 
+from auth import require_can_edit
 from ..contracts import PlanStatus
 from ..db_models import ShiftPlans, ShiftSolveJobs
 from ..services.solve_jobs import cbc_available, schedule_solve
@@ -40,7 +41,7 @@ def plans_list(
     )
 
 
-@router.post("/plans")
+@router.post("/plans", dependencies=[Depends(require_can_edit)])
 def plans_create(
     target_month: str = Form(...),
     staffing_standard_key: str = Form("fukuoka_city"),
@@ -142,7 +143,7 @@ def plans_detail(
     )
 
 
-@router.post("/plans/{plan_id}/solve")
+@router.post("/plans/{plan_id}/solve", dependencies=[Depends(require_can_edit)])
 def plans_solve(
     plan_id: int,
     request: Request,
@@ -235,7 +236,7 @@ def plans_status(
     }
 
 
-@router.post("/plans/{plan_id}/approve")
+@router.post("/plans/{plan_id}/approve", dependencies=[Depends(require_can_edit)])
 def plans_approve(
     plan_id: int,
     repo: ShiftRepository = Depends(ShiftRepositoryDep),

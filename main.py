@@ -92,7 +92,10 @@ from staff_recovery import staff_mail_worker_loop
 from url_utils import safe_internal_redirect
 from auth import (
     configure_auth_backends_from_environment,
+    get_current_staff_user,
     mock_auth_enabled,
+    require_admin,
+    require_can_edit,
     require_mock_staff_auth,
     staff_auth_http_exception_handler,
 )
@@ -221,12 +224,12 @@ app.include_router(plan_docs_plans_router, prefix="/plans")
 app.include_router(plan_docs_documents_router, prefix="/plans")
 app.include_router(plan_docs_bunrei_router, prefix="/plans")
 app.include_router(monthly_library_router, prefix="/plans")
-app.include_router(shift_home_router)
-app.include_router(shift_facility_router)
-app.include_router(shift_contracts_router)
-app.include_router(shift_plans_router)
-app.include_router(shift_plans_edit_router)
-app.include_router(shift_exports_router)
+app.include_router(shift_home_router, dependencies=[Depends(get_current_staff_user)])
+app.include_router(shift_facility_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
+app.include_router(shift_contracts_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
+app.include_router(shift_plans_router, dependencies=[Depends(get_current_staff_user)])
+app.include_router(shift_plans_edit_router, dependencies=[Depends(get_current_staff_user), Depends(require_can_edit)])
+app.include_router(shift_exports_router, dependencies=[Depends(get_current_staff_user)])
 
 @app.get("/switch-role", dependencies=[Depends(require_mock_staff_auth)])
 def switch_role(redirect: str = "/"):

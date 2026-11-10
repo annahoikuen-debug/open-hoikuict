@@ -57,6 +57,18 @@ def require_live_admin(session: Session, current_user: StaffUser) -> User:
     return user
 
 
+def can_manage_child_records(session: Session, current_user: StaffUser) -> bool:
+    user = get_live_staff_user(session, current_user)
+    return bool(user and user.can_manage_child_records_effective)
+
+
+def require_child_record_manager(session: Session, current_user: StaffUser) -> User:
+    user = get_live_staff_user(session, current_user)
+    if user is None or not user.can_manage_child_records_effective:
+        raise HTTPException(status_code=403, detail="園児台帳管理権限が必要です")
+    return user
+
+
 def can_manage_billing_accounts(session: Session, current_user: StaffUser) -> bool:
     user = get_live_staff_user(session, current_user)
     return bool(user and user.can_manage_billing_accounts_effective)

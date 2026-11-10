@@ -145,3 +145,64 @@ class StaffPaidLeaveTests(unittest.TestCase):
             # unavailable に 2026-11-15 の有給休が含まれていること
             unavail_days = [u.day for u in prefs.unavailable]
             self.assertIn(date(2026, 11, 15), unavail_days)
+
+    def test_apply_and_approve_rejected_when_insufficient_remaining_days(self):
+        """有給残日数不足時の申請および承認拒否テスト。"""
+        # 1. 有給残日数が 1.0 日の状態で、2.0日の申請を試行 -> 422 拒否
+        with Session(self.engine) as session:
+            leave = StaffPaidLeave(
+                staff_user_id=self.staff_user_id,
+                granted_date=date(2026, 4, 1),
+                granted_days=1.0,
+                used_days=0.0,
+                expires_on=date(2028, 3, 31),
+            )
+            session.add(leave)
+            session.commit()
+
+        self.current_user = self.staff_user
+        r_fail = self.client.post(
+            "/paid-leave/requests",
+            data={
+                "target_date": "2026-11-20",
+                "days": "2.0",
+                "reason": "私用",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(r_fail.status_code, 422)
+        self.assertIn("有給残日数が不足しています", r_fail.json()["detail"])
+
+        # 2. 1.0日の申請は通過
+        r_ok = self.client.post(
+            "/paid-leave/requests",
+            data={
+                "target_date": "2026-11-20",
+                "days": "1.0",
+                "reason": "私用",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(r_ok.status_code, 303)
+
+        with Session(self.engine) as session:
+            req = session.exec(select(StaffPaidLeaveRequest)).one()
+            req_id = req.id
+            # 申請後に残日数が他の処理等で消費されて 0 になった状態をシミュレート
+            leave_db = session.exec(select(StaffPaidLeave)).one()
+            leave_db.used_days = 1.0
+            session.add(leave_db)
+            session.commit()
+
+        # 3. 承認時に残日数が不足している場合 -> 400 拒否
+        self.current_user = self.admin_user
+        r_approve_fail = self.client.post(
+            f"/paid-leave/requests/{req_id}/approve",
+            follow_redirects=False,
+        )
+        self.assertEqual(r_approve_fail.status_code, 400)
+        self.assertIn("有給残日数が不足しているため承認できません", r_approve_fail.json()["detail"])
+
+        with Session(self.engine) as session:
+            req_check = session.get(StaffPaidLeaveRequest, req_id)
+            self.assertEqual(req_check.status, "PENDING")

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from auth import get_current_staff_user
 from database import get_session
@@ -86,19 +87,23 @@ def document_export_history(
 ):
     require_document_exporter(session, current_user)
 
-    query = select(DocumentExportLog).order_by(DocumentExportLog.created_at.desc())
+    base_query = select(DocumentExportLog)
+    count_query = select(func.count(DocumentExportLog.id))
     if export_type:
-        query = query.where(DocumentExportLog.export_type == export_type)
+        base_query = base_query.where(DocumentExportLog.export_type == export_type)
+        count_query = count_query.where(DocumentExportLog.export_type == export_type)
     if status:
-        query = query.where(DocumentExportLog.status == status)
+        base_query = base_query.where(DocumentExportLog.status == status)
+        count_query = count_query.where(DocumentExportLog.status == status)
 
-    logs = session.exec(query).all()
+    total = session.exec(count_query).one()
 
     per_page = 50
-    total = len(logs)
     start = (page - 1) * per_page
     end = start + per_page
-    paginated_logs = logs[start:end]
+    paginated_logs = session.exec(
+        base_query.order_by(DocumentExportLog.created_at.desc()).offset(start).limit(per_page)
+    ).all()
     has_next = end < total
 
     return templates.TemplateResponse(
@@ -125,7 +130,7 @@ def log_export(
     export_type: str,
     export_format: str,
     target_month: Optional[str] = None,
-    exported_by_user_id: Optional[str] = None,
+    exported_by_user_id: Optional[UUID | str] = None,
     exported_by_name: Optional[str] = None,
     record_count: Optional[int] = None,
     file_size_bytes: Optional[int] = None,
@@ -133,11 +138,21 @@ def log_export(
     error_message: Optional[str] = None,
 ) -> None:
     """帳票エクスポート履歴を記録する。"""
+    user_uuid: Optional[UUID] = None
+    if exported_by_user_id is not None:
+        if isinstance(exported_by_user_id, UUID):
+            user_uuid = exported_by_user_id
+        else:
+            try:
+                user_uuid = UUID(exported_by_user_id)
+            except (ValueError, TypeError):
+                user_uuid = None
+
     log = DocumentExportLog(
         export_type=export_type,
         export_format=export_format,
         target_month=target_month,
-        exported_by_user_id=exported_by_user_id,
+        exported_by_user_id=user_uuid,
         exported_by_name=exported_by_name,
         record_count=record_count,
         file_size_bytes=file_size_bytes,

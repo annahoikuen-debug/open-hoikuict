@@ -83,6 +83,20 @@ def apply_paid_leave(
     if days <= 0 or days > 30:
         raise HTTPException(status_code=422, detail="日数は0より大きく30日以内で指定してください")
 
+    # 有給残日数の上限チェック
+    leave_records = session.exec(
+        select(StaffPaidLeave).where(StaffPaidLeave.staff_user_id == current_user.user_id)
+    ).all()
+    total_granted = sum(r.granted_days for r in leave_records)
+    total_used = sum(r.used_days for r in leave_records)
+    remaining_days = max(0.0, total_granted - total_used)
+
+    if days > remaining_days:
+        raise HTTPException(
+            status_code=422,
+            detail=f"有給残日数が不足しています（必要: {days}日, 残日数: {remaining_days}日）",
+        )
+
     req = StaffPaidLeaveRequest(
         staff_user_id=current_user.user_id,
         target_date=parsed_date,
@@ -119,6 +133,13 @@ def approve_paid_leave(
         .where(StaffPaidLeave.staff_user_id == req.staff_user_id)
         .order_by(StaffPaidLeave.expires_on.asc())
     ).all()
+
+    total_available = sum(l.granted_days - l.used_days for l in leaves if l.granted_days > l.used_days)
+    if total_available < req.days:
+        raise HTTPException(
+            status_code=400,
+            detail=f"有給残日数が不足しているため承認できません（必要: {req.days}日, 残日数: {total_available}日）",
+        )
 
     remaining_to_deduct = req.days
     for leave in leaves:

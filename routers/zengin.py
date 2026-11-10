@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import csv
+import io
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
 from sqlmodel import Session
 
 from auth import get_current_staff_user
+from common.csv_utils import sanitize_csv_cell
 from database import get_session
+from routers.document_exports import log_export
 from staff_permissions import require_zengin_exporter
 from zengin_service import (
     ZenginError,
@@ -50,7 +55,25 @@ def download_export(
     require_zengin_exporter(session, current_user)
     try:
         file_bytes = build_zengin_file(session, export_id)
+        log_export(
+            session,
+            export_type="zengin",
+            export_format="txt",
+            exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+            exported_by_name=current_user.name,
+            file_size_bytes=len(file_bytes),
+            status="success",
+        )
     except ZenginError as exc:
+        log_export(
+            session,
+            export_type="zengin",
+            export_format="txt",
+            exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+            exported_by_name=current_user.name,
+            status="error",
+            error_message=str(exc),
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return Response(
         content=file_bytes,
@@ -139,8 +162,12 @@ def validation_report(
     except ZenginError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    lines = ["\t".join(row) for row in rows]
-    content = "\n".join(lines).encode("utf-8")
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, lineterminator="\r\n")
+    for row in rows:
+        writer.writerow([sanitize_csv_cell(cell) for cell in row])
+
+    content = ("\ufeff" + output.getvalue()).encode("utf-8")
     return Response(
         content=content,
         media_type="text/csv; charset=utf-8",

@@ -6,6 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from auth import Role
+from testing_helpers import authenticate_mock_staff
 from main import app
 from database import engine
 from shift_schedule.contracts import PlanStatus
@@ -42,6 +44,7 @@ def test_plans_cell_edit_and_pinned():
         plan_id = plan.id
 
     client = TestClient(app, base_url="https://testserver")
+    authenticate_mock_staff(client, role=Role.ADMIN)
     client.get(f"/shifts/plans/{plan_id}")
     token = client.cookies.get(CSRF_COOKIE_NAME) or ""
 
@@ -88,6 +91,7 @@ def test_plans_approve_blocked_when_blocker_violations():
         repo.create_violation(violation)
 
     client = TestClient(app, base_url="https://testserver")
+    authenticate_mock_staff(client, role=Role.ADMIN)
     client.get(f"/shifts/plans/{plan_id}")
     token = client.cookies.get(CSRF_COOKIE_NAME) or ""
 
@@ -120,6 +124,7 @@ def test_plans_approve_succeeds_when_no_blockers():
         repo.create_violation(violation)
 
     client = TestClient(app, base_url="https://testserver")
+    authenticate_mock_staff(client, role=Role.ADMIN)
     client.get(f"/shifts/plans/{plan_id}")
     token = client.cookies.get(CSRF_COOKIE_NAME) or ""
 
