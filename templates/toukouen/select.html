@@ -250,19 +250,23 @@
 {% block scripts %}
 <script>
 (() => {
-  const CURRENT_MODE = "{{ mode }}"; // 'check_in' | 'check_out' | 'absence'
+  let currentMode = "{{ mode }}"; // 'check_in' | 'check_out' | 'absence'
   const MODE_LABELS = {
     'check_in': '登園',
     'check_out': '降園',
     'absence': '欠席'
   };
-  const currentModeLabel = MODE_LABELS[CURRENT_MODE] || '打刻';
 
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const cards = document.querySelectorAll('.child-card');
+  const tabs = document.querySelectorAll('.class-tab');
+  const modeButtons = document.querySelectorAll('.mode-switch-btn');
+  const headerBadge = document.getElementById('header-mode-badge');
+  const qrInput = document.getElementById('qr-input');
+  const idleCountdownEl = document.getElementById('idle-countdown');
 
   // 1. 放置タイマー (35秒無操作でTOPへ自動復帰) - F-07
   let idleTime = 35;
-  const idleCountdownEl = document.getElementById('idle-countdown');
   let idleInterval = null;
 
   function resetIdleTimer() {
@@ -285,17 +289,160 @@
   }
   startIdleMonitor();
 
-  // 2. クラスタブ切り替え (F-02)
-  const tabs = document.querySelectorAll('.class-tab');
-  const cards = document.querySelectorAll('.child-card');
+  // 2. モード切替スイッチャー & ヘッダー更新 (提案1: 画面遷移なしで即座に切替)
+  function setMode(newMode) {
+    if (newMode !== 'check_in' && newMode !== 'check_out' && newMode !== 'absence') {
+      newMode = 'check_in';
+    }
+    currentMode = newMode;
 
+    // スイッチャーボタンのスタイル更新
+    modeButtons.forEach(btn => {
+      const bMode = btn.dataset.modeBtn;
+      if (bMode === currentMode) {
+        if (bMode === 'check_in') {
+          btn.className = "mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm bg-emerald-600 text-white ring-2 ring-emerald-400";
+        } else if (bMode === 'check_out') {
+          btn.className = "mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm bg-amber-600 text-white ring-2 ring-amber-400";
+        } else {
+          btn.className = "mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm bg-rose-600 text-white ring-2 ring-rose-400";
+        }
+      } else {
+        btn.className = "mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm bg-white/80 text-slate-600 hover:bg-white";
+      }
+    });
+
+    // ヘッダーバッジ更新
+    if (headerBadge) {
+      if (currentMode === 'check_in') {
+        headerBadge.innerHTML = `
+          <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+            <span>🌅</span><span>登園モード</span>
+          </span>`;
+      } else if (currentMode === 'check_out') {
+        headerBadge.innerHTML = `
+          <span class="bg-amber-100 text-amber-800 border border-amber-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+            <span>🌇</span><span>降園モード</span>
+          </span>`;
+      } else {
+        headerBadge.innerHTML = `
+          <span class="bg-rose-100 text-rose-800 border border-rose-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+            <span>🤒</span><span>欠席登録モード</span>
+          </span>`;
+      }
+    }
+
+    // URLパラメータ更新 (リロード時や履歴維持)
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', currentMode);
+      window.history.replaceState(null, '', url.toString());
+    } catch(e) {}
+
+    // 提案2: モード変更に応じて全カードのハイライト／グレーアウト状態を再計算
+    applyCardStates();
+    keepQrFocus();
+  }
+
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setMode(btn.dataset.modeBtn);
+    });
+  });
+
+  // 3. 園児カードのステータス連動動的ガード (提案2: 押し間違い防止グレーアウト)
+  function applyCardStates() {
+    cards.forEach(card => {
+      const status = card.dataset.status || '未登園';
+      const detail = card.dataset.detail || '';
+      const actionLabel = card.querySelector('.card-action-label');
+      const nameEl = card.querySelector('.card-child-name');
+
+      // 共通クラスリセット
+      card.classList.remove(
+        'opacity-40', 'grayscale-[40%]', 'bg-slate-50', 'cursor-not-allowed',
+        'ring-2', 'ring-emerald-400', 'ring-amber-400', 'ring-rose-400',
+        'border-emerald-300', 'border-amber-300', 'border-rose-300', 'hover:border-indigo-400',
+        'bg-white'
+      );
+
+      let isAllowed = false;
+
+      if (currentMode === 'check_in') {
+        // 【登園モード】: 未登園のみ受付可能
+        if (status === '未登園') {
+          isAllowed = true;
+          card.classList.add('bg-white', 'border-emerald-300', 'ring-1', 'ring-emerald-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-bold text-emerald-600 transition';
+            actionLabel.textContent = '登園 ➔';
+          }
+        } else {
+          // すでに登園中、降園済、欠席はガード
+          card.classList.add('opacity-40', 'grayscale-[40%]', 'bg-slate-50', 'cursor-not-allowed', 'border-slate-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-semibold text-slate-400 text-[11px] transition';
+            if (status === '登園中') actionLabel.textContent = `登園中 (${card.dataset.checkinTime || detail})`;
+            else if (status === '降園済') actionLabel.textContent = '降園済';
+            else if (status === '欠席') actionLabel.textContent = `欠席 (${detail})`;
+          }
+        }
+
+      } else if (currentMode === 'check_out') {
+        // 【降園モード】: 登園中（在園児）のみ受付可能
+        if (status === '登園中') {
+          isAllowed = true;
+          card.classList.add('bg-white', 'border-amber-300', 'ring-1', 'ring-amber-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-bold text-amber-600 transition';
+            actionLabel.textContent = '降園 ➔';
+          }
+        } else {
+          // 未登園、降園済、欠席はガード
+          card.classList.add('opacity-40', 'grayscale-[40%]', 'bg-slate-50', 'cursor-not-allowed', 'border-slate-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-semibold text-slate-400 text-[11px] transition';
+            if (status === '未登園') actionLabel.textContent = '未登園';
+            else if (status === '降園済') actionLabel.textContent = `降園済 (${card.dataset.checkoutTime || detail})`;
+            else if (status === '欠席') actionLabel.textContent = `欠席 (${detail})`;
+          }
+        }
+
+      } else if (currentMode === 'absence') {
+        // 【欠席モード】: 未登園のみ受付可能
+        if (status === '未登園') {
+          isAllowed = true;
+          card.classList.add('bg-white', 'border-rose-300', 'ring-1', 'ring-rose-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-bold text-rose-600 transition';
+            actionLabel.textContent = '欠席 ➔';
+          }
+        } else {
+          card.classList.add('opacity-40', 'grayscale-[40%]', 'bg-slate-50', 'cursor-not-allowed', 'border-slate-200');
+          if (actionLabel) {
+            actionLabel.className = 'card-action-label font-semibold text-slate-400 text-[11px] transition';
+            if (status === '登園中') actionLabel.textContent = `在園中 (${card.dataset.checkinTime || detail})`;
+            else if (status === '降園済') actionLabel.textContent = '降園済';
+            else if (status === '欠席') actionLabel.textContent = `登録済 (${detail})`;
+          }
+        }
+      }
+
+      card.dataset.isAllowed = isAllowed ? 'true' : 'false';
+    });
+  }
+
+  // 初回適用
+  applyCardStates();
+
+  // 4. クラスタブ切り替え (F-02)
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const selectedClass = tab.dataset.classTab;
       tabs.forEach(t => {
-        t.className = "class-tab px-5 py-2.5 rounded-xl font-bold text-base transition shrink-0 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200";
+        t.className = "class-tab px-4 sm:px-5 py-2 rounded-xl font-bold text-sm sm:text-base transition shrink-0 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200";
       });
-      tab.className = "class-tab px-5 py-2.5 rounded-xl font-bold text-base transition shrink-0 bg-indigo-600 text-white shadow-sm";
+      tab.className = "class-tab px-4 sm:px-5 py-2 rounded-xl font-bold text-sm sm:text-base transition shrink-0 bg-indigo-600 text-white shadow-sm";
 
       cards.forEach(card => {
         if (selectedClass === 'all' || card.dataset.className === selectedClass) {
@@ -308,15 +455,14 @@
     });
   });
 
-  // 3. QR/バーコードリーダー常時フォーカス維持 (F-03)
-  const qrInput = document.getElementById('qr-input');
+  // 5. QR/バーコードリーダー常時フォーカス維持 (F-03)
   function keepQrFocus() {
     if (qrInput && !document.querySelector('#sibling-modal:not(.hidden)') && !document.querySelector('#absence-modal:not(.hidden)')) {
       qrInput.focus();
     }
   }
   window.addEventListener('click', (e) => {
-    if (!e.target.closest('button, a, input, select')) {
+    if (!e.target.closest('button, a, input, select, .child-card')) {
       keepQrFocus();
     }
   });
@@ -344,7 +490,7 @@
     }
   }
 
-  // 4. 園児カードタップ処理
+  // 6. 園児カードタップ処理 (提案2: ガード警告 ＆ 兄弟・欠席モーダル連携)
   let activeChildData = null;
 
   cards.forEach(card => {
@@ -357,6 +503,40 @@
     const childId = card.dataset.childId;
     const childName = card.dataset.childName;
     const familyId = card.dataset.familyId;
+    const status = card.dataset.status || '未登園';
+    const detail = card.dataset.detail || '';
+    const isAllowed = card.dataset.isAllowed === 'true';
+
+    // 提案2: ガード状態のカードをタップした際の親切なフィードバック
+    if (!isAllowed) {
+      if (currentMode === 'check_in') {
+        if (status === '登園中') {
+          showToast(`${childName} さんはすでに登園しています (${card.dataset.checkinTime || detail})`, true);
+        } else if (status === '降園済') {
+          showToast(`${childName} さんは本日すでに降園済みです`, true);
+        } else if (status === '欠席') {
+          showToast(`${childName} さんは本日欠席（${detail}）として登録されています`, true);
+        }
+      } else if (currentMode === 'check_out') {
+        if (status === '未登園') {
+          showToast(`${childName} さんは本日まだ登園していません`, true);
+        } else if (status === '降園済') {
+          showToast(`${childName} さんはすでに降園打刻済みです (${card.dataset.checkoutTime || detail})`, true);
+        } else if (status === '欠席') {
+          showToast(`${childName} さんは本日欠席として登録されています`, true);
+        }
+      } else if (currentMode === 'absence') {
+        if (status === '登園中') {
+          showToast(`${childName} さんは現在登園中です。保育士にご相談ください`, true);
+        } else if (status === '欠席') {
+          showToast(`${childName} さんはすでに欠席（${detail}）として登録済みです`, true);
+        } else {
+          showToast(`${childName} さんは現在欠席登録を受け付けられません`, true);
+        }
+      }
+      return;
+    }
+
     let siblings = [];
     try {
       siblings = JSON.parse(card.dataset.siblings || '[]');
@@ -369,15 +549,16 @@
       siblings
     };
 
-    if (CURRENT_MODE === 'absence') {
+    if (currentMode === 'absence') {
       // 欠席モード -> 理由選択モーダル表示 (F-05)
       openAbsenceModal(childName);
       return;
     }
 
+    const currentModeLabel = MODE_LABELS[currentMode] || '打刻';
+
     // 登園・降園モード
     // F-04: 世帯IDが一致する園児が2名以上いる場合のみモーダル表示
-    // 世帯IDが空欄、または単独世帯は即時単独打刻
     if (familyId && familyId.trim() && siblings.length > 0) {
       openSiblingModal(childName, siblings);
     } else {
@@ -386,7 +567,7 @@
     }
   }
 
-  // 5. 兄弟モーダル制御 (F-04)
+  // 7. 兄弟モーダル制御 (F-04)
   const siblingModal = document.getElementById('sibling-modal');
   const siblingModeLabel = document.getElementById('sibling-mode-label');
   const siblingNamesText = document.getElementById('sibling-names-text');
@@ -397,6 +578,7 @@
   const btnCloseSiblingModal = document.getElementById('btn-close-sibling-modal');
 
   function openSiblingModal(targetName, siblings) {
+    const currentModeLabel = MODE_LABELS[currentMode] || '打刻';
     siblingModeLabel.textContent = currentModeLabel;
     singleModeLabel.textContent = currentModeLabel;
     singleChildName.textContent = targetName;
@@ -417,6 +599,7 @@
   btnPunchSiblings.addEventListener('click', () => {
     if (!activeChildData) return;
     const allChildIds = [activeChildData.childId, ...activeChildData.siblings.map(s => s.child_id)];
+    const currentModeLabel = MODE_LABELS[currentMode] || '打刻';
     closeSiblingModal();
     executePunch(allChildIds, currentModeLabel);
   });
@@ -424,11 +607,12 @@
   btnPunchSingle.addEventListener('click', () => {
     if (!activeChildData) return;
     const singleId = [activeChildData.childId];
+    const currentModeLabel = MODE_LABELS[currentMode] || '打刻';
     closeSiblingModal();
     executePunch(singleId, currentModeLabel);
   });
 
-  // 6. 欠席モーダル制御 (F-05)
+  // 8. 欠席モーダル制御 (F-05)
   const absenceModal = document.getElementById('absence-modal');
   const absenceChildName = document.getElementById('absence-child-name');
   const btnCloseAbsenceModal = document.getElementById('btn-close-absence-modal');
@@ -455,8 +639,60 @@
     });
   });
 
-  // 7. 打刻実行APIリクエスト ＆ 電子音 ＆ トースト ＆ 2.5秒オートリセット (F-02, F-07)
+  // 9. 打刻実行APIリクエスト ＆ 電子音 ＆ 即時Undo ＆ スムーズ連続打刻 (提案1 & 提案2)
   let isSubmitting = false;
+
+  function updateDOMStates(updatedStates) {
+    if (!updatedStates) return;
+    cards.forEach(card => {
+      const cid = card.dataset.childId;
+      if (updatedStates[cid]) {
+        const st = updatedStates[cid];
+        card.dataset.status = st.status || '未登園';
+        card.dataset.detail = st.detail || '-';
+        card.dataset.checkinTime = st.check_in_time || '';
+        card.dataset.checkoutTime = st.check_out_time || '';
+
+        const badge = card.querySelector('.card-status-badge');
+        if (badge) {
+          badge.className = `card-status-badge text-[11px] font-bold px-2 py-0.5 rounded-full ${st.badge_class || 'badge-not-arrived'}`;
+          badge.textContent = `${st.status || '未登園'}${st.detail && st.detail !== '-' ? ' ' + st.detail : ''}`;
+        }
+      }
+    });
+    // ガード状態を再反映
+    applyCardStates();
+  }
+
+  async function executeUndo(logIds) {
+    try {
+      const formData = new URLSearchParams();
+      logIds.forEach(id => formData.append('log_ids', id));
+      formData.append('csrf_token', csrfToken);
+
+      const resp = await fetch('/toukouen/undo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      });
+
+      const res = await resp.json();
+      if (!resp.ok || !res.success) {
+        showToast(res.error || '打刻の取り消しに失敗しました', true);
+        return;
+      }
+
+      playSuccessBeep();
+      updateDOMStates(res.updated_states);
+      showToast(res.message || '直前の打刻を取り消しました', false, null, 3000);
+
+    } catch (err) {
+      console.error(err);
+      showToast('取り消し通信エラーが発生しました', true);
+    }
+  }
 
   async function executePunch(childIds, punchType, absenceReason = null) {
     if (isSubmitting) return;
@@ -489,13 +725,22 @@
       // F-02: Web Audio API 電子音再生 (880Hz, 120ms)
       playSuccessBeep();
 
-      // F-02: トースト通知
-      showToast(res.message || `${punchType}を記録しました`);
+      // 提案1 & 提案2: 画面をリロードせず即座にカード状態をインプレース更新（連続打刻を待ち時間ゼロで実現！）
+      if (res.updated_states) {
+        updateDOMStates(res.updated_states);
+      }
 
-      // F-07: 打刻完了から2.5秒後に自動でTOP画面へ復帰
-      setTimeout(() => {
-        window.location.href = '/toukouen';
-      }, 2500);
+      // 提案2: Undoコールバックを渡してトースト表示（5秒間取り消し可能）
+      const undoCallback = (res.log_ids && res.log_ids.length > 0)
+        ? () => executeUndo(res.log_ids)
+        : null;
+
+      showToast(res.message || `${punchType}を記録しました`, false, undoCallback, 4500);
+
+      // 操作タイマーリセット
+      resetIdleTimer();
+
+      isSubmitting = false;
 
     } catch (err) {
       console.error(err);
