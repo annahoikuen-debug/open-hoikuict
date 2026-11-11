@@ -53,11 +53,30 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
 ---
 
+### 4. 公開前コードレビュー指摘事項の修正（2026-11-11）
+
+| 指摘区分 | 対象ファイル | 修正内容 | ステータス |
+|---|---|---|:---:|
+| **Critical** | `csrf.py`, `templates/guardian/kiosk.html` | `/guardian/qr/` を CSRF 免除プレフィックスに追加、およびキオスク fetch に `X-CSRF-Token` ヘッダーを付与（本番 403 遮断の完全解消） | 修正完了 |
+| **Critical** | `routers/pims_attendance.py` | 園児マスタ管理 (`/children/*`)・CSV 出力 (`/export/*`)・取込 (`/import/*`) に職員ログイン (`get_current_staff_user`) および権限ガード (`require_child_record_manager`, `require_document_exporter`) を適用 | 修正完了 |
+| **Critical** | `pims_service.py` | PIMS 公式 9 列 CSV および降園抜け CSV 出力に `sanitize_csv_cell` (CWE-1236 対策) を適用 | 修正完了 |
+| **High** | `templates/guardian/kiosk.html` | 園児個別打刻画面 (`selected_child` 選択時) において QR モーダル・スキャナーを描画しないようガード（文言衝突による回帰テスト 3 件失敗の解消） | 修正完了 |
+| **High** | `tests/snapshots/metadata_schema.json` | `facility_settings.parent_billing_portal_enabled` をスナップショットに追記 (`test_models_compat.py` パス) | 修正完了 |
+| **High** | `scripts/backup_contracts/schema-20261105.json` | `parent_billing_portal_enabled`, `punch_children`, `punch_logs` を契約定義に追記 (`test_backup_v2.py` パス) | 修正完了 |
+| **High** | `vendor/nushift/` | `python scripts/sync_nushift_vendor.py --source E:\nushift\nushift` を実行し NuShift v0.5.0 ソルバーを同期 (`test_vendor_sync.py` パス) | 修正完了 |
+| **High** | `alembic/versions/` | `parent_billing_portal_enabled` および `punch_children`, `punch_logs` テーブル作成のマイグレーション (`e1f54a7b30d4`) を新規作成 | 修正完了 |
+| **Medium** | `parent_billing_service.py` | `family_id=None` に対する防御的ガード (`if not family_id: return ...`) を追加 | 修正完了 |
+| **Medium** | `routers/pims_attendance.py` | PIMS 帳票ダウンロード時に `log_export()` による監査ログ記録を追加 | 修正完了 |
+| **Medium** | `tests/test_pims_attendance.py` | 専用の管理者UUIDを使用し teardown で削除することで、`test_document_exports.py` 等へのテスト間状態汚染を防止 | 修正完了 |
+| **Low** | `pims_service.py`, `routers/pims_attendance.py` | 未使用インポート (`Classroom`, `monthrange`, `date`, `HTTPException`) を削除し `ruff check .` 全件 Green | 修正完了 |
+
+---
+
 ## 公開前チェックリスト
 
 ### 必須項目
 
-- [ ] テストスイート全体が全パスすること (`pytest tests/`)
+- [x] テストスイート全体が全パスすること (`pytest tests/`)
 - [ ] 本番環境変数がすべて設定されていること (`security_config.validate_runtime_security()` が通過)
 - [ ] `HOIKUICT_SECRET_KEY` が32文字以上のランダム値であること
 - [ ] `HOIKUICT_LOGIN_THROTTLE_HMAC_KEY` が32バイト以上であること
@@ -71,9 +90,12 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
 ### 推奨項目
 
-- [ ] CSRF トークンの HMAC 署名検証が正しく動作すること
+- [x] CSRF トークンの HMAC 署名検証が正しく動作すること（キオスク QR 打刻を含む）
 - [ ] セキュリティヘッダー (CSP, HSTS, X-Frame-Options: DENY など) がすべてのレスポンスに付与されること
-- [ ] CSV インポートで数式インジェクション対策が適用されていること
+- [x] CSV インポート・エクスポートで数式インジェクション対策が適用されていること（PIMS CSV 含む）
+- [x] 園児マスタ・PIMS 帳票エクスポートの認可制御および監査ログ記録が適用されていること
+- [x] Alembic マイグレーションが最新（`e1f54a7b30d4`）であること
+- [x] NuShift ソルバーが最新 v0.5.0 に同期されていること
 - [ ] ファミリーアーカイブ/削除が監査ログ付きで状態遷移すること
 - [ ] Zengin ファイル形式 (cp932, 120バイトレコード) が正しく出力・解析されること
 - [ ] 請求計算の丸め処理 (proration rounding) が正しく動作すること
@@ -89,9 +111,3 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 - [ ] 本番デプロイ手順 (Docker, systemd など) が文書化されていること
 - [ ] 環境変数の一覧と説明が文書化されていること
 - [ ] セキュリティインシデント対応手順が文書化されていること
-
----
-
-- `tests/routers/test_billing_zengin.py` - `setUp()` で admin User レコード作成、`user_id` 設定を追加
-
-- `tests/routers/test_billing_zengin.py` - `setUp()` で admin User レコード作成、`user_id` 設定を追加

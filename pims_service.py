@@ -12,6 +12,7 @@ from typing import Optional, Tuple, List, Dict, Any
 from sqlmodel import Session, select
 
 from auth_mail import send_auth_mail
+from common.csv_utils import sanitize_csv_cell
 from models.pims import PunchChild, PunchLog
 from time_utils import local_naive_now, local_today
 
@@ -71,7 +72,7 @@ def sync_core_children_if_empty(session: Session) -> int:
         return 0
 
     try:
-        from models.core import Child, Classroom, ChildStatus
+        from models.core import Child, ChildStatus
         core_children = session.exec(select(Child).where(Child.status == ChildStatus.enrolled)).all()
         synced = 0
         for cc in core_children:
@@ -625,13 +626,13 @@ def export_pims_csv(session: Session, year: int, month: int) -> Tuple[bytes, Lis
 
             # 9列構成
             row = [
-                clean_name,      # 1. 氏名
-                clean_kana,      # 2. 氏名カナ
+                sanitize_csv_cell(clean_name),      # 1. 氏名
+                sanitize_csv_cell(clean_kana),      # 2. 氏名カナ
                 birth_str,       # 3. 生年月日
                 "",              # 4. 未使用
                 "",              # 5. 未使用
                 date_str,        # 6. 日付
-                reason_str,      # 7. 欠席理由
+                sanitize_csv_cell(reason_str),      # 7. 欠席理由
                 in_time_str,     # 8. 登園時刻
                 out_time_str,    # 9. 降園時刻
             ]
@@ -659,10 +660,10 @@ def export_missing_checkouts_csv(missing_list: List[Dict[str, Any]], year: int, 
     for item in missing_list:
         writer.writerow([
             item["date"],
-            item["child_name"],
+            sanitize_csv_cell(item["child_name"]),
             item["check_in_time"],
             item["auto_checkout_time"],
-            item["status"],
+            sanitize_csv_cell(item["status"]),
         ])
 
     csv_text = buffer.getvalue()

@@ -7,21 +7,39 @@ from datetime import date, datetime, time
 from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, select
 
 from csrf import CSRF_COOKIE_NAME, generate_csrf_token
 from database import engine as app_engine, create_db_and_tables
 from main import app
+import uuid
+from auth import Role
+from models import User
 from models.pims import PunchChild, PunchLog
 import pims_service
+from testing_helpers import authenticate_mock_staff
+
+PIMS_TEST_ADMIN_ID = uuid.uuid4()
 
 
 @pytest.fixture(autouse=True)
 def setup_db():
     create_db_and_tables()
     with Session(app_engine) as session:
+        # 専用の管理者ユーザーを作成
+        admin = session.get(User, PIMS_TEST_ADMIN_ID)
+        if not admin:
+            admin = User(
+                id=PIMS_TEST_ADMIN_ID,
+                email="admin-pims@example.test",
+                display_name="園長",
+                staff_role="admin",
+                can_manage_child_records=True,
+                can_export_documents=True,
+                is_active=True,
+            )
+            session.add(admin)
         # テストデータのクリーンアップ
-        session.exec(select(PunchLog)).all()
         for log in session.exec(select(PunchLog)).all():
             session.delete(log)
         for child in session.exec(select(PunchChild)).all():
@@ -33,14 +51,18 @@ def setup_db():
             session.delete(log)
         for child in session.exec(select(PunchChild)).all():
             session.delete(child)
+        admin = session.get(User, PIMS_TEST_ADMIN_ID)
+        if admin:
+            session.delete(admin)
         session.commit()
 
 
 @pytest.fixture
 def client():
     c = TestClient(app)
+    authenticate_mock_staff(c, role=Role.ADMIN, user_id=PIMS_TEST_ADMIN_ID, can_manage_child_records=True)
     # まずGETを呼んでCSRFミドルウェアにクッキーを生成させる
-    resp = c.get("/toukouen")
+    c.get("/toukouen")
     token = c.cookies.get(CSRF_COOKIE_NAME)
     if not token:
         token = generate_csrf_token()
@@ -354,7 +376,7 @@ def test_f10_f11_pims_csv_export(db_session: Session):
     found_day4 = False
 
     reader = csv.reader(io.StringIO(text))
-    header = next(reader)
+    _ = next(reader)
     for row in reader:
         if not row:
             continue
@@ -623,5 +645,21 @@ def test_proposal_2_sibling_undo(client: TestClient, db_session: Session):
     assert u_data["success"] is True
     assert u_data["updated_states"]["SIB_U1"]["status"] == "未登園"
     assert u_data["updated_states"]["SIB_U2"]["status"] == "未登園"
+
+
+def test_toukouen_admin_endpoints_require_staff_auth():
+    """バックオフィス管理エンドポイントへのアクセスには職員ログインが必須であること。"""
+    unauth_client = TestClient(app)
+    # 園児マスタ管理
+    resp = unauth_client.get("/toukouen/children")
+    assert resp.status_code in {401, 303}
+
+    # PIMS CSV ダウンロード
+    resp_dl = unauth_client.get("/toukouen/export/pims/download?year=2026&month=10")
+    assert resp_dl.status_code in {401, 303}
+
+    # コドモン CSV 取込
+    resp_imp = unauth_client.get("/toukouen/import/codmon")
+    assert resp_imp.status_code in {401, 303}
 
 

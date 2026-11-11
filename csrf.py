@@ -12,7 +12,12 @@ from security_config import csrf_enforced, secure_cookie_enabled
 
 CSRF_COOKIE_NAME = "hoikuict_csrf"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
-CSRF_EXEMPT_PATH_PREFIXES = ("/parent-portal/push/receipts/", "/toukouen/punch", "/toukouen/undo")
+CSRF_EXEMPT_PATH_PREFIXES = (
+    "/parent-portal/push/receipts/",
+    "/toukouen/punch",
+    "/toukouen/undo",
+    "/guardian/qr/",
+)
 logger = logging.getLogger(__name__)
 
 

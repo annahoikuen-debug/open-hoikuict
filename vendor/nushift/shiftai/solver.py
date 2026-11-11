@@ -115,7 +115,6 @@ _DEFAULT_BREAK_MINUTES = config.DEFAULT_BREAK_MINUTES
 #: 時間帯数 n に対して候補は O(n²) なので、n を大きくするとこの上限に
 #: 先に当たり、:func:`_add_interval_block` は ``False`` を返して
 #: ソフトペナルティにフォールバックする。
-_MAX_INTERVAL_CANDIDATES = 100
 _DEFAULT_STAGGER_SLOTS = 1
 _EPS = config.FLOAT_TOLERANCE
 _INFEASIBLE_FALLBACK_MESSAGE = "PuLP では解なし。貪欲法による暫定シフトを生成しました"
@@ -501,6 +500,7 @@ def _interval_candidates(
     seq: Mapping[int, object],
     n: int,
     host: Mapping[int, object] | None = None,
+    fixed_length: int | None = None,
 ) -> tuple[list[tuple[int, int]], list[int]]:
     """在勤が取り得る連続区間の候補と、固定1セルの添字列を返す。
 
@@ -535,15 +535,31 @@ def _interval_candidates(
         if fixed_ones and not all(lo <= i <= hi for i in fixed_ones):
             # 固定セルが別のランにある。連続1区間に収まらないので候補なし。
             continue
-        for start_i in range(lo, (fix_first if fixed_ones else hi) + 1):
-            for end_i in range((fix_last if fixed_ones else start_i), hi + 1):
+        if fixed_length is not None:
+            flen = fixed_length
+            if flen <= 0 or (hi - lo + 1) < flen:
+                continue
+            max_start = hi - flen + 1
+            for start_i in range(lo, max_start + 1):
+                end_i = start_i + flen - 1
+                if fixed_ones and not (start_i <= fix_first and end_i >= fix_last):
+                    continue
                 if host is not None:
-                    # 前後に在勤できるセルがなければ休息区間として成立しない。
                     if not any(i < start_i for i in host_idx):
                         continue
                     if not any(i > end_i for i in host_idx):
                         continue
                 candidates.append((start_i, end_i))
+        else:
+            for start_i in range(lo, (fix_first if fixed_ones else hi) + 1):
+                for end_i in range((fix_last if fixed_ones else start_i), hi + 1):
+                    if host is not None:
+                        # 前後に在勤できるセルがなければ休息区間として成立しない。
+                        if not any(i < start_i for i in host_idx):
+                            continue
+                        if not any(i > end_i for i in host_idx):
+                            continue
+                    candidates.append((start_i, end_i))
     return candidates, fixed_ones
 
 
@@ -553,6 +569,7 @@ def _add_interval_block(
     tag: str,
     n: int,
     host: Mapping[int, object] | None = None,
+    fixed_length: int | None = None,
 ) -> bool:
     """「在勤は高々1つの連続区間」を**区間列挙**でハード制約化する。
 
@@ -565,12 +582,12 @@ def _add_interval_block(
 
     :returns: 制約を張れたら ``True``、候補が膨大すぎて諦めたら ``False``。
     """
-    candidates, fixed_ones = _interval_candidates(seq, n, host)
+    candidates, fixed_ones = _interval_candidates(seq, n, host, fixed_length)
     if not candidates:
         if fixed_ones:
             ctx.conflicts.append(f"{tag}: 固定セルを含む在勤区間がありません")
         return True
-    if len(candidates) > _MAX_INTERVAL_CANDIDATES:
+    if len(candidates) > config.MAX_INTERVAL_CANDIDATES:
         return False
     z_vars: list[tuple[tuple[int, int], object]] = []
     for start_i, end_i in candidates:
@@ -654,6 +671,7 @@ def _add_duty_block(
     commute_reach: int = 0,
     obj: list[object] | None = None,
     weights: ObjectiveWeights | None = None,
+    break_slots: int | None = None,
 ) -> None:
     """1職員1日の勤務を運用可能な形に制約する（案1の中核）。
 
@@ -702,7 +720,7 @@ def _add_duty_block(
     # 「休息区間の前後に在勤可能なセルがある」こと（D3）を課す。
     if allow_split:
         _add_block(ctx, brk, f"brk_{tag}", n, soft_obj, soft_weights)
-    elif not _add_interval_block(ctx, brk, f"brk_{tag}", n, host=duty):
+    elif not _add_interval_block(ctx, brk, f"brk_{tag}", n, host=duty, fixed_length=break_slots):
         _add_block(ctx, brk, f"brk_{tag}", n, obj, weights)
     # D3: 休息の前後に在勤があること（**ソフト**）。
     # ハードにすると 2〜3 時間帯しか働かない短勤務には「休息を入れても
@@ -741,6 +759,7 @@ def _build_cells(
     ignore_unavailable: bool = False,
     drop_groups: frozenset[str] = frozenset(),
     allow_split: bool = False,
+    break_minutes: int = _DEFAULT_BREAK_MINUTES,
 ) -> None:
     """セル変数の生成と、セル単位のハード制約（排他・在勤/休憩ブロック・1日上限）。
 
@@ -841,6 +860,8 @@ def _build_cells(
             if "duty_block" not in drop_groups:
                 # 案1: 1職員1日の在勤は1連続ブロック・休息は1回だけにする。
                 # allow_split=True（緩和 L3 ``RELAX_HOURS``）ならソフトに戻る。
+                _gran = max(1, int(requirements.granularity_min or slots[0].minutes))
+                _brk_slots = _break_slots(cap_min, break_minutes, _gran)
                 _add_duty_block(
                     ctx,
                     duty,
@@ -852,6 +873,7 @@ def _build_cells(
                     commute_reach=_commute_reach_slots(n),
                     obj=obj,
                     weights=weights,
+                    break_slots=_brk_slots,
                 )
 
             if "daily_cap" not in drop_groups:
@@ -1033,6 +1055,11 @@ def _add_workload(
             obj.append(weights.break_conflict_penalty * excess)
 
 
+def _break_slots(cap_min: int, break_minutes: int, gran: int) -> int:
+    """必要休憩スロット数を算出する（0 以上、日上限スロット数以下）。"""
+    return min(max(1, -(-break_minutes // gran)), max(0, cap_min // gran))
+
+
 def _add_breaks(
     ctx: _ModelCtx,
     staff: Sequence[StaffMember],
@@ -1047,7 +1074,7 @@ def _add_breaks(
     for st in staff:
         sid = st.staff_id
         cap_min = _daily_cap_minutes(st.contract)
-        need_slots = min(max(1, -(-break_minutes // gran)), max(0, cap_min // gran))
+        need_slots = _break_slots(cap_min, break_minutes, gran)
         if need_slots <= 0:
             continue
         for day in requirements.all_days():
@@ -1350,32 +1377,19 @@ def _add_hours_objective(
         unused = pulp.LpVariable(f"unused_{sid}", lowBound=0)
         ctx.prob += hvar + unused >= _UNUSED_HOURS_EPS
         obj.append(weights.unused_staff_penalty * unused)
-        # 「週 44 時間」は **週ごと** に判定する。
-        #
-        # 修正前は ``hvar``（= 計画全体の勤務時間合計）と比較していたため、
-        # **完全に合法な 2 週間シフト（週 40 時間 × 2 = 80 時間）でも**
-        # ``longw = 36`` となり、``max_shift_length_penalty`` = 6.0 で
-        # **216** の目的関数ペナルティが発生していた。
-        # 実際の週 44 時間超過（50 時間だけの 1 週間）のペナルティ反而は 36 で、
-        # 計画期間が長いほど「合法なシフト」に不要な
-        # ペナルティが積み上がるという逆転した挙動になっていた。
-        #
-        # ``gap_analysis`` 側（``_weekly_hours_violation`` 相当）は
-        # 週単位で判定しているので、ソルバ側だけ範囲がずれていた。
-        # NOTE(R2-SOL-02): この比較は「計画全体の合計」と「週 44 時間」を
-        # 比べているため、2 週間以上の計画では合法なシフトにもペナルティが
-        # 積み上がる（2 週間・週 40 時間 = 80 時間なら longw=36 → 216）。
-        #
-        # 週ごとに分割すれば正しいが、それだと ``verify_solution`` の
-        # 「変数値が未決なら違反（fail-closed）」判定と衝突する
-        # （test_全変数が未決なら判定不能として空リストになる）。
-        # 根治には未決変数を制約側から除外する仕組み
-        # （``capture_specs`` の設計変更）が必要なため、意図的に据え置く。
-        # 影響は目的関数の重み付けのみで、出力される制約違反ではない
-        # （``gap_analysis`` は週単位で正しく検出する）。
-        long_week = pulp.LpVariable(f"longw_{sid}", lowBound=0)
-        ctx.prob += hvar - STATUTORY_WEEKLY_WORK_HOURS <= long_week
-        obj.append(weights.max_shift_length_penalty * long_week)
+        # 週44時間目安は週ごとの窓で判定する（R2-SOL-02 修正済み）。
+        for wi, window in enumerate(weekly_windows(days, config.WEEKLY_WINDOW_DAYS)):
+            week_items = [
+                (ctx.day_work[(sid, d)], 1)
+                for d in window
+                if isinstance(ctx.day_work.get((sid, d)), pulp.LpAffineExpression)
+            ]
+            if not week_items:
+                continue
+            week_hours = _linear(week_items) * (1.0 / 60.0)  # day_work は「分」単位
+            slack = pulp.LpVariable(f"longw_{sid}_{wi}", lowBound=0)
+            ctx.prob += week_hours - STATUTORY_WEEKLY_WORK_HOURS <= slack
+            obj.append(weights.max_shift_length_penalty * slack)
     for sid, day in ctx.day_work:
         expr = ctx.day_work[(sid, day)]
         if isinstance(expr, int | float):
@@ -1459,7 +1473,12 @@ def _add_pattern_alignment(
             tag = day.strftime("%m%d")
             matched: list[object] = []
             for k, indices in enumerate(ranges):
-                var = pulp.LpVariable(f"pat_{sid}_{tag}_{k}", lowBound=0, upBound=1)
+                var = pulp.LpVariable(
+                    f"pat_{sid}_{tag}_{k}",
+                    0,
+                    1,
+                    pulp.LpBinary if pattern_mode else pulp.LpContinuous,
+                )
                 terms: list[object] = []
                 for i in indices:
                     cell = duty.get(i, 0)
@@ -1793,6 +1812,7 @@ def _build_problem(
         ignore_unavailable=ignore_unavailable,
         drop_groups=drop_groups,
         allow_split=level >= int(RelaxLevel.RELAX_HOURS),
+        break_minutes=break_minutes,
     )
     if "coverage" not in drop_groups:
         if soft_coverage or level >= int(RelaxLevel.SOFT_COVERAGE):
@@ -2028,13 +2048,8 @@ def solve_shift(
 
     # ウォームスタート（初期解投入）
     if payload.warm_start:
-        warm_assignments = dict(payload.warm_start_assignments or {})
-        # 手動確定セルを優先的にウォームスタートにマージ（探索空間削減）
-        if payload.fixed:
-            for key, state in payload.fixed.items():
-                if key not in warm_assignments:
-                    warm_assignments[key] = state
-        if not warm_assignments:
+        warm_assignments = payload.warm_start_assignments
+        if warm_assignments is None:
             try:
                 g_res = solve_shift_greedy(
                     children=payload.children,
@@ -2051,7 +2066,6 @@ def solve_shift(
             applied_count = apply_warm_start(ctx, slots, warm_assignments)
             stats["warm_start_applied"] = applied_count > 0
             stats["warm_start_vars"] = applied_count
-            stats["warm_start_fixed_merged"] = len(payload.fixed or {}) > 0
 
     status, raw, actual_solver = _run_solver(
         ctx,

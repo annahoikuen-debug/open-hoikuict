@@ -739,6 +739,7 @@
       "fever_review_c",
       "final_pickup_time",
       "id",
+      "parent_billing_portal_enabled",
       "supplementary_meal_fee",
       "supplementary_meal_time",
       "updated_at",
@@ -1509,6 +1510,25 @@
       "created_at",
       "family_id",
       "id"
+    ],
+    "punch_children": [
+      "birth_date",
+      "child_id",
+      "class_name",
+      "family_id",
+      "is_active",
+      "kana",
+      "name",
+      "parent_email",
+      "sort_order"
+    ],
+    "punch_logs": [
+      "absence_reason",
+      "child_id",
+      "is_auto_filled",
+      "log_id",
+      "punch_type",
+      "punched_at"
     ],
     "record_highlight_comments": [
       "author",

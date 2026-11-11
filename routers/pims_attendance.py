@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import logging
-from calendar import monthrange
-from datetime import date, datetime, time
+from datetime import datetime, time
 from typing import List, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 from sqlmodel import Session, select
 
+from auth import get_current_staff_user
 from database import get_session
 from models.pims import PunchChild, PunchLog
 import pims_service
+from routers.document_exports import log_export
+from staff_permissions import require_child_record_manager, require_document_exporter
 from template_utils import create_templates
 from time_utils import local_naive_now, local_today
 
@@ -161,9 +163,14 @@ def toukouen_undo(
 
 
 @router.get("/import/codmon", response_class=HTMLResponse)
-def toukouen_import_codmon_get(request: Request):
+def toukouen_import_codmon_get(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
     """F-09: コドモンCSV取込画面"""
-    return templates.TemplateResponse(request, "toukouen/import_codmon.html", {"request": request})
+    require_child_record_manager(session, current_user)
+    return templates.TemplateResponse(request, "toukouen/import_codmon.html", {"request": request, "current_user": current_user})
 
 
 @router.post("/import/codmon", response_class=HTMLResponse)
@@ -171,22 +178,24 @@ async def toukouen_import_codmon_post(
     request: Request,
     csv_file: UploadFile = File(...),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """F-09: コドモンCSV取込実行"""
+    require_child_record_manager(session, current_user)
     try:
         content = await csv_file.read()
         result = pims_service.import_codmon_csv(session, content)
         return templates.TemplateResponse(
             request,
             "toukouen/import_codmon.html",
-            {"request": request, "result": result},
+            {"request": request, "result": result, "current_user": current_user},
         )
     except Exception as exc:
         logger.exception("コドモンCSV取込エラー")
         return templates.TemplateResponse(
             request,
             "toukouen/import_codmon.html",
-            {"request": request, "error": str(exc)},
+            {"request": request, "error": str(exc), "current_user": current_user},
         )
 
 
@@ -195,8 +204,10 @@ def toukouen_export_pims_get(
     request: Request,
     month: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """F-10, F-11: ピムスCSV出力設定画面"""
+    require_document_exporter(session, current_user)
     today = local_today()
     selected_month = month or today.strftime("%Y-%m")
     return templates.TemplateResponse(
@@ -206,6 +217,7 @@ def toukouen_export_pims_get(
             "request": request,
             "selected_month": selected_month,
             "exported": False,
+            "current_user": current_user,
         },
     )
 
@@ -215,8 +227,10 @@ def toukouen_export_pims_post(
     request: Request,
     target_month: str = Form(...),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """F-10, F-11: ピムスCSV出力生成＆降園抜けチェック"""
+    require_document_exporter(session, current_user)
     try:
         parts = target_month.split("-")
         year = int(parts[0])
@@ -239,6 +253,7 @@ def toukouen_export_pims_post(
             "target_year": year,
             "target_month_num": month,
             "missing_checkouts": missing_checkouts,
+            "current_user": current_user,
         },
     )
 
@@ -248,11 +263,24 @@ def toukouen_export_pims_download(
     year: int = Query(...),
     month: int = Query(...),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """F-10: ピムス9列CSVダウンロード"""
+    require_document_exporter(session, current_user)
     csv_bytes, _ = pims_service.export_pims_csv(session, year, month)
     filename = f"月次報告_児童表_{year}{month:02d}.csv"
     encoded_filename = quote(filename)
+
+    log_export(
+        session,
+        export_type="pims_attendance",
+        export_format="csv",
+        target_month=f"{year}-{month:02d}",
+        exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+        exported_by_name=current_user.name,
+        file_size_bytes=len(csv_bytes),
+        status="success",
+    )
 
     return Response(
         content=csv_bytes,
@@ -268,12 +296,25 @@ def toukouen_export_missing_checkout_download(
     year: int = Query(...),
     month: int = Query(...),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """F-11: 降園打刻忘れ一覧CSVダウンロード"""
+    require_document_exporter(session, current_user)
     _, missing_checkouts = pims_service.export_pims_csv(session, year, month)
     csv_bytes = pims_service.export_missing_checkouts_csv(missing_checkouts, year, month)
     filename = f"降園打刻忘れ一覧_{year}{month:02d}.csv"
     encoded_filename = quote(filename)
+
+    log_export(
+        session,
+        export_type="pims_missing_checkout",
+        export_format="csv",
+        target_month=f"{year}-{month:02d}",
+        exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+        exported_by_name=current_user.name,
+        file_size_bytes=len(csv_bytes),
+        status="success",
+    )
 
     return Response(
         content=csv_bytes,
@@ -289,14 +330,16 @@ def toukouen_children_list(
     request: Request,
     notice: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """園児マスタ管理画面"""
+    require_child_record_manager(session, current_user)
     pims_service.sync_core_children_if_empty(session)
     children = session.exec(select(PunchChild).order_by(PunchChild.sort_order, PunchChild.name)).all()
     return templates.TemplateResponse(
         request,
         "toukouen/children.html",
-        {"request": request, "children": children, "notice": notice},
+        {"request": request, "children": children, "notice": notice, "current_user": current_user},
     )
 
 
@@ -314,8 +357,10 @@ def toukouen_children_save(
     is_active: Optional[str] = Form(default=None),
     is_edit: str = Form(default="0"),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """園児マスタ保存（新規・編集）"""
+    require_child_record_manager(session, current_user)
     cid = child_id.strip()
     parsed_birth = pims_service.parse_date_str(birth_date)
     active_val = bool(is_active)
@@ -354,8 +399,10 @@ def toukouen_children_save(
 @router.post("/children/sync")
 def toukouen_children_sync(
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """既存台帳からの同期"""
+    require_child_record_manager(session, current_user)
     from models.core import Child, ChildStatus
     core_children = session.exec(select(Child).where(Child.status == ChildStatus.enrolled)).all()
     count = 0
@@ -387,8 +434,10 @@ def toukouen_logs(
     request: Request,
     target_date: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
 ):
     """打刻トランザクションログ一覧画面"""
+    require_child_record_manager(session, current_user)
     day = pims_service.parse_date_str(target_date) or local_today()
     start_dt = datetime.combine(day, time.min)
     end_dt = datetime.combine(day, time.max)

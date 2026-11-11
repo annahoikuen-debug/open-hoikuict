@@ -68,6 +68,16 @@ def get_parent_realtime_extended_care_summary(
         end_date = date(year, month, last_day)
         target_ym = today.strftime("%Y-%m")
 
+    if not family_id:
+        return {
+            "year_month": target_ym,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_extended_minutes": 0,
+            "total_estimated_amount": 0,
+            "charges": [],
+        }
+
     # 家族に所属する園児を取得
     children = session.exec(select(Child).where(Child.family_id == family_id)).all()
     child_map = {c.id: f"{c.last_name} {c.first_name}" for c in children if c.id is not None}
@@ -150,6 +160,9 @@ def get_parent_billing_claims_list(
     family_id: int,
 ) -> list[dict[str, Any]]:
     """保護者家庭の確定済み月次請求一覧を取得する（ドラフト非公開制御）。"""
+    if not family_id:
+        return []
+
     rows = session.exec(
         select(BillingClaim, BillingCycle)
         .join(BillingCycle, BillingClaim.billing_cycle_id == BillingCycle.id)
@@ -193,6 +206,9 @@ def get_parent_claim_detail(
 
     IDOR対策として、family_id が一致しない場合や、ドラフト状態の場合は None を返す。
     """
+    if not family_id or not claim_id:
+        return None
+
     claim = session.get(BillingClaim, claim_id)
     if not claim or claim.family_id != family_id:
         return None

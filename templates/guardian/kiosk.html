@@ -28,7 +28,7 @@
   </div>
   {% endif %}
 
-  {% if not terminal_mode or not selected_classroom %}
+  {% if (not terminal_mode or not selected_classroom) and not selected_child %}
   <!-- QRコードスキャンエリア -->
   <section id="qr-scan-section" class="mb-5 rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-sky-50/50 p-5 shadow-sm">
     <div class="flex flex-col md:flex-row items-center gap-6">
@@ -203,6 +203,7 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
   });
 })();
 
+{% if not selected_child %}
 // QRコードスキャナー & 兄弟一括打刻ロジック
 (() => {
   const video = document.getElementById("kiosk-camera-preview");
@@ -302,11 +303,14 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
   // QRスキャンAPIの呼び出し
   async function handleQrScan(token) {
     try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
       const formData = new FormData();
       formData.append("qr_token", token);
+      if (csrfToken) formData.append("csrf_token", csrfToken);
       const res = await fetch("/guardian/qr/scan", {
         method: "POST",
         body: formData,
+        headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
       });
 
       if (!res.ok) {
@@ -420,15 +424,18 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
       btnCommitSibling.textContent = "打刻処理中...";
 
       try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
         const formData = new FormData();
         formData.append("qr_token", currentQrToken);
         formData.append("action", action);
         formData.append("actual_pickup_person", pickupPerson);
+        if (csrfToken) formData.append("csrf_token", csrfToken);
         cids.forEach(id => formData.append("child_ids", id));
 
         const res = await fetch("/guardian/qr/commit", {
           method: "POST",
           body: formData,
+          headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
         });
 
         if (!res.ok) {
@@ -477,5 +484,6 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
     initCamera();
   }
 })();
+{% endif %}
 </script>
 {% endblock %}
