@@ -75,6 +75,20 @@
           </label>
         </div>
       </div>
+      <div class="border-t border-slate-100 pt-5">
+        <label class="block text-sm font-semibold text-slate-800">
+          保護者ポータル 請求・延長保育料の表示
+        </label>
+        <p class="text-xs text-slate-500 mt-1">有効にすると、保護者ポータルに「ご利用明細」メニューが表示され、当月の延長保育料金速報および確定した月次請求書（口座振替明細）を保護者が確認できるようになります。自治体一括徴収等で園からの直接表示が不要な場合は無効にしてください。</p>
+        <div class="mt-3 flex items-center gap-3">
+          <label class="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="parent_billing_portal_enabled" name="parent_billing_portal_enabled" value="1"
+              {% if settings.parent_billing_portal_enabled %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <span class="ml-2 text-sm font-medium text-slate-700">保護者への請求・延長保育料の開示を有効にする</span>
+          </label>
+        </div>
+      </div>
     </section>
 
     <div class="flex justify-end gap-3">

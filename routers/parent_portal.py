@@ -5,7 +5,7 @@ from typing import Optional
 import unicodedata
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
@@ -32,6 +32,18 @@ from child_profile_changes import normalize_child_profile_payload, with_current_
 from pickup_plan_service import load_pickup_record, pickup_revision, save_pickup_plan
 from models import ChildStatus
 from home_care_details import CARE_KEYS, validate_home_care
+from daily_contact_service import (
+    load_latest_previous_contact,
+    extract_copyable_fields,
+    save_bulk_parent_contacts,
+)
+from facility_settings_service import is_parent_billing_enabled
+from guardian_qr_service import generate_parent_qr_token, generate_parent_qr_svg
+from parent_billing_service import (
+    get_parent_billing_claims_list,
+    get_parent_claim_detail,
+    get_parent_realtime_extended_care_summary,
+)
 from database import get_session
 from models import (
     Child,
@@ -220,6 +232,9 @@ def _render_contact_form(
     pickup_record=None,
     pickup_editable: bool = True,
     status_code: int = 200,
+    has_previous_entry: bool = False,
+    previous_entry_date: Optional[str] = None,
+    previous_copy_fields: Optional[dict[str, str]] = None,
 ):
     pickup_values = {
         "planned_pickup_time": pickup_record.planned_pickup_time or "" if pickup_record else "",
@@ -245,6 +260,9 @@ def _render_contact_form(
             "form_data": _contact_form_data(entry, form_data),
             "pickup_values": pickup_values,
             "pickup_editable": pickup_editable,
+            "has_previous_entry": has_previous_entry,
+            "previous_entry_date": previous_entry_date,
+            "previous_copy_fields": previous_copy_fields or {},
             "present_temperature_limit": str(PRESENT_TEMPERATURE_LIMIT),
             "present_temperature_error": PRESENT_TEMPERATURE_ERROR,
             "temperature_format_error": TEMPERATURE_FORMAT_ERROR,
@@ -665,7 +683,8 @@ def parent_home(
             "latest_updates": latest_updates[:5],
             "recent_replies": recent_replies,
             "unread_notice_count": sum(1 for item in latest_updates if item["is_unread"]),
-            "flash_notice": "日次連絡を保存しました。" if notice == "saved" else "",
+            "parent_billing_portal_enabled": is_parent_billing_enabled(session),
+            "flash_notice": "きょうだい全員分の連絡を保存しました。" if notice == "bulk_saved" else ("日次連絡を保存しました。" if notice == "saved" else ""),
         },
     )
 
@@ -1112,6 +1131,7 @@ def parent_contact_form(
     child_id: int,
     target_date: Optional[str] = Query(default=None, alias="date"),
     notice: Optional[str] = Query(default=None),
+    copy_previous: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ):
     current_parent_user = _get_parent_account(request, session)
@@ -1129,6 +1149,20 @@ def parent_contact_form(
     published_reply = _load_published_daily_contact_reply(session, child_id, day)
     pickup_record = load_pickup_record(session, child_id, day)
 
+    latest_prev = load_latest_previous_contact(session, child_id=child_id, before_date=day)
+    has_prev = latest_prev is not None
+    prev_date_str = latest_prev.target_date.strftime("%m/%d") if latest_prev else None
+    prev_fields = {}
+    form_data = None
+    notice_text = "日次連絡を保存しました。" if notice == "saved" else ""
+
+    if latest_prev:
+        prev_pickup = load_pickup_record(session, child_id, latest_prev.target_date)
+        prev_fields = extract_copyable_fields(latest_prev, prev_pickup)
+        if copy_previous == "1" and entry is None:
+            form_data = dict(prev_fields)
+            notice_text = f"前回の入力（{prev_date_str}）を反映しました。体温を測って入力してください。"
+
     return _render_contact_form(
         request,
         current_parent_user=current_parent_user,
@@ -1136,9 +1170,13 @@ def parent_contact_form(
         entry=entry,
         target_date_value=day.isoformat(),
         published_reply=published_reply,
-        notice="日次連絡を保存しました。" if notice == "saved" else "",
+        notice=notice_text,
         pickup_record=pickup_record,
         pickup_editable=day >= local_today() and child.status == ChildStatus.enrolled and not (pickup_record and pickup_record.check_out_at),
+        has_previous_entry=has_prev,
+        previous_entry_date=prev_date_str,
+        previous_copy_fields=prev_fields,
+        form_data=form_data,
     )
 
 
@@ -1406,6 +1444,234 @@ def save_parent_contact(
 
     return RedirectResponse(
         url=f"/parent-portal/?date={day.isoformat()}&notice=saved",
+        status_code=303,
+    )
+
+
+@router.get("/bulk-contact", response_class=HTMLResponse)
+def bulk_contact_form(
+    request: Request,
+    target_date: Optional[str] = Query(default=None, alias="date"),
+    copy_previous: Optional[str] = Query(default=None),
+    notice: Optional[str] = Query(default=None),
+    session: Session = Depends(get_session),
+):
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    children = _linked_children(current_parent_user)
+    if len(children) < 2:
+        return RedirectResponse(url="/parent-portal/", status_code=303)
+
+    day = _parse_target_date(target_date)
+
+    existing_entries = {}
+    pickup_records = {}
+    for c in children:
+        e = session.exec(select(DailyContactEntry).where(
+            DailyContactEntry.child_id == c.id,
+            DailyContactEntry.target_date == day,
+        )).first()
+        if e:
+            existing_entries[c.id] = e
+        r = load_pickup_record(session, c.id, day)
+        if r:
+            pickup_records[c.id] = r
+
+    has_any_previous = False
+    latest_previous_by_child = {}
+    for c in children:
+        prev = load_latest_previous_contact(session, child_id=c.id, before_date=day)
+        if prev:
+            has_any_previous = True
+            prev_pickup = load_pickup_record(session, c.id, prev.target_date)
+            latest_previous_by_child[c.id] = (prev, extract_copyable_fields(prev, prev_pickup))
+
+    common_values = {
+        "planned_pickup_time": "",
+        "pickup_person": "",
+        "snack_required": "",
+        "breakfast_contents": "",
+        "contact_note": "",
+    }
+    children_values = {}
+
+    for c in children:
+        e = existing_entries.get(c.id)
+        r = pickup_records.get(c.id)
+        if e:
+            mode = "absent" if e.contact_type in {ParentContactType.absent_private, ParentContactType.absent_sick} else "present"
+            extra = e.extra_data or {}
+            children_values[c.id] = {
+                "attendance_mode": mode,
+                "absence_reason": e.contact_type.value if mode == "absent" else "",
+                "temperature": e.temperature or "",
+                "mood": e.mood or "",
+                "breakfast_status": e.breakfast_status or "",
+                "bedtime": extra.get("bedtime", ""),
+                "wakeup_time": extra.get("wakeup_time", ""),
+                "stool_consistency": extra.get("stool_consistency", ""),
+                "stool_count": extra.get("stool_count", ""),
+                "condition_note": e.condition_note or "",
+                "contact_note": e.contact_note or "",
+                "absence_temperature": e.absence_temperature or "",
+                "absence_symptoms": e.absence_symptoms or "",
+            }
+            if not common_values["breakfast_contents"] and extra.get("breakfast_contents"):
+                common_values["breakfast_contents"] = extra.get("breakfast_contents")
+        elif copy_previous == "1" and c.id in latest_previous_by_child:
+            _, fields = latest_previous_by_child[c.id]
+            children_values[c.id] = {
+                "attendance_mode": "present",
+                "temperature": "",
+                "mood": fields.get("mood", ""),
+                "breakfast_status": fields.get("breakfast_status", ""),
+                "bedtime": fields.get("bedtime", ""),
+                "wakeup_time": fields.get("wakeup_time", ""),
+                "stool_consistency": fields.get("stool_consistency", ""),
+                "stool_count": fields.get("stool_count", ""),
+                "condition_note": "",
+                "absence_temperature": "",
+                "absence_symptoms": "",
+            }
+            if not common_values["planned_pickup_time"] and fields.get("planned_pickup_time"):
+                common_values["planned_pickup_time"] = fields.get("planned_pickup_time")
+            if not common_values["pickup_person"] and fields.get("pickup_person"):
+                common_values["pickup_person"] = fields.get("pickup_person")
+            if not common_values["snack_required"] and fields.get("snack_required"):
+                common_values["snack_required"] = fields.get("snack_required")
+            if not common_values["breakfast_contents"] and fields.get("breakfast_contents"):
+                common_values["breakfast_contents"] = fields.get("breakfast_contents")
+
+        if r:
+            if not common_values["planned_pickup_time"] and r.planned_pickup_time:
+                common_values["planned_pickup_time"] = r.planned_pickup_time
+            if not common_values["pickup_person"] and r.pickup_person:
+                common_values["pickup_person"] = r.pickup_person
+            if not common_values["snack_required"] and r.pickup_snack_confirmed:
+                common_values["snack_required"] = "1" if r.snack_required else "0"
+
+    notice_msg = ""
+    if notice == "copied" or (copy_previous == "1" and has_any_previous):
+        notice_msg = "前回の入力を反映しました。今朝の体温を測って入力してください。"
+
+    return templates.TemplateResponse(
+        request,
+        "parent_portal/bulk_contact.html",
+        {
+            "request": request,
+            "current_parent_user": current_parent_user,
+            "parent_portal_mode": True,
+            "children": children,
+            "target_date_value": day.isoformat(),
+            "common_values": common_values,
+            "children_values": children_values,
+            "existing_entries": existing_entries,
+            "has_any_previous": has_any_previous,
+            "notice": notice_msg,
+            "form_error": "",
+        },
+    )
+
+
+@router.post("/bulk-contact", response_class=HTMLResponse)
+async def submit_bulk_contact(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    children = _linked_children(current_parent_user)
+    if len(children) < 2:
+        return RedirectResponse(url="/parent-portal/", status_code=303)
+
+    form_data = await request.form()
+    target_date_raw = str(form_data.get("date") or "")
+    day = _parse_target_date(target_date_raw)
+
+    common_data = {
+        "planned_pickup_time": str(form_data.get("common_planned_pickup_time") or ""),
+        "pickup_person": str(form_data.get("common_pickup_person") or ""),
+        "snack_required": str(form_data.get("common_snack_required") or ""),
+        "breakfast_contents": str(form_data.get("common_breakfast_contents") or ""),
+        "contact_note": str(form_data.get("common_contact_note") or ""),
+    }
+
+    child_ids_raw = form_data.getlist("child_ids")
+    children_data = []
+    children_values = {}
+
+    for cid_str in child_ids_raw:
+        try:
+            cid = int(cid_str)
+        except ValueError:
+            continue
+        c_mode = str(form_data.get(f"attendance_mode_{cid}") or "present")
+        c_reason = str(form_data.get(f"absence_reason_{cid}") or "")
+        c_temp = str(form_data.get(f"temperature_{cid}") or "")
+        c_mood = str(form_data.get(f"mood_{cid}") or "")
+        c_breakfast = str(form_data.get(f"breakfast_status_{cid}") or "")
+        c_bedtime = str(form_data.get(f"bedtime_{cid}") or "")
+        c_wakeup = str(form_data.get(f"wakeup_time_{cid}") or "")
+        c_stool_consistency = str(form_data.get(f"stool_consistency_{cid}") or "")
+        c_stool_count = str(form_data.get(f"stool_count_{cid}") or "")
+        c_note = str(form_data.get(f"condition_note_{cid}") or "")
+        c_abs_temp = str(form_data.get(f"absence_temperature_{cid}") or "")
+        c_abs_symptoms = str(form_data.get(f"absence_symptoms_{cid}") or "")
+
+        c_dict = {
+            "child_id": cid,
+            "attendance_mode": c_mode,
+            "absence_reason": c_reason,
+            "temperature": c_temp,
+            "mood": c_mood,
+            "breakfast_status": c_breakfast,
+            "bedtime": c_bedtime,
+            "wakeup_time": c_wakeup,
+            "stool_consistency": c_stool_consistency,
+            "stool_count": c_stool_count,
+            "condition_note": c_note,
+            "absence_temperature": c_abs_temp,
+            "absence_symptoms": c_abs_symptoms,
+        }
+        children_data.append(c_dict)
+        children_values[cid] = c_dict
+
+    try:
+        save_bulk_parent_contacts(
+            session,
+            current_parent_user=current_parent_user,
+            target_date=day,
+            common_data=common_data,
+            children_data=children_data,
+        )
+        session.commit()
+    except (ValueError, HTTPException) as exc:
+        err_msg = exc.detail if isinstance(exc, HTTPException) else str(exc)
+        return templates.TemplateResponse(
+            request,
+            "parent_portal/bulk_contact.html",
+            {
+                "request": request,
+                "current_parent_user": current_parent_user,
+                "parent_portal_mode": True,
+                "children": children,
+                "target_date_value": day.isoformat(),
+                "common_values": common_data,
+                "children_values": children_values,
+                "existing_entries": {},
+                "has_any_previous": False,
+                "notice": "",
+                "form_error": err_msg,
+            },
+            status_code=400,
+        )
+
+    return RedirectResponse(
+        url=f"/parent-portal/?date={day.isoformat()}&notice=bulk_saved",
         status_code=303,
     )
 
@@ -2049,3 +2315,97 @@ def parent_video_detail(
             "now": now,
         },
     )
+
+
+@router.get("/qr-code.svg")
+def parent_qr_code_image(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        raise HTTPException(status_code=401, detail="ログインが必要です")
+
+    token = generate_parent_qr_token(
+        parent_account_id=current_parent_user.id,
+        family_id=current_parent_user.family_id,
+        expires_in_days=30,
+    )
+    svg_str = generate_parent_qr_svg(token)
+    response = Response(content=svg_str, media_type="image/svg+xml")
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
+@router.get("/billing", response_class=HTMLResponse)
+def parent_billing_index(
+    request: Request,
+    year_month: Optional[str] = Query(default=None),
+    tab: Optional[str] = Query(default="realtime"),
+    session: Session = Depends(get_session),
+):
+    if not is_parent_billing_enabled(session):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    realtime_summary = get_parent_realtime_extended_care_summary(
+        session,
+        family_id=current_parent_user.family_id,
+        year_month=year_month,
+    )
+    claims = get_parent_billing_claims_list(
+        session,
+        family_id=current_parent_user.family_id,
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "parent_portal/billing.html",
+        {
+            "request": request,
+            "current_parent_user": current_parent_user,
+            "parent_portal_mode": True,
+            "realtime_summary": realtime_summary,
+            "claims": claims,
+            "active_tab": tab,
+            "target_year_month": realtime_summary["year_month"],
+        },
+    )
+
+
+@router.get("/billing/claims/{claim_id}", response_class=HTMLResponse)
+def parent_billing_claim_detail_view(
+    request: Request,
+    claim_id: int,
+    session: Session = Depends(get_session),
+):
+    if not is_parent_billing_enabled(session):
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    current_parent_user = _get_parent_account(request, session)
+    if not current_parent_user:
+        return RedirectResponse(url="/parent-portal/login", status_code=303)
+
+    claim_detail = get_parent_claim_detail(
+        session,
+        family_id=current_parent_user.family_id,
+        claim_id=claim_id,
+    )
+    if not claim_detail:
+        raise HTTPException(status_code=404, detail="請求明細が見つかりません")
+
+    return templates.TemplateResponse(
+        request,
+        "parent_portal/billing_claim_detail.html",
+        {
+            "request": request,
+            "current_parent_user": current_parent_user,
+            "parent_portal_mode": True,
+            "claim": claim_detail,
+        },
+    )
+
+

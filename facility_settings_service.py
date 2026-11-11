@@ -22,6 +22,7 @@ DEFAULTS = dict(
     final_pickup_time="19:00",
     supplementary_meal_time="18:00",
     supplementary_meal_fee=100,
+    parent_billing_portal_enabled=False,
 )
 
 
@@ -51,9 +52,12 @@ def record_change_history(
         final_pickup_time=settings.final_pickup_time,
         supplementary_meal_time=settings.supplementary_meal_time,
         supplementary_meal_fee=str(settings.supplementary_meal_fee),
+        parent_billing_portal_enabled=str(settings.parent_billing_portal_enabled),
     )
     now = utc_now()
     for field, new_value in current.items():
+        if field not in previous:
+            continue
         old_value = previous.get(field, "")
         if old_value == new_value:
             continue
@@ -91,3 +95,9 @@ def auto_snack_required(session: Session, planned_pickup_time: str) -> bool:
     if not TIME_RE.match(time_value):
         return False
     return time_value >= snack_threshold_time(session)
+
+
+def is_parent_billing_enabled(session: Session) -> bool:
+    """施設設定で保護者ポータル請求・延長保育料確認機能が有効か判定する。"""
+    settings = get_facility_settings(session)
+    return bool(getattr(settings, "parent_billing_portal_enabled", False))

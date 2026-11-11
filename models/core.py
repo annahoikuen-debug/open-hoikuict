@@ -3277,6 +3277,7 @@ class FacilitySettings(SQLModel, table=True):
     fever_return_days: int = Field(default=2)  # 解熱後の登園目安日数（改善案8）
     fever_caution_c: str = Field(default="37.5", max_length=4)
     fever_review_c: str = Field(default="38.0", max_length=4)
+    parent_billing_portal_enabled: bool = Field(default=False)
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
     updated_by_name: Optional[str] = None

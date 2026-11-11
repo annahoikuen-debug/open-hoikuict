@@ -124,7 +124,7 @@ def toukouen_punch(
             absence_reason=absence_reason,
             send_email=True,
         )
-        log_ids = [l.id for l in logs if l.id is not None]
+        log_ids = [l.log_id for l in logs if l.log_id is not None]
         updated_states = pims_service.get_daily_child_states(session)
 
         return JSONResponse({
@@ -142,7 +142,7 @@ def toukouen_punch(
 @router.post("/undo")
 def toukouen_undo(
     request: Request,
-    log_ids: List[int] = Form(...),
+    log_ids: List[str] = Form(...),
     session: Session = Depends(get_session),
 ):
     """直前の打刻取り消し (Undo) API (提案2)"""

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
@@ -23,6 +25,7 @@ FIELD_LABELS = {
     "final_pickup_time": "お迎え最終時刻",
     "supplementary_meal_time": "補食判定時刻",
     "supplementary_meal_fee": "補食費",
+    "parent_billing_portal_enabled": "保護者ポータル 請求・延長保育料の表示",
 }
 
 
@@ -74,6 +77,7 @@ def facility_settings_update(
     fever_return_days: int = Form(2),
     fever_caution_c: str = Form("37.5"),
     fever_review_c: str = Form("38.0"),
+    parent_billing_portal_enabled: Optional[str] = Form(None),
     session: Session = Depends(get_session),
     current_user: StaffUser = Depends(get_current_staff_user),
 ):
@@ -94,11 +98,14 @@ def facility_settings_update(
     if not (0 <= fever_return_days <= 14):
         raise HTTPException(status_code=422, detail="解熱後の登園目安日数は0〜14日の範囲で入力してください")
 
+    is_billing_enabled = parent_billing_portal_enabled in ("1", "true", "True", "on")
+
     settings = _get_or_create_settings(session)
     previous = dict(
         final_pickup_time=settings.final_pickup_time,
         supplementary_meal_time=settings.supplementary_meal_time,
         supplementary_meal_fee=str(settings.supplementary_meal_fee),
+        parent_billing_portal_enabled=str(settings.parent_billing_portal_enabled),
     )
     settings.final_pickup_time = final_pickup_time
     settings.supplementary_meal_time = supplementary_meal_time
@@ -106,6 +113,7 @@ def facility_settings_update(
     settings.fever_return_days = fever_return_days
     settings.fever_caution_c = f"{caution_c:.1f}"
     settings.fever_review_c = f"{review_c:.1f}"
+    settings.parent_billing_portal_enabled = is_billing_enabled
     settings.updated_at = utc_now()
     settings.updated_by_user_id = current_user.user_id
     settings.updated_by_name = current_user.name

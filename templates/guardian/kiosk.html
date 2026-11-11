@@ -29,8 +29,94 @@
   {% endif %}
 
   {% if not terminal_mode or not selected_classroom %}
+  <!-- QRコードスキャンエリア -->
+  <section id="qr-scan-section" class="mb-5 rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-sky-50/50 p-5 shadow-sm">
+    <div class="flex flex-col md:flex-row items-center gap-6">
+      <div class="relative w-full md:w-64 h-48 rounded-xl overflow-hidden bg-slate-900 border-2 border-indigo-300 shadow-inner flex items-center justify-center">
+        <video id="kiosk-camera-preview" class="w-full h-full object-cover" playsinline autoplay muted></video>
+        <div id="camera-loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 text-white p-3 text-center">
+          <svg class="h-8 w-8 animate-spin text-indigo-400 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <p class="text-xs">カメラを起動中...</p>
+        </div>
+        <div id="camera-scan-frame" class="absolute inset-4 border-2 border-dashed border-indigo-400/80 rounded-lg pointer-events-none animate-pulse"></div>
+      </div>
+      <div class="flex-1 text-center md:text-left">
+        <div class="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white mb-2">
+          <span>📲 スマホをかざすだけ</span>
+        </div>
+        <h2 class="text-xl md:text-2xl font-bold text-indigo-950">登降園QRコードをカメラにかざしてください</h2>
+        <p class="mt-1 text-sm text-slate-600">保護者スマホの「登降園QR」を枠内にかざすと、きょうだいを自動認識して一括打刻できます。</p>
+        <p class="mt-2 text-xs text-slate-500">※ カメラを使用しない場合は、下のクラス一覧からタッチして打刻できます。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 兄弟QRまとめ打刻モーダル -->
+  <div id="sibling-punch-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div class="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b pb-3 mb-4">
+        <div>
+          <span class="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-800">QR認識完了</span>
+          <h3 id="sibling-family-title" class="text-xl font-bold text-gray-900 mt-1">ご家族を認識しました</h3>
+        </div>
+        <button type="button" id="btn-close-sibling-modal" class="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 mb-2">打刻種別</label>
+        <div class="grid grid-cols-2 gap-3">
+          <label id="lbl-action-checkin" class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3 text-emerald-800 font-bold">
+            <input type="radio" name="sibling_action" value="check_in" class="h-4 w-4" checked> 登園
+          </label>
+          <label id="lbl-action-checkout" class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-3 text-slate-700 font-bold">
+            <input type="radio" name="sibling_action" value="check_out" class="h-4 w-4"> 降園
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 mb-2">対象園児（きょうだい）</label>
+        <div id="sibling-children-list" class="space-y-2">
+          <!-- JSで動的挿入 -->
+        </div>
+      </div>
+
+      <div id="sibling-pickup-person-panel" class="mb-4 hidden rounded-xl bg-slate-50 p-3 border">
+        <label class="block text-xs font-semibold text-gray-700 mb-2">実際にお迎えに来た人</label>
+        <div class="grid grid-cols-3 gap-2">
+          {% for p in ["母", "父", "祖父", "祖母", "ファミリーサポート", "その他"] %}
+          <button type="button" data-sibling-person="{{ p }}" class="rounded-lg border bg-white py-2 text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:border-indigo-400 focus:bg-indigo-600 focus:text-white">
+            {{ p }}
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="sibling-actual-pickup-person" value="母">
+      </div>
+
+      <div class="mt-6 flex gap-3">
+        <button type="button" id="btn-cancel-sibling" class="w-1/3 rounded-xl border border-gray-300 py-3.5 text-sm font-bold text-gray-700 hover:bg-gray-50">キャンセル</button>
+        <button type="button" id="btn-commit-sibling" class="w-2/3 rounded-xl bg-indigo-600 py-3.5 text-base font-bold text-white shadow-lg transition hover:bg-indigo-700 focus:outline-none">
+          まとめて打刻する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打刻完了トースト -->
+  <div id="punch-toast-notification" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 hidden rounded-2xl bg-emerald-600 px-6 py-4 text-white shadow-2xl text-center border-2 border-emerald-400">
+    <div class="flex items-center gap-3">
+      <svg class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      <div class="text-left">
+        <h4 id="toast-title" class="font-bold text-lg">打刻が完了しました</h4>
+        <p id="toast-message" class="text-xs text-emerald-100">画面は自動で戻ります</p>
+      </div>
+    </div>
+  </div>
+
   <section class="mb-5 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-    <h2 class="text-sm font-semibold text-gray-600 mb-3">1. クラスを選択</h2>
+    <h2 class="text-sm font-semibold text-gray-600 mb-3">1. クラスを選択（タッチ打刻）</h2>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       {% for classroom in classrooms %}
       <a href="/guardian?date={{ target_date_value }}&class_id={{ classroom.id }}"
@@ -115,6 +201,281 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
   form.addEventListener('submit', event => {
     if (!input.value) { event.preventDefault(); error.hidden = false; error.scrollIntoView({block:'center'}); }
   });
+})();
+
+// QRコードスキャナー & 兄弟一括打刻ロジック
+(() => {
+  const video = document.getElementById("kiosk-camera-preview");
+  const loadingOverlay = document.getElementById("camera-loading-overlay");
+  const scanSection = document.getElementById("qr-scan-section");
+  const modal = document.getElementById("sibling-punch-modal");
+  const childrenList = document.getElementById("sibling-children-list");
+  const btnCloseModal = document.getElementById("btn-close-sibling-modal");
+  const btnCancelSibling = document.getElementById("btn-cancel-sibling");
+  const btnCommitSibling = document.getElementById("btn-commit-sibling");
+  const pickupPanel = document.getElementById("sibling-pickup-person-panel");
+  const pickupPersonInput = document.getElementById("sibling-actual-pickup-person");
+  const actionCheckin = document.querySelector('input[name="sibling_action"][value="check_in"]');
+  const actionCheckout = document.querySelector('input[name="sibling_action"][value="check_out"]');
+  const lblCheckin = document.getElementById("lbl-action-checkin");
+  const lblCheckout = document.getElementById("lbl-action-checkout");
+  const toast = document.getElementById("punch-toast-notification");
+  const toastTitle = document.getElementById("toast-title");
+  const toastMsg = document.getElementById("toast-message");
+
+  if (!video || !scanSection) return;
+
+  let currentQrToken = "";
+  let isScanning = true;
+  let activeStream = null;
+
+  // Web Audio API による認識音（外部ファイル不要）
+  function playBeep(success = true) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(success ? 880 : 330, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {
+      // Audio not permitted or supported
+    }
+  }
+
+  // カメラの起動
+  async function initCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      activeStream = stream;
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        video.play();
+        if (loadingOverlay) loadingOverlay.classList.add("hidden");
+        startQrDetection();
+      };
+    } catch (err) {
+      if (loadingOverlay) {
+        loadingOverlay.innerHTML = `<p class="text-xs text-rose-300">カメラの起動に失敗しました。<br>タッチ操作をご利用ください。</p>`;
+      }
+    }
+  }
+
+  // QRコード検出ループ
+  async function startQrDetection() {
+    if (!("BarcodeDetector" in window)) {
+      if (loadingOverlay) {
+        loadingOverlay.innerHTML = `<p class="text-xs text-amber-300">QRスキャン非対応ブラウザです。<br>タッチ操作をご利用ください。</p>`;
+        loadingOverlay.classList.remove("hidden");
+      }
+      return;
+    }
+
+    const detector = new BarcodeDetector({ formats: ["qr_code"] });
+    const scanInterval = setInterval(async () => {
+      if (!isScanning || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes.length > 0) {
+          const rawValue = barcodes[0].rawValue;
+          if (rawValue && rawValue !== currentQrToken) {
+            isScanning = false;
+            currentQrToken = rawValue;
+            playBeep(true);
+            await handleQrScan(rawValue);
+          }
+        }
+      } catch (err) {
+        // detection frame error
+      }
+    }, 250);
+  }
+
+  // QRスキャンAPIの呼び出し
+  async function handleQrScan(token) {
+    try {
+      const formData = new FormData();
+      formData.append("qr_token", token);
+      const res = await fetch("/guardian/qr/scan", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "QRコードを認識できませんでした。" }));
+        alert(err.detail || "QRコードが無効です。");
+        resumeScanning();
+        return;
+      }
+
+      const data = await res.json();
+      renderSiblingModal(data);
+    } catch (err) {
+      alert("通信エラーが発生しました。");
+      resumeScanning();
+    }
+  }
+
+  // 兄弟打刻モーダルの描画
+  function renderSiblingModal(data) {
+    const familyTitle = document.getElementById("sibling-family-title");
+    if (familyTitle) {
+      familyTitle.textContent = `${data.family_name || data.parent_name} 様のご家族`;
+    }
+
+    // アクション設定（登園 or 降園）
+    const isCheckin = data.suggested_action === "check_in";
+    if (actionCheckin) actionCheckin.checked = isCheckin;
+    if (actionCheckout) actionCheckout.checked = !isCheckin;
+    syncActionTabs();
+
+    // 園児カード一覧の生成
+    childrenList.innerHTML = "";
+    (data.children || []).forEach(child => {
+      const item = document.createElement("label");
+      item.className = "flex cursor-pointer items-center justify-between rounded-xl border border-gray-200 bg-slate-50/50 p-3.5 transition hover:bg-indigo-50/30";
+      const isPresent = child.status === "present";
+      const isLeft = child.status === "left";
+      const statusBadge = isPresent ? '<span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">登園中</span>' :
+                          (isLeft ? '<span class="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded font-bold">降園済み</span>' :
+                          '<span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">未登園</span>');
+
+      item.innerHTML = `
+        <div class="flex items-center gap-3">
+          <input type="checkbox" name="sibling_cids" value="${child.child_id}" checked class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500">
+          <div>
+            <div class="font-bold text-gray-800 text-base">${child.full_name}</div>
+            <div class="text-xs text-gray-500">${child.classroom_name || 'クラス'}</div>
+          </div>
+        </div>
+        <div>${statusBadge}</div>
+      `;
+      childrenList.appendChild(item);
+    });
+
+    modal.classList.remove("hidden");
+  }
+
+  function syncActionTabs() {
+    const isCheckin = actionCheckin && actionCheckin.checked;
+    if (lblCheckin) {
+      lblCheckin.className = isCheckin ?
+        "flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3 text-emerald-800 font-bold" :
+        "flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-3 text-slate-700 font-bold";
+    }
+    if (lblCheckout) {
+      lblCheckout.className = !isCheckin ?
+        "flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-blue-500 bg-blue-50 p-3 text-blue-800 font-bold" :
+        "flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white p-3 text-slate-700 font-bold";
+    }
+    if (pickupPanel) {
+      pickupPanel.classList.toggle("hidden", isCheckin);
+    }
+    if (btnCommitSibling) {
+      btnCommitSibling.textContent = isCheckin ? "👥 まとめて登園する" : "👥 まとめて降園する";
+      btnCommitSibling.className = isCheckin ?
+        "w-2/3 rounded-xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-lg transition hover:bg-emerald-700" :
+        "w-2/3 rounded-xl bg-blue-600 py-3.5 text-base font-bold text-white shadow-lg transition hover:bg-blue-700";
+    }
+  }
+
+  if (actionCheckin) actionCheckin.addEventListener("change", syncActionTabs);
+  if (actionCheckout) actionCheckout.addEventListener("change", syncActionTabs);
+
+  // お迎え者の選択ボタン
+  document.querySelectorAll("[data-sibling-person]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-sibling-person]").forEach(b => {
+        b.classList.remove("bg-indigo-600", "text-white");
+        b.classList.add("bg-white", "text-gray-700");
+      });
+      btn.classList.add("bg-indigo-600", "text-white");
+      btn.classList.remove("bg-white", "text-gray-700");
+      if (pickupPersonInput) pickupPersonInput.value = btn.dataset.siblingPerson;
+    });
+  });
+
+  // 打刻コミット
+  if (btnCommitSibling) {
+    btnCommitSibling.addEventListener("click", async () => {
+      const selectedBoxes = Array.from(document.querySelectorAll('input[name="sibling_cids"]:checked'));
+      const cids = selectedBoxes.map(b => b.value);
+      if (cids.length === 0) {
+        alert("打刻対象の園児を1名以上選択してください。");
+        return;
+      }
+
+      const action = actionCheckin && actionCheckin.checked ? "check_in" : "check_out";
+      const pickupPerson = pickupPersonInput ? pickupPersonInput.value : "";
+
+      btnCommitSibling.disabled = true;
+      btnCommitSibling.textContent = "打刻処理中...";
+
+      try {
+        const formData = new FormData();
+        formData.append("qr_token", currentQrToken);
+        formData.append("action", action);
+        formData.append("actual_pickup_person", pickupPerson);
+        cids.forEach(id => formData.append("child_ids", id));
+
+        const res = await fetch("/guardian/qr/commit", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: "打刻に失敗しました。" }));
+          alert(err.detail || "打刻に失敗しました。");
+          btnCommitSibling.disabled = false;
+          syncActionTabs();
+          return;
+        }
+
+        const resData = await res.json();
+        modal.classList.add("hidden");
+        btnCommitSibling.disabled = false;
+
+        // トースト通知を表示
+        if (toast && toastTitle && toastMsg) {
+          toastTitle.textContent = resData.message || "打刻が完了しました";
+          toastMsg.textContent = `${resData.completed_at || ""} 完了`;
+          toast.classList.remove("hidden");
+          setTimeout(() => {
+            toast.classList.add("hidden");
+            window.location.reload();
+          }, 2000);
+        } else {
+          window.location.reload();
+        }
+      } catch (err) {
+        alert("通信エラーが発生しました。");
+        btnCommitSibling.disabled = false;
+        syncActionTabs();
+      }
+    });
+  }
+
+  function resumeScanning() {
+    modal.classList.add("hidden");
+    currentQrToken = "";
+    isScanning = true;
+  }
+
+  if (btnCloseModal) btnCloseModal.addEventListener("click", resumeScanning);
+  if (btnCancelSibling) btnCancelSibling.addEventListener("click", resumeScanning);
+
+  // カメラ初期化の実行
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    initCamera();
+  }
 })();
 </script>
 {% endblock %}

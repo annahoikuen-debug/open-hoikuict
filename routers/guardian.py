@@ -14,13 +14,18 @@ from database import get_session
 from auth import get_current_staff_user
 from security_config import kiosk_access_mode
 from extended_care_fee_service import recalculate_attendance_charge
-from models import AttendanceRecord, AttendanceVerification, AttendanceVerificationStatus, Child, ChildStatus, Classroom
+from models import AttendanceRecord, AttendanceVerification, AttendanceVerificationStatus, Child, ChildStatus, Classroom, ParentAccount
 from time_utils import local_naive_now, local_today, utc_now
 from pickup_plan_service import pickup_revision, save_pickup_plan
 from guardian_terminal import GuardianRoute, TERMINAL_START, is_terminal, remember_terminal, render_guardian
 from guardian_hours import closing_time, kiosk_is_closed
 from facility_settings_service import auto_snack_required, latest_pickup_time
 from guardian_arrival import issue_arrival_draft, read_arrival_draft
+from guardian_qr_service import (
+    verify_parent_qr_token,
+    get_sibling_qr_punch_info,
+    execute_sibling_qr_punch,
+)
 from kiosk_security import (
     KIOSK_DEVICE_COOKIE,
     issue_kiosk_device_cookie,
@@ -556,3 +561,109 @@ def guardian_asset(filename: str):
     if filename not in {"terminal.js", "icon-192.png", "icon-512.png"}:
         raise HTTPException(status_code=404, detail="Not Found")
     return FileResponse(Path(__file__).resolve().parent.parent / "assets" / "guardian" / filename)
+
+
+@router.post("/qr/scan", dependencies=[Depends(require_kiosk_access)])
+async def guardian_qr_scan(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    form_data = await request.form()
+    qr_token = str(form_data.get("qr_token") or "").strip()
+    if not qr_token:
+        try:
+            body = await request.json()
+            qr_token = str(body.get("qr_token") or "").strip()
+        except Exception:
+            pass
+
+    if not qr_token:
+        raise HTTPException(status_code=400, detail="QRコードを読み取れませんでした。")
+
+    try:
+        payload = verify_parent_qr_token(qr_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    parent_id = payload.get("pid")
+    info = get_sibling_qr_punch_info(session, parent_account_id=parent_id)
+    return JSONResponse(info)
+
+
+@router.post("/qr/commit", dependencies=[Depends(require_kiosk_access)])
+async def guardian_qr_commit(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    form_data = await request.form()
+    qr_token = str(form_data.get("qr_token") or "").strip()
+    action = str(form_data.get("action") or "").strip()
+    actual_pickup_person = str(form_data.get("actual_pickup_person") or "").strip()
+    child_ids_raw = form_data.getlist("child_ids")
+
+    if not qr_token:
+        try:
+            body = await request.json()
+            qr_token = str(body.get("qr_token") or "").strip()
+            action = str(body.get("action") or "").strip()
+            actual_pickup_person = str(body.get("actual_pickup_person") or "").strip()
+            child_ids_raw = body.get("child_ids") or []
+        except Exception:
+            pass
+
+    try:
+        payload = verify_parent_qr_token(qr_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    parent_id = payload.get("pid")
+    parent = session.get(ParentAccount, parent_id)
+    if not parent:
+        raise HTTPException(status_code=404, detail="保護者が見つかりません。")
+
+    accessible_ids = set()
+    for link in parent.child_links or []:
+        if link.child and link.child.id:
+            accessible_ids.add(link.child.id)
+    if not accessible_ids and parent.family and parent.family.children:
+        accessible_ids = {c.id for c in parent.family.children if c.id}
+
+    target_cids = []
+    for cid_val in child_ids_raw:
+        try:
+            cid = int(cid_val)
+            if cid in accessible_ids:
+                target_cids.append(cid)
+        except (ValueError, TypeError):
+            continue
+
+    if not target_cids:
+        raise HTTPException(status_code=400, detail="有効な園児が選択されていません。")
+
+    if action not in {"check_in", "check_out"}:
+        raise HTTPException(status_code=400, detail="打刻種別（登園/降園）が不正です。")
+
+    if action == "check_out" and not actual_pickup_person:
+        actual_pickup_person = "保護者"
+
+    records = execute_sibling_qr_punch(
+        session,
+        child_ids=target_cids,
+        action=action,
+        actual_pickup_person=actual_pickup_person,
+        actor_name=parent.display_name,
+    )
+    session.commit()
+
+    action_label = "登園" if action == "check_in" else "降園"
+    child_names = [r.child.full_name if r.child else f"園児{r.child_id}" for r in records]
+    message = f"{'、'.join(child_names)} の{action_label}を受け付けました。" if child_names else f"{action_label}を受け付けました。"
+
+    return JSONResponse({
+        "success": True,
+        "message": message,
+        "action": action,
+        "count": len(records),
+        "completed_at": local_naive_now().strftime("%H:%M"),
+    })
+

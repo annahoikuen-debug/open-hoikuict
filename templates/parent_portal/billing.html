@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}ご利用明細・請求 | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+  <div>
+    <div class="flex items-center gap-2">
+      <span class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">保護者ポータル</span>
+      <h1 class="text-2xl font-bold text-gray-900">ご利用明細・請求</h1>
+    </div>
+    <p class="mt-1 text-sm text-gray-500">当月の延長保育料金速報および確定した月次請求内訳をご確認いただけます。</p>
+  </div>
+  <a href="/parent-portal/" class="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+    <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+    ホームへ戻る
+  </a>
+</div>
+
+<!-- タブ切り替えボタン -->
+<div class="mb-6 border-b border-gray-200">
+  <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+    <button type="button" id="tab-btn-realtime" onclick="switchBillingTab('realtime')"
+      class="border-b-2 py-3 px-1 text-sm font-semibold transition border-indigo-600 text-indigo-600">
+      ⚡ 当月 延長保育速報 ({{ target_year_month }})
+    </button>
+    <button type="button" id="tab-btn-claims" onclick="switchBillingTab('claims')"
+      class="border-b-2 py-3 px-1 text-sm font-semibold transition border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700">
+      📄 確定請求書・口座振替明細 ({{ claims|length }}件)
+    </button>
+  </nav>
+</div>
+
+<!-- タブ1: 延長保育リアルタイム速報 -->
+<div id="tab-panel-realtime" class="space-y-6">
+  <!-- 速報サマリーカード -->
+  <div class="grid gap-4 md:grid-cols-3">
+    <div class="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
+      <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600">当月 暫定延長料金</p>
+      <p class="mt-2 text-3xl font-extrabold text-indigo-950">¥{{ "{:,}".format(realtime_summary.total_estimated_amount) }}</p>
+      <p class="mt-1 text-xs text-indigo-700">※ 打刻実績に基づく現時点の概算</p>
+    </div>
+    <div class="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
+      <p class="text-xs font-semibold uppercase tracking-wider text-sky-600">当月 累計延長時間</p>
+      <p class="mt-2 text-3xl font-extrabold text-sky-950">{{ realtime_summary.total_extended_minutes }} <span class="text-lg font-semibold">分</span></p>
+      <p class="mt-1 text-xs text-sky-700">合計 {{ realtime_summary.charges|length }} 回の延長保育</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">集計対象月度</p>
+        <p class="mt-2 text-xl font-bold text-slate-800">{{ target_year_month }}</p>
+      </div>
+      <form method="get" action="/parent-portal/billing" class="mt-2 flex items-center gap-2">
+        <input type="hidden" name="tab" value="realtime">
+        <input type="month" name="year_month" value="{{ target_year_month }}" class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700">
+        <button type="submit" class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200">表示</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-800 flex items-start gap-2.5">
+    <svg class="h-4 w-4 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <p>登降園の打刻実績に基づき自動算出された速報値です。月末の締め処理や園による時間調整等によって確定請求額と異なる場合があります。</p>
+  </div>
+
+  <!-- 日次明細テーブル -->
+  <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div class="border-b border-slate-100 bg-slate-50 px-5 py-3 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-slate-800">日次延長保育ご利用一覧</h2>
+      <span class="text-xs text-slate-500">最新順</span>
+    </div>
+    {% if realtime_summary.charges %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-slate-600">
+        <thead class="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+          <tr>
+            <th class="px-5 py-3 font-semibold">利用日</th>
+            <th class="px-5 py-3 font-semibold">園児名</th>
+            <th class="px-5 py-3 font-semibold">降園時刻</th>
+            <th class="px-5 py-3 font-semibold">延長時間</th>
+            <th class="px-5 py-3 font-semibold text-center">補食</th>
+            <th class="px-5 py-3 font-semibold text-right">料金</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for charge in realtime_summary.charges %}
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="px-5 py-3.5 font-medium text-slate-800 whitespace-nowrap">{{ charge.formatted_date }}</td>
+            <td class="px-5 py-3.5 whitespace-nowrap font-medium text-slate-900">{{ charge.child_name }}</td>
+            <td class="px-5 py-3.5 whitespace-nowrap">{{ charge.check_out_time }}</td>
+            <td class="px-5 py-3.5 whitespace-nowrap">
+              <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {{ charge.extended_minutes }} 分
+              </span>
+            </td>
+            <td class="px-5 py-3.5 whitespace-nowrap text-center">
+              {% if charge.has_snack %}
+              <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">あり</span>
+              {% else %}
+              <span class="text-slate-400 text-xs">—</span>
+              {% endif %}
+            </td>
+            <td class="px-5 py-3.5 whitespace-nowrap text-right font-bold text-slate-900">¥{{ "{:,}".format(charge.amount) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="bg-slate-50 font-semibold text-slate-800 border-t border-slate-200">
+          <tr>
+            <td colspan="3" class="px-5 py-3 text-right">当月暫定合計:</td>
+            <td class="px-5 py-3">{{ realtime_summary.total_extended_minutes }} 分</td>
+            <td></td>
+            <td class="px-5 py-3 text-right text-indigo-700 font-extrabold text-base">¥{{ "{:,}".format(realtime_summary.total_estimated_amount) }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-sm text-slate-400">
+      {{ target_year_month }} の延長保育ご利用実績はまだありません。
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- タブ2: 確定請求書一覧 -->
+<div id="tab-panel-claims" class="space-y-4 hidden">
+  {% if claims %}
+  <div class="grid gap-4 md:grid-cols-2">
+    {% for claim in claims %}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-indigo-300 transition flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ claim.year_month }} 分 ご請求</span>
+          <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">{{ claim.status_label }}</span>
+        </div>
+        <div class="mt-3 flex items-baseline justify-between">
+          <p class="text-2xl font-black text-slate-900">¥{{ claim.formatted_total_amount }} <span class="text-xs font-normal text-slate-500">(税込)</span></p>
+        </div>
+        <dl class="mt-4 space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
+          <div class="flex justify-between">
+            <dt class="text-slate-400">お支払方法:</dt>
+            <dd class="font-medium text-slate-700">口座振替</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-slate-400">振替予定日:</dt>
+            <dd class="font-medium text-slate-700">{{ claim.withdrawal_date }}</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="mt-5 border-t border-slate-100 pt-3">
+        <a href="/parent-portal/billing/claims/{{ claim.id }}" class="inline-flex w-full items-center justify-center rounded-xl bg-indigo-50 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition">
+          📄 内訳明細・受領証を表示
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-400">
+    確定済みの請求書はありません。
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block body_end %}
+<script>
+  function switchBillingTab(tabName) {
+    const realtimePanel = document.getElementById("tab-panel-realtime");
+    const claimsPanel = document.getElementById("tab-panel-claims");
+    const realtimeBtn = document.getElementById("tab-btn-realtime");
+    const claimsBtn = document.getElementById("tab-btn-claims");
+
+    if (tabName === "claims") {
+      realtimePanel.classList.add("hidden");
+      claimsPanel.classList.remove("hidden");
+      realtimeBtn.className = "border-b-2 py-3 px-1 text-sm font-semibold transition border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700";
+      claimsBtn.className = "border-b-2 py-3 px-1 text-sm font-semibold transition border-indigo-600 text-indigo-600";
+    } else {
+      claimsPanel.classList.add("hidden");
+      realtimePanel.classList.remove("hidden");
+      claimsBtn.className = "border-b-2 py-3 px-1 text-sm font-semibold transition border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700";
+      realtimeBtn.className = "border-b-2 py-3 px-1 text-sm font-semibold transition border-indigo-600 text-indigo-600";
+    }
+  }
+
+  // 初期アクティブタブ判定
+  {% if active_tab == 'claims' %}
+  switchBillingTab('claims');
+  {% endif %}
+</script>
+{% endblock %}
+

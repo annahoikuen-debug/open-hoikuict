@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% from "parent_portal/_contact_quick_inputs.html" import temperature_picker, choices %}
+{% from "shared/_pickup_fields.html" import pickup_fields %}
+{% block title %}きょうだい一括連絡 | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">きょうだい一括連絡</h1>
+      <p class="text-sm text-gray-500">{{ target_date_value }} の出席・お迎え予定・体調をまとめて入力します。</p>
+    </div>
+    <div class="flex items-center gap-3">
+      {% if has_any_previous %}
+      <a href="/parent-portal/bulk-contact?date={{ target_date_value }}&copy_previous=1" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        前回の入力を反映
+      </a>
+      {% endif %}
+      <a href="/parent-portal/?date={{ target_date_value }}" class="text-sm text-indigo-600 hover:underline">ホームへ戻る</a>
+    </div>
+  </div>
+
+  {% if notice %}
+  <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ notice }}</div>
+  {% endif %}
+  {% if form_error %}
+  <div role="alert" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ form_error }}</div>
+  {% endif %}
+
+  <form method="post" action="/parent-portal/bulk-contact" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+    <input type="hidden" name="date" value="{{ target_date_value }}">
+
+    <!-- 共通入力セクション -->
+    <section class="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-sky-50/50 p-6 shadow-sm">
+      <div class="mb-4 flex items-center justify-between border-b border-indigo-100 pb-3">
+        <div>
+          <h2 class="text-lg font-bold text-indigo-950">1. きょうだい共通の予定・生活記録</h2>
+          <p class="text-xs text-indigo-800">全園児に共通して適用されます（個別設定も可能です）。</p>
+        </div>
+        <span class="rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white">共通反映</span>
+      </div>
+
+      <!-- お迎え予定 -->
+      <div class="mb-6 rounded-xl border border-indigo-200/80 bg-white p-5 shadow-sm">
+        <h3 class="mb-3 text-sm font-semibold text-gray-800">お迎え予定（きょうだい共通）</h3>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">降園予定時刻</label>
+            <input type="time" name="common_planned_pickup_time" value="{{ common_values.planned_pickup_time or '' }}" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">お迎えの人</label>
+            <select name="common_pickup_person" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+              <option value="">未選択</option>
+              {% for p in ["母", "父", "祖父", "祖母", "ファミリーサポート", "その他"] %}
+              <option value="{{ p }}" {% if common_values.pickup_person == p %}selected{% endif %}>{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-600">補食</label>
+            <div class="mt-2 flex gap-4 text-sm">
+              <label class="inline-flex items-center gap-1.5"><input type="radio" name="common_snack_required" value="0" {% if common_values.snack_required == '0' %}checked{% endif %}> 不要</label>
+              <label class="inline-flex items-center gap-1.5"><input type="radio" name="common_snack_required" value="1" {% if common_values.snack_required == '1' %}checked{% endif %}> 必要</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 朝食内容・園への連絡事項 -->
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-indigo-200/80 bg-white p-5 shadow-sm">
+          <label class="mb-1 block text-sm font-semibold text-gray-800">朝食の内容（共通）</label>
+          <p class="mb-2 text-xs text-gray-500">ごはんとみそ汁、パン等、共通して食べたもの</p>
+          <textarea name="common_breakfast_contents" rows="2" placeholder="ごはん、みそ汁、卵焼きなど" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">{{ common_values.breakfast_contents or '' }}</textarea>
+        </div>
+        <div class="rounded-xl border border-indigo-200/80 bg-white p-5 shadow-sm">
+          <label class="mb-1 block text-sm font-semibold text-gray-800">園への共通連絡事項</label>
+          <p class="mb-2 text-xs text-gray-500">お迎えの引き継ぎや共通の伝達など</p>
+          <textarea name="common_contact_note" rows="2" placeholder="本日は祖母がお迎えに同行予定です、など" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">{{ common_values.contact_note or '' }}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- 園児個別入力セクション -->
+    <section class="space-y-6">
+      <div class="border-b border-gray-200 pb-2">
+        <h2 class="text-lg font-bold text-gray-800">2. 園児ごとの出席・体調入力</h2>
+        <p class="text-xs text-gray-500">検温した体温や個別の体調を入力してください。</p>
+      </div>
+
+      {% for child in children %}
+      {% set c_id = child.id %}
+      {% set c_data = children_values.get(c_id) or {} %}
+      {% set c_mode = c_data.get('attendance_mode') or 'present' %}
+      {% set c_entry = existing_entries.get(c_id) %}
+
+      <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm" data-child-card="{{ c_id }}">
+        <input type="hidden" name="child_ids" value="{{ c_id }}">
+        
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <div class="flex items-center gap-3">
+            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 font-bold text-white text-sm">{{ loop.index }}</span>
+            <div>
+              <h3 class="text-lg font-bold text-gray-800">{{ child.full_name }}</h3>
+              <p class="text-xs text-gray-500">{{ child.classroom.name if child.classroom else 'クラス未設定' }}</p>
+            </div>
+          </div>
+          {% if c_entry %}
+          <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">本日送信済み（更新可能）</span>
+          {% endif %}
+        </div>
+
+        <!-- 出席・欠席切り替え -->
+        <div class="mb-5 grid gap-3 md:grid-cols-2">
+          <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if c_mode == 'present' %}border-emerald-500 bg-emerald-50/50{% else %}border-slate-200 bg-white{% endif %}">
+            <input type="radio" name="attendance_mode_{{ c_id }}" value="present" {% if c_mode == 'present' %}checked{% endif %} class="h-4 w-4 text-emerald-600" data-mode-toggle="present">
+            <div>
+              <div class="font-semibold text-slate-800 text-sm">出席</div>
+              <div class="text-xs text-slate-500">体温や機嫌を入力</div>
+            </div>
+          </label>
+          <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if c_mode == 'absent' %}border-amber-500 bg-amber-50/50{% else %}border-slate-200 bg-white{% endif %}">
+            <input type="radio" name="attendance_mode_{{ c_id }}" value="absent" {% if c_mode == 'absent' %}checked{% endif %} class="h-4 w-4 text-amber-600" data-mode-toggle="absent">
+            <div>
+              <div class="font-semibold text-slate-800 text-sm">欠席</div>
+              <div class="text-xs text-slate-500">私用または病欠</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- 出席時フィールド -->
+        <div class="child-present-fields space-y-4 {% if c_mode != 'present' %}hidden{% endif %}">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">今朝の体温（℃）<span class="text-rose-500">*</span></label>
+              <input type="text" inputmode="decimal" name="temperature_{{ c_id }}" value="{{ c_data.get('temperature') or '' }}" placeholder="36.6" class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none">
+              <p class="mt-1 text-[11px] text-gray-500">37.5℃以上は出席登録不可</p>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">機嫌</label>
+              <select name="mood_{{ c_id }}" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+                <option value="">未選択</option>
+                {% for m in ["良好", "ふつう", "不機嫌", "眠そう"] %}
+                <option value="{{ m }}" {% if c_data.get('mood') == m %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">朝食の食欲</label>
+              <select name="breakfast_status_{{ c_id }}" class="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+                <option value="">未選択</option>
+                {% for b in ["完食", "少なめ", "食べていない"] %}
+                <option value="{{ b }}" {% if c_data.get('breakfast_status') == b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">就寝・起床</label>
+              <div class="flex items-center gap-2">
+                <input type="time" name="bedtime_{{ c_id }}" value="{{ c_data.get('bedtime') or '' }}" class="w-1/2 rounded border border-gray-300 px-2 py-1.5 text-xs">
+                <span class="text-gray-400">〜</span>
+                <input type="time" name="wakeup_time_{{ c_id }}" value="{{ c_data.get('wakeup_time') or '' }}" class="w-1/2 rounded border border-gray-300 px-2 py-1.5 text-xs">
+              </div>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">排便（性状・回数）</label>
+              <div class="flex items-center gap-2">
+                <select name="stool_consistency_{{ c_id }}" class="w-2/3 rounded border border-gray-300 px-2 py-1.5 text-xs">
+                  <option value="">未選択</option>
+                  <option value="none" {% if c_data.get('stool_consistency') == 'none' %}selected{% endif %}>なし</option>
+                  <option value="normal" {% if c_data.get('stool_consistency') == 'normal' %}selected{% endif %}>普通</option>
+                  <option value="soft" {% if c_data.get('stool_consistency') == 'soft' %}selected{% endif %}>軟らかい</option>
+                  <option value="hard" {% if c_data.get('stool_consistency') == 'hard' %}selected{% endif %}>硬い</option>
+                  <option value="watery" {% if c_data.get('stool_consistency') == 'watery' %}selected{% endif %}>水様</option>
+                </select>
+                <input type="number" name="stool_count_{{ c_id }}" min="0" max="9" placeholder="回" value="{{ c_data.get('stool_count') or '' }}" class="w-1/3 rounded border border-gray-300 px-2 py-1.5 text-xs">
+              </div>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">個別体調メモ</label>
+              <input type="text" name="condition_note_{{ c_id }}" value="{{ c_data.get('condition_note') or '' }}" placeholder="夜泣き、咳など" class="w-full rounded border border-gray-300 px-3 py-1.5 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <!-- 欠席時フィールド -->
+        <div class="child-absent-fields space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 {% if c_mode != 'absent' %}hidden{% endif %}">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-amber-900">欠席理由</label>
+              <div class="flex gap-4 text-sm">
+                <label class="inline-flex items-center gap-1.5"><input type="radio" name="absence_reason_{{ c_id }}" value="absent_private" {% if c_data.get('absence_reason') != 'absent_sick' %}checked{% endif %}> 私用</label>
+                <label class="inline-flex items-center gap-1.5"><input type="radio" name="absence_reason_{{ c_id }}" value="absent_sick" {% if c_data.get('absence_reason') == 'absent_sick' %}checked{% endif %}> 病欠</label>
+              </div>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold text-amber-900">現在の体温（病欠時）</label>
+              <input type="text" inputmode="decimal" name="absence_temperature_{{ c_id }}" value="{{ c_data.get('absence_temperature') or '' }}" placeholder="38.0" class="w-full rounded border border-amber-300 px-3 py-1.5 text-sm">
+            </div>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-amber-900">症状・医師の診断（病欠時）</label>
+            <input type="text" name="absence_symptoms_{{ c_id }}" value="{{ c_data.get('absence_symptoms') or '' }}" placeholder="発熱、咳など" class="w-full rounded border border-amber-300 px-3 py-1.5 text-sm">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <!-- 送信アクション -->
+    <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-xs text-gray-500">
+        ※ 入力された内容はきょうだい全員分が一度に保存されます。
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/parent-portal/?date={{ target_date_value }}" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">キャンセル</a>
+        <button type="submit" class="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">きょうだい全員分をまとめて保存</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block body_end %}
+<script>
+  (() => {
+    // 各園児カード内の出欠切り替えトグル
+    document.querySelectorAll("[data-child-card]").forEach((card) => {
+      const presentRadio = card.querySelector('[data-mode-toggle="present"]');
+      const absentRadio = card.querySelector('[data-mode-toggle="absent"]');
+      const presentFields = card.querySelector(".child-present-fields");
+      const absentFields = card.querySelector(".child-absent-fields");
+
+      function sync() {
+        const isPresent = presentRadio.checked;
+        presentFields.classList.toggle("hidden", !isPresent);
+        absentFields.classList.toggle("hidden", isPresent);
+      }
+
+      presentRadio.addEventListener("change", sync);
+      absentRadio.addEventListener("change", sync);
+      sync();
+    });
+  })();
+</script>
+{% endblock %}

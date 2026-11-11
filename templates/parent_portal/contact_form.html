@@ -61,9 +61,19 @@
     <input type="hidden" id="contact_type" name="contact_type" value="{{ selected_contact_type }}">
 
     <section class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-      <div>
-        <h2 class="text-lg font-semibold text-slate-800">1. 出席か欠席かを選択</h2>
-        <p class="mt-1 text-sm text-slate-500">当日の状況に合わせて選んでください。</p>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-800">1. 出席か欠席かを選択</h2>
+          <p class="mt-1 text-sm text-slate-500">当日の状況に合わせて選んでください。</p>
+        </div>
+        {% if has_previous_entry and not entry %}
+        <div>
+          <button type="button" id="btn-copy-previous" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            前回の入力を反映（{{ previous_entry_date }}）
+          </button>
+        </div>
+        {% endif %}
       </div>
       <div class="grid gap-3 md:grid-cols-2">
         <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_mode == 'present' %}border-emerald-500 bg-emerald-50{% else %}border-slate-200 bg-white{% endif %}">
@@ -374,6 +384,57 @@
       }
     });
     syncState();
+
+    const btnCopyPrevious = document.getElementById("btn-copy-previous");
+    if (btnCopyPrevious) {
+      const prevData = {{ previous_copy_fields|tojson }};
+      btnCopyPrevious.addEventListener("click", () => {
+        // 出席モードに設定
+        const presentRadio = modeInputs.find((r) => r.value === "present");
+        if (presentRadio) {
+          presentRadio.checked = true;
+        }
+
+        // コピー対象フィールドを安全に設定
+        const setVal = (name, val) => {
+          const el = form.querySelector(`[name="${name}"]`);
+          if (el && val !== undefined && val !== null && val !== "") {
+            el.value = val;
+          }
+        };
+
+        setVal("bedtime", prevData.bedtime);
+        setVal("wakeup_time", prevData.wakeup_time);
+        setVal("breakfast_status", prevData.breakfast_status);
+        setVal("breakfast_contents", prevData.breakfast_contents);
+        setVal("mood", prevData.mood);
+        setVal("stool_consistency", prevData.stool_consistency);
+        setVal("stool_count", prevData.stool_count);
+        setVal("sleep_notes", prevData.sleep_notes);
+
+        // お迎え予定
+        setVal("planned_pickup_time", prevData.planned_pickup_time);
+        setVal("pickup_person", prevData.pickup_person);
+        if (prevData.planned_pickup_time && prevData.planned_pickup_time.includes(":")) {
+          const [h, m] = prevData.planned_pickup_time.split(":");
+          setVal("pickup_hour", h);
+          setVal("pickup_minute", m);
+        }
+        if (prevData.snack_required !== "") {
+          const snackRadio = form.querySelector(`input[name="snack_required"][value="${prevData.snack_required}"]`);
+          if (snackRadio) snackRadio.checked = true;
+        }
+
+        syncState();
+
+        // 成功フィードバック表示
+        btnCopyPrevious.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-300");
+        btnCopyPrevious.innerHTML = `✓ 前回の入力を反映しました（体温を入力してください）`;
+        setTimeout(() => {
+          temperatureInput.focus();
+        }, 100);
+      });
+    }
   })();
 </script>
 {% include 'shared/_pickup_script.html' %}

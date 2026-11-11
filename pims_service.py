@@ -281,7 +281,7 @@ def record_punch(
 
 def undo_punch(
     session: Session,
-    log_ids: List[int],
+    log_ids: List[str],
 ) -> Tuple[bool, str, Dict[str, Any]]:
     """直前の打刻ログを物理削除し、取り消しを実行する (Undo機能)。
 

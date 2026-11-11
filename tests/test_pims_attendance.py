@@ -506,3 +506,122 @@ def test_children_management_and_sync(client: TestClient, db_session: Session):
     assert resp_logs.status_code == 200
     assert "打刻トランザクションログ" in resp_logs.text
 
+
+def test_proposal_1_time_auto_mode_and_switcher(client: TestClient, db_session: Session):
+    """提案1: 時間帯連動モード自動判定 ＆ 大型モード切替スイッチャーの検証"""
+    child = PunchChild(
+        child_id="TIME01",
+        name="時間 太郎",
+        class_name="つき組",
+        is_active=True,
+    )
+    db_session.add(child)
+    db_session.commit()
+
+    # modeパラメータ未指定でGETアクセス -> 自動判定されること
+    resp = client.get("/toukouen/select")
+    assert resp.status_code == 200
+    assert "mode-switch-btn" in resp.text
+    assert 'data-mode-btn="check_in"' in resp.text
+    assert 'data-mode-btn="check_out"' in resp.text
+    assert 'data-mode-btn="absence"' in resp.text
+    assert "data-status=" in resp.text
+    assert "card-action-label" in resp.text
+    assert "btn-toast-undo" in resp.text
+    assert "btn-toast-skip" in resp.text
+
+
+def test_proposal_2_punch_response_and_undo_api(client: TestClient, db_session: Session):
+    """提案2: 打刻レスポンスの拡張 (log_ids, updated_states) ＆ 即時Undo (取り消し) の検証"""
+    child = PunchChild(
+        child_id="UNDO01",
+        name="取消 花子",
+        class_name="ほし組",
+        is_active=True,
+    )
+    db_session.add(child)
+    db_session.commit()
+
+    token = client.cookies.get(CSRF_COOKIE_NAME) or ""
+
+    # 1. 登園打刻を実行
+    punch_resp = client.post(
+        "/toukouen/punch",
+        data={
+            "child_ids": ["UNDO01"],
+            "punch_type": "登園",
+            "csrf_token": token,
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert punch_resp.status_code == 200
+    p_data = punch_resp.json()
+    assert p_data["success"] is True
+    assert "log_ids" in p_data
+    assert len(p_data["log_ids"]) == 1
+    log_id = p_data["log_ids"][0]
+    assert "updated_states" in p_data
+    assert p_data["updated_states"]["UNDO01"]["status"] == "登園中"
+
+    # DB上にもログが存在することを確認
+    assert db_session.get(PunchLog, log_id) is not None
+
+    # 2. Undo API で打刻を取り消し
+    undo_resp = client.post(
+        "/toukouen/undo",
+        data={
+            "log_ids": [log_id],
+            "csrf_token": token,
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert undo_resp.status_code == 200
+    u_data = undo_resp.json()
+    assert u_data["success"] is True
+    assert "取り消しました" in u_data["message"]
+    # 最新ステータスが未登園に戻っていること
+    assert u_data["updated_states"]["UNDO01"]["status"] == "未登園"
+
+    # DB上のログが物理削除されていること
+    assert db_session.get(PunchLog, log_id) is None
+
+
+def test_proposal_2_sibling_undo(client: TestClient, db_session: Session):
+    """提案2: 兄弟同時打刻のUndo検証（複数log_ids一括取り消し）"""
+    c1 = PunchChild(child_id="SIB_U1", name="兄弟 兄太", family_id="FAM_U", is_active=True)
+    c2 = PunchChild(child_id="SIB_U2", name="兄弟 妹子", family_id="FAM_U", is_active=True)
+    db_session.add_all([c1, c2])
+    db_session.commit()
+
+    token = client.cookies.get(CSRF_COOKIE_NAME) or ""
+
+    # 兄弟打刻
+    punch_resp = client.post(
+        "/toukouen/punch",
+        data={
+            "child_ids": ["SIB_U1", "SIB_U2"],
+            "punch_type": "登園",
+            "csrf_token": token,
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert punch_resp.status_code == 200
+    p_data = punch_resp.json()
+    assert len(p_data["log_ids"]) == 2
+
+    # 兄弟一括Undo
+    undo_resp = client.post(
+        "/toukouen/undo",
+        data={
+            "log_ids": p_data["log_ids"],
+            "csrf_token": token,
+        },
+        headers={"X-CSRF-Token": token},
+    )
+    assert undo_resp.status_code == 200
+    u_data = undo_resp.json()
+    assert u_data["success"] is True
+    assert u_data["updated_states"]["SIB_U1"]["status"] == "未登園"
+    assert u_data["updated_states"]["SIB_U2"]["status"] == "未登園"
+
+

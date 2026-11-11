@@ -9,6 +9,19 @@
     <p class="mt-2 text-sm text-indigo-100">{{ target_date_value }} の連絡状況を確認できます。</p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
+    <button type="button" id="btn-open-qr-modal" class="rounded bg-white px-3.5 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 shadow-sm flex items-center gap-1.5 transition">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+      登降園QR
+    </button>
+    {% if parent_billing_portal_enabled %}
+    <a href="/parent-portal/billing" class="rounded bg-white px-3.5 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-50 shadow-sm flex items-center gap-1.5 transition">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/></svg>
+      💴 ご利用明細
+    </a>
+    {% endif %}
+    {% if children|length >= 2 %}
+    <a href="/parent-portal/bulk-contact?date={{ target_date_value }}" class="rounded bg-white/20 px-3.5 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/30 border border-white/30">👥 きょうだい一括入力</a>
+    {% endif %}
     <form method="get" action="/parent-portal/" class="flex items-center gap-2">
       <input type="date" name="date" value="{{ target_date_value }}" class="rounded border border-white/40 bg-white/10 px-3 py-2 text-sm text-white">
       <button type="submit" class="rounded bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">日付を変更</button>
@@ -51,7 +64,12 @@
   <section id="child-information" class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold text-gray-800">園児ごとの連絡・申請</h2>
-      <a href="/parent-portal/history" class="text-sm text-indigo-600 hover:underline">履歴を見る</a>
+      <div class="flex items-center gap-3">
+        {% if children|length >= 2 %}
+        <a href="/parent-portal/bulk-contact?date={{ target_date_value }}" class="text-sm font-semibold text-indigo-600 hover:underline">👥 まとめて入力</a>
+        {% endif %}
+        <a href="/parent-portal/history" class="text-sm text-indigo-600 hover:underline">履歴を見る</a>
+      </div>
     </div>
 
     {% for child in children %}
@@ -174,4 +192,56 @@
     </div>
   </section>
 </div>
+
+<!-- 登降園QRコードモーダル -->
+<div id="qr-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+  <div class="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
+    <button type="button" id="btn-close-qr-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 rounded-full p-2 focus:outline-none">
+      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <div class="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+    </div>
+    <h3 id="qr-modal-title" class="text-xl font-bold text-gray-900">登降園受付用 QRコード</h3>
+    <p class="mt-1 text-xs text-gray-500">{{ current_parent_user.display_name }} さん</p>
+
+    <div class="my-5 flex justify-center">
+      <div class="rounded-2xl border-4 border-indigo-100 bg-white p-3 shadow-inner">
+        <img src="/parent-portal/qr-code.svg" alt="登降園QRコード" class="h-56 w-56 object-contain" loading="eager">
+      </div>
+    </div>
+
+    <div class="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+      <p class="font-medium text-slate-800">玄関端末のカメラにかざしてください</p>
+      <p class="mt-1 text-[11px] text-slate-500">※ スマホ画面を明るくすると読み取りやすくなります</p>
+    </div>
+
+    <button type="button" id="btn-close-qr-modal-bottom" class="mt-5 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700">
+      閉じる
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block body_end %}
+<script>
+  (() => {
+    const modal = document.getElementById("qr-modal");
+    const btnOpen = document.getElementById("btn-open-qr-modal");
+    const btnClose = document.getElementById("btn-close-qr-modal");
+    const btnCloseBottom = document.getElementById("btn-close-qr-modal-bottom");
+
+    if (modal && btnOpen) {
+      const openModal = () => modal.classList.remove("hidden");
+      const closeModal = () => modal.classList.add("hidden");
+
+      btnOpen.addEventListener("click", openModal);
+      if (btnClose) btnClose.addEventListener("click", closeModal);
+      if (btnCloseBottom) btnCloseBottom.addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+  })();
+</script>
 {% endblock %}
