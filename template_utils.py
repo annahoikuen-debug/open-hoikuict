@@ -6,6 +6,7 @@ from time_utils import format_jst_datetime, format_local_datetime
 from security_config import parent_auth_mode
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
+_TEMPLATE_ROOT = Path(__file__).resolve().parent / "templates"
 
 
 def static_asset_url(asset: str) -> str:
@@ -17,8 +18,10 @@ def static_asset_url(asset: str) -> str:
     return f"/static/{asset}?v={version}"
 
 
-def create_templates(directory: str = "templates") -> Jinja2Templates:
+def create_templates(directory: str | Path = "templates") -> Jinja2Templates:
     """Create the shared Jinja environment with explicit datetime filters."""
+    if directory == "templates" and not Path("templates").exists() and _TEMPLATE_ROOT.exists():
+        directory = str(_TEMPLATE_ROOT)
     templates = Jinja2Templates(directory=directory)
     templates.env.filters["jst_datetime"] = format_jst_datetime
     templates.env.filters["local_datetime"] = format_local_datetime

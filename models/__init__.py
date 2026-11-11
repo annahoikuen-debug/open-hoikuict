@@ -19,3 +19,7 @@ from models.notice import (  # noqa: F401
     NoticeTargetType,
     NoticeWorkflowAction,
 )
+from models.pims import (  # noqa: F401
+    PunchChild,
+    PunchLog,
+)

@@ -92,6 +92,8 @@ class StaffContracts(SQLModel, table=True):
     latest_end: Optional[str] = Field(default=None, max_length=5)  # "HH:MM"
     can_work_holiday: bool = Field(default=False)
     overtime_allowed: bool = Field(default=False)
+    has_36_agreement: bool = Field(default=True)
+    variable_working_hours: bool = Field(default=False)
     effective_from: date = Field(index=True)
     effective_to: Optional[date] = Field(default=None, index=True)
 
@@ -121,6 +123,7 @@ class StaffShiftUnavailability(SQLModel, table=True):
     start_time: Optional[str] = Field(default=None, max_length=5)
     end_time: Optional[str] = Field(default=None, max_length=5)
     kind: str = Field(max_length=16)  # 希望休 / 出勤不可 / 出勤希望 / 休み希望
+    status: str = Field(default="approved", max_length=16)  # pending / approved / rejected
     reason: Optional[str] = Field(default=None, max_length=255)
 
 

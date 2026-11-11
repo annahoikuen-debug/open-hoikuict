@@ -1,0 +1,128 @@
+{% extends "toukouen/base.html" %}
+
+{% block title %}ピムス用CSV出力 | 登降園管理・ピムス連携システム{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl w-full mx-auto py-8">
+
+  <div class="mb-6 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <a href="/toukouen" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 text-sm font-semibold transition">
+        ← TOPへ戻る
+      </a>
+      <h1 class="text-2xl font-black text-slate-800">ピムス用CSV出力（月次報告_児童表）</h1>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 mb-6">
+    <form method="post" action="/toukouen/export/pims" class="space-y-6">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+
+      <div>
+        <label for="export-month" class="block text-sm font-bold text-slate-700 mb-2">
+          対象年月を選択してください
+        </label>
+        <div class="flex items-center gap-3">
+          <input type="month" id="export-month" name="target_month" value="{{ selected_month }}"
+                 class="px-4 py-2.5 border border-slate-300 rounded-xl text-base font-bold text-slate-800 focus:ring-2 focus:ring-violet-500 shadow-sm" required>
+          <span class="text-xs text-slate-400">※当月または報告対象月</span>
+        </div>
+      </div>
+
+      <!-- 仕様説明 -->
+      <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs text-slate-600 space-y-2">
+        <div class="font-bold text-slate-700 text-sm">📋 ピムス（PIMS）公式9列フォーマット仕様</div>
+        <ul class="list-disc list-inside space-y-1">
+          <li><strong>ファイル名</strong>: <code class="font-mono bg-slate-200 px-1 py-0.5 rounded">月次報告_児童表_YYYYMM.csv</code>（BOM付きUTF-8 / CRLF）</li>
+          <li><strong>9列固定ヘッダー</strong>: 氏名, 氏名カナ, 生年月日, 未使用, 未使用, 日付, 欠席理由, 登園時刻, 降園時刻</li>
+          <li><strong>氏名・カナのスペース完全除去</strong>: ピムス連携仕様に準拠し、全角・半角スペースを完全に除去して出力します。</li>
+          <li><strong>排他制御</strong>: 登園または降園時刻がある日は、欠席理由を必ず空欄にします。</li>
+          <li><strong>降園抜け自動補完（F-11）</strong>: 登園時刻があって降園時刻がない日は、<strong>18:00</strong> を自動補完して生成します。</li>
+        </ul>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3 pt-2">
+        <a href="/toukouen" class="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 font-bold transition text-sm">
+          キャンセル
+        </a>
+        <button type="submit" class="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold transition shadow-md hover:shadow-lg text-sm flex items-center gap-1.5">
+          <span>📊</span>
+          <span>ピムス用CSVを生成・ダウンロード</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 出力完了サマリー & 降園抜け警告表示エリア -->
+  {% if exported %}
+  <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
+    <div class="flex items-center space-x-2 text-emerald-700 font-bold text-lg mb-4">
+      <span>✅</span>
+      <span>ピムス用CSV（{{ export_filename }}）を生成しました</span>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <a href="/toukouen/export/pims/download?year={{ target_year }}&month={{ target_month_num }}"
+         class="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-6 py-3 rounded-xl transition shadow">
+        <span>💾</span>
+        <span>ピムス用CSVをダウンロード（{{ export_filename }}）</span>
+      </a>
+    </div>
+
+    <!-- 降園抜けが検知された場合の警告モーダル／表示 (F-11) -->
+    {% if missing_checkouts and missing_checkouts|length > 0 %}
+    <div class="mt-8 border-2 border-amber-300 bg-amber-50 rounded-2xl p-6">
+      <div class="flex items-center space-x-2 text-amber-800 font-black text-xl mb-2">
+        <span>⚠️</span>
+        <span>降園の押し忘れがありました（{{ missing_checkouts|length }}件）</span>
+      </div>
+      <p class="text-sm text-amber-700 mb-4">
+        登園時刻は記録されていますが降園時刻がないため、ピムスCSVには規定通り <strong>「18:00」</strong> を自動補完しました。<br>
+        必要に応じて、以下の「打刻忘れ一覧」CSVをダウンロードしてご確認ください。
+      </p>
+
+      <!-- 押し忘れ一覧テーブル -->
+      <div class="bg-white rounded-xl border border-amber-200 overflow-hidden mb-4 max-h-64 overflow-y-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-amber-100/70 text-amber-900 font-bold sticky top-0">
+            <tr>
+              <th class="px-4 py-2">日付</th>
+              <th class="px-4 py-2">児童名</th>
+              <th class="px-4 py-2">登園時刻</th>
+              <th class="px-4 py-2">補完降園時刻</th>
+              <th class="px-4 py-2">状態</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for item in missing_checkouts %}
+            <tr class="hover:bg-amber-50/50">
+              <td class="px-4 py-2 font-mono">{{ item.date }}</td>
+              <td class="px-4 py-2 font-bold">{{ item.child_name }}</td>
+              <td class="px-4 py-2 font-mono text-emerald-700">{{ item.check_in_time }}</td>
+              <td class="px-4 py-2 font-mono font-bold text-amber-700">{{ item.auto_checkout_time }}</td>
+              <td class="px-4 py-2 text-xs text-amber-600 font-semibold">{{ item.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 打刻忘れ一覧CSVダウンロードボタン (F-11) -->
+      <a href="/toukouen/export/missing-checkout/download?year={{ target_year }}&month={{ target_month_num }}"
+         class="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2.5 rounded-xl transition shadow text-sm">
+        <span>📄</span>
+        <span>打刻忘れ一覧をCSVでダウンロード（降園打刻忘れ一覧_{{ target_year }}{{ '%02d'|format(target_month_num) }}.csv）</span>
+      </a>
+    </div>
+    {% else %}
+    <div class="mt-4 p-4 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-sm font-semibold flex items-center gap-2">
+      <span>✨</span>
+      <span>当月に降園の押し忘れはありませんでした。完全な実績データです。</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+

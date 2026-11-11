@@ -1,0 +1,79 @@
+{% extends "toukouen/base.html" %}
+
+{% block title %}打刻トランザクションログ | 登降園管理・ピムス連携システム{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl w-full mx-auto py-8">
+
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center space-x-3">
+      <a href="/toukouen" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 text-sm font-semibold transition">
+        ← TOPへ戻る
+      </a>
+      <h1 class="text-2xl font-black text-slate-800">打刻トランザクションログ</h1>
+    </div>
+
+    <!-- 日付絞り込み -->
+    <form method="get" action="/toukouen/logs" class="flex items-center gap-2">
+      <input type="date" name="target_date" value="{{ selected_date.isoformat() }}"
+             class="px-3 py-1.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-700">
+      <button type="submit" class="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition">
+        表示
+      </button>
+    </form>
+  </div>
+
+  <!-- ログ一覧テーブル -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+          <tr>
+            <th class="px-4 py-3">打刻日時 (JST)</th>
+            <th class="px-4 py-3">園児名</th>
+            <th class="px-4 py-3">クラス</th>
+            <th class="px-4 py-3 text-center">区分</th>
+            <th class="px-4 py-3">欠席事由</th>
+            <th class="px-4 py-3 text-center">補完フラグ</th>
+            <th class="px-4 py-3">ログID</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for log in logs %}
+          {% set child = children_map.get(log.child_id) %}
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="px-4 py-3 font-mono font-bold text-slate-700">{{ log.punched_at.strftime('%Y/%m/%d %H:%M:%S') }}</td>
+            <td class="px-4 py-3 font-black text-slate-800">{{ child.name if child else log.child_id }}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs">{{ child.class_name if child else '-' }}</td>
+            <td class="px-4 py-3 text-center">
+              {% if log.punch_type == '登園' %}
+                <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-2.5 py-1 rounded-full">登園</span>
+              {% elif log.punch_type == '降園' %}
+                <span class="bg-sky-100 text-sky-800 border border-sky-300 text-xs font-bold px-2.5 py-1 rounded-full">降園</span>
+              {% else %}
+                <span class="bg-rose-100 text-rose-800 border border-rose-300 text-xs font-bold px-2.5 py-1 rounded-full">欠席</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 font-bold text-rose-700 text-xs">{{ log.absence_reason or '-' }}</td>
+            <td class="px-4 py-3 text-center text-xs">
+              {% if log.is_auto_filled %}
+                <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">自動補完 (18:00)</span>
+              {% else %}
+                <span class="text-slate-300">-</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 font-mono text-[11px] text-slate-400 truncate max-w-[120px]">{{ log.log_id }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="px-4 py-8 text-center text-slate-400">指定された日付の打刻ログはありません。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+

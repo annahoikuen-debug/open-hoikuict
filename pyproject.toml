@@ -28,7 +28,7 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "tests", "tests/routers", "tests/services", "tests/system", "tests/auth"]
+pythonpath = ["vendor/nushift", ".", "tests", "tests/routers", "tests/services", "tests/system", "tests/auth"]
 python_files = ["test_*.py"]
 addopts = ["--import-mode=importlib"]
 norecursedirs = [".*", "venv", ".venv", ".demo-port", "gen_bunnrei", "tmp*", "storage"]

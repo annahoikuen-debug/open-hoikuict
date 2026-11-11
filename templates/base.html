@@ -915,6 +915,8 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/health') or '/health' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">健康管理</a>
                   <a href="/attendance"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path == '/attendance' or current_path.startswith('/attendance/') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠一覧</a>
+                  <a href="/toukouen"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/toukouen') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">登降園打刻（ピムス対応）</a>
                   <a href="/attendance-checks/"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/attendance-checks') and current_path != '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠確認</a>
                   <a href="/attendance-checks/roster"
@@ -948,7 +950,15 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                   <a href="/videos"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/videos') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">動画配信管理</a>
                   <a href="/shifts/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト</a>
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts') and not current_path.startswith('/shifts/staff') and not current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト</a>
+                  <a href="/shifts/staff"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts/staff') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト設定</a>
+                  <a href="/shifts/requests"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休管理</a>
+                  <a href="/staff/shift-requests"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/staff/shift-requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休申請</a>
+                  <a href="/paid-leave"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/paid-leave') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">有給休暇管理</a>
                   <a href="/surveys/"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/surveys') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">アンケート管理</a>
                   <a href="/staff-surveys/"

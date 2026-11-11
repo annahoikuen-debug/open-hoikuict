@@ -25,7 +25,12 @@ from shiftai.domain import (
 
 from models import (
     AttendanceRecord,
+    AttendanceVerification,
+    AttendanceVerificationStatus,
+    CareTimeCategory,
     Child,
+    ChildCareCertification,
+    ChildStatus,
     User,
 )
 
@@ -34,8 +39,25 @@ from .db_models import (
     ShiftFacilitySettings,
     StaffContracts,
     StaffQualifications,
+    StaffShiftPreferences,
     StaffShiftUnavailability,
 )
+
+
+def active_children(session: Session, day: date) -> list[Child]:
+    """対象日時点で在籍している園児一覧を返す。
+
+    条件:
+      - status == ChildStatus.enrolled
+      - enrollment_date <= day
+      - withdrawal_date is None or withdrawal_date > day
+    """
+    statement = select(Child).where(
+        Child.status == ChildStatus.enrolled,
+        Child.enrollment_date <= day,
+        (Child.withdrawal_date.is_(None)) | (Child.withdrawal_date > day),
+    )
+    return list(session.exec(statement).all())
 
 
 def age_class_on(target_date: date, birth_date: date | None) -> AgeClass:
@@ -50,6 +72,8 @@ def build_child_plan(
     *,
     attendance_record: AttendanceRecord | None = None,
     planned_arrival_default: ChildPlannedArrivalDefaults | None,
+    certification: ChildCareCertification | None = None,
+    verification: AttendanceVerification | None = None,
 ) -> ChildPlan | None:
     """単園児×対象日の ChildPlan を組み立てる。
 
@@ -84,10 +108,23 @@ def build_child_plan(
         return None  # 園児単位でエラー行として収集
 
     # is_short_time（短時間保育）
-    is_short_time = bool(getattr(child, "care_time_category", None) == "short")
+    cert_category = getattr(certification, "care_time_category", None)
+    is_short_time = bool(
+        certification is not None
+        and (
+            cert_category == CareTimeCategory.short
+            or getattr(cert_category, "value", cert_category) == "short"
+        )
+    )
 
     # absent（未登園予定）
-    absent = bool(attendance_record is not None and getattr(attendance_record, "is_absent", False))
+    verif_status = getattr(verification, "status", None)
+    if isinstance(verif_status, AttendanceVerificationStatus):
+        absent = verif_status.is_absent
+    elif verif_status in ("private_absent", "sick_absent"):
+        absent = True
+    else:
+        absent = bool(attendance_record is not None and getattr(attendance_record, "is_absent", False))
 
     return ChildPlan(
         child_id=str(child.id),
@@ -118,6 +155,7 @@ def build_staff_preferences(
             select(StaffShiftUnavailability).where(
                 StaffShiftUnavailability.staff_user_id.in_(uids),
                 StaffShiftUnavailability.target_date >= date.today(),
+                StaffShiftUnavailability.status == "approved",
             )
         ).all()
     )
@@ -148,7 +186,22 @@ def build_staff_preferences(
             )
         )
 
-    return StaffPreferences(unavailable=unavail_list)
+    # シフト希望（早番・遅番避け）の反映
+    pref_row = session.exec(
+        select(StaffShiftPreferences).where(StaffShiftPreferences.staff_user_id.in_(uids))
+    ).first()
+    avoid_early = pref_row.avoid_early if pref_row else False
+    avoid_late = pref_row.avoid_late if pref_row else False
+    max_early = pref_row.max_early_shifts if pref_row and pref_row.max_early_shifts is not None else 4
+    max_late = pref_row.max_late_shifts if pref_row and pref_row.max_late_shifts is not None else 4
+
+    return StaffPreferences(
+        unavailable=unavail_list,
+        avoid_early=avoid_early,
+        avoid_late=avoid_late,
+        max_early_shifts=max_early,
+        max_late_shifts=max_late,
+    )
 
 
 def build_staff_member(
@@ -176,7 +229,7 @@ def build_staff_member(
             StaffContracts.staff_user_id.in_(uids),
             (StaffContracts.effective_to.is_(None))
             | (StaffContracts.effective_to >= date.today()),
-        )
+        ).order_by(StaffContracts.effective_from.desc(), StaffContracts.id.desc())
     ).first()
     if contract is None:
         return None
@@ -189,8 +242,16 @@ def build_staff_member(
             weekly_hours=contract.weekly_hours or 40.0,
             daily_hours=contract.daily_hours or 8.0,
             employment_type=EmploymentType(contract.employment_type),
+            min_monthly_hours=contract.min_monthly_hours or 0.0,
+            max_monthly_hours=contract.max_monthly_hours or 200.0,
+            max_weekly_days=contract.max_weekly_days or 5,
+            max_consecutive_days=contract.max_consecutive_days or 5,
             earliest_start=time.fromisoformat(contract.earliest_start) if contract.earliest_start else time(9, 0),
             latest_end=time.fromisoformat(contract.latest_end) if contract.latest_end else time(18, 0),
+            can_work_holiday=contract.can_work_holiday,
+            overtime_allowed=contract.overtime_allowed,
+            has_36_agreement=contract.has_36_agreement,
+            variable_working_hours=contract.variable_working_hours,
         ),
         skills=frozenset(),
     )

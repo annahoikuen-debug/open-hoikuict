@@ -1,0 +1,228 @@
+{% extends "toukouen/base.html" %}
+
+{% block title %}園児・世帯マスタ管理 | 登降園管理・ピムス連携システム{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl w-full mx-auto py-8">
+
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center space-x-3">
+      <a href="/toukouen" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 text-sm font-semibold transition">
+        ← TOPへ戻る
+      </a>
+      <h1 class="text-2xl font-black text-slate-800">園児・世帯マスタ管理</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- 既存台帳から同期 -->
+      <form method="post" action="/toukouen/children/sync" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+        <button type="submit" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition">
+          🔄 既存台帳から同期
+        </button>
+      </form>
+      <!-- 新規登録ボタン -->
+      <button type="button" onclick="document.getElementById('add-child-modal').classList.remove('hidden')"
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition shadow">
+        ＋ 園児を新規登録
+      </button>
+    </div>
+  </div>
+
+  {% if notice %}
+  <div class="mb-6 bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-emerald-800 font-bold">
+    {{ notice }}
+  </div>
+  {% endif %}
+
+  <!-- 園児一覧テーブル -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+          <tr>
+            <th class="px-4 py-3">園児ID (QR)</th>
+            <th class="px-4 py-3">氏名</th>
+            <th class="px-4 py-3">フリガナ</th>
+            <th class="px-4 py-3">生年月日</th>
+            <th class="px-4 py-3">クラス</th>
+            <th class="px-4 py-3">世帯ID（兄弟判定）</th>
+            <th class="px-4 py-3">保護者メール</th>
+            <th class="px-4 py-3 text-center">状態</th>
+            <th class="px-4 py-3 text-center">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for child in children %}
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="px-4 py-3 font-mono text-xs text-slate-500 font-bold">{{ child.child_id }}</td>
+            <td class="px-4 py-3 font-black text-slate-800">{{ child.name }}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs">{{ child.kana or '-' }}</td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-600">
+              {{ child.birth_date.strftime('%Y/%m/%d') if child.birth_date else '-' }}
+            </td>
+            <td class="px-4 py-3">
+              <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs font-semibold">{{ child.class_name }}</span>
+            </td>
+            <td class="px-4 py-3 font-mono text-xs">
+              {% if child.family_id %}
+                <span class="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {{ child.family_id }}
+                </span>
+              {% else %}
+                <span class="text-slate-300">-</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500 truncate max-w-[160px]">{{ child.parent_email or '-' }}</td>
+            <td class="px-4 py-3 text-center">
+              {% if child.is_active %}
+                <span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-bold">有効</span>
+              {% else %}
+                <span class="bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full text-xs">無効</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-center">
+              <button type="button"
+                      data-child-id="{{ child.child_id }}"
+                      data-name="{{ child.name }}"
+                      data-kana="{{ child.kana or '' }}"
+                      data-birth-date="{{ child.birth_date.isoformat() if child.birth_date else '' }}"
+                      data-class-name="{{ child.class_name }}"
+                      data-family-id="{{ child.family_id or '' }}"
+                      data-sort-order="{{ child.sort_order or 0 }}"
+                      data-parent-email="{{ child.parent_email or '' }}"
+                      data-is-active="{{ '1' if child.is_active else '0' }}"
+                      onclick="openEditModalFromButton(this)"
+                      class="text-indigo-600 hover:text-indigo-800 font-bold text-xs">
+                編集
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="px-4 py-8 text-center text-slate-400">園児が登録されていません。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- 登録/編集モーダル -->
+<div id="add-child-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200">
+    <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+      <h3 id="modal-title" class="text-xl font-black text-slate-800">園児の登録・編集</h3>
+      <button type="button" onclick="document.getElementById('add-child-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+
+    <form method="post" action="/toukouen/children/save" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+      <input type="hidden" name="is_edit" id="form-is-edit" value="0">
+
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">園児ID（QRコード値・出席番号）<span class="text-rose-500">*</span></label>
+        <input type="text" name="child_id" id="form-child-id" required
+               class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">漢字氏名 <span class="text-rose-500">*</span></label>
+          <input type="text" name="name" id="form-name" required placeholder="例: 中村 陽葵"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">フリガナ（名前(かな)）</label>
+          <input type="text" name="kana" id="form-kana" placeholder="例: ナカムラ ヒマリ"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">生年月日</label>
+          <input type="date" name="birth_date" id="form-birth-date"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">所属クラス <span class="text-rose-500">*</span></label>
+          <input type="text" name="class_name" id="form-class-name" required placeholder="例: ひよこ組"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">世帯ID（family_id）</label>
+          <input type="text" name="family_id" id="form-family-id" placeholder="兄弟共通のID（例: F001）"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+          <span class="text-[10px] text-slate-400">※同じIDの園児同士が兄弟判定されます</span>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">表示順 (sort_order)</label>
+          <input type="number" name="sort_order" id="form-sort-order" value="0"
+                 class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">保護者メールアドレス（通知先）</label>
+        <input type="email" name="parent_email" id="form-parent-email" placeholder="example@parent.jp"
+               class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="is_active" id="form-is-active" value="1" checked class="rounded text-indigo-600">
+          <span class="text-xs font-bold text-slate-700">在籍・有効フラグ（チェックで打刻対象）</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+        <button type="button" onclick="document.getElementById('add-child-modal').classList.add('hidden')"
+                class="px-4 py-2 text-slate-500 hover:text-slate-700 font-semibold text-sm">
+          キャンセル
+        </button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm shadow">
+          保存する
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModalFromButton(btn) {
+  document.getElementById('modal-title').textContent = '園児情報の編集';
+  document.getElementById('form-is-edit').value = '1';
+  document.getElementById('form-child-id').value = btn.dataset.childId;
+  document.getElementById('form-child-id').readOnly = true;
+  document.getElementById('form-name').value = btn.dataset.name || '';
+  document.getElementById('form-kana').value = btn.dataset.kana || '';
+  document.getElementById('form-birth-date').value = btn.dataset.birthDate || '';
+  document.getElementById('form-class-name').value = btn.dataset.className || '';
+  document.getElementById('form-family-id').value = btn.dataset.familyId || '';
+  document.getElementById('form-sort-order').value = btn.dataset.sortOrder || 0;
+  document.getElementById('form-parent-email').value = btn.dataset.parentEmail || '';
+  document.getElementById('form-is-active').checked = btn.dataset.isActive === '1';
+
+  document.getElementById('add-child-modal').classList.remove('hidden');
+}
+
+function openEditModal(child) {
+  openEditModalFromButton({ dataset: {
+    childId: child.child_id,
+    name: child.name,
+    kana: child.kana,
+    birthDate: child.birth_date,
+    className: child.class_name,
+    familyId: child.family_id,
+    sortOrder: child.sort_order,
+    parentEmail: child.parent_email,
+    isActive: child.is_active ? '1' : '0'
+  }});
+}
+</script>
+{% endblock %}

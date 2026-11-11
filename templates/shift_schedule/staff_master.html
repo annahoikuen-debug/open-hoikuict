@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}職員シフト設定・マスタ管理 | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="text-sm font-semibold text-indigo-600">シフト最適化連携</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">職員シフト設定・マスタ管理</h1>
+      <p class="mt-2 text-sm text-slate-600">職員の資格・雇用契約・シフト希望条件を管理し、NuShift シフト自動計算の対象として整備します。</p>
+    </div>
+  </div>
+
+  {% if request.query_params.get('msg') %}
+  <div class="rounded-md bg-emerald-50 p-4 border border-emerald-200 text-sm text-emerald-800">
+    {{ request.query_params.get('msg') }}
+  </div>
+  {% endif %}
+
+  <!-- CSV 一括取込エリア -->
+  <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-900">CSV 一括登録・更新</h2>
+        <p class="text-xs text-slate-500 mt-1">テンプレート形式の CSV をアップロードして、全職員の資格・契約情報を一括で登録・更新します。</p>
+      </div>
+      <form method="post" action="/shifts/staff/import" enctype="multipart/form-data" class="flex items-center gap-3">
+        <input type="file" name="file" accept=".csv" required class="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+        <button type="submit" class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">一括取込</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- NuShift 連携 CSV ダウンロード -->
+  <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-900">NuShift 連携データ出力</h2>
+        <p class="text-xs text-slate-500 mt-1">NuShift 側でシフト計算や検証を行うための園児計画・職員マスタ・希望休 CSV をダウンロードします。</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input type="month" id="exportMonth" value="2026-11" class="text-xs rounded border border-slate-300 p-1.5">
+        <button type="button" onclick="location.href='/shifts/nushift-export?kind=zip&month=' + document.getElementById('exportMonth').value" class="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-700">一括 ZIP ダウンロード</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 職員マスタ一覧 -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">職員一覧 ({{ staff_list|length }}名)</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-4 py-3">職員名 / メール</th>
+            <th class="px-4 py-3">保有資格 (求解要件)</th>
+            <th class="px-4 py-3">雇用契約 (労基法・週時間)</th>
+            <th class="px-4 py-3">希望条件</th>
+            <th class="px-4 py-3">操作・更新</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for item in staff_list %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-4 py-3">
+              <div class="font-medium text-slate-900">{{ item.user.display_name or '（氏名未設定）' }}</div>
+              <div class="text-xs text-slate-500">{{ item.user.email }}</div>
+            </td>
+            <td class="px-4 py-3">
+              {% if item.has_qual %}
+                {% for q in item.qualifications %}
+                  <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 mr-1 mb-1">
+                    {{ q.role }} ({{ q.effective_from }})
+                  </span>
+                {% endfor %}
+              {% else %}
+                <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+                  🔴 未登録（求解から除外）
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if item.has_contract %}
+                <div class="text-xs space-y-0.5 text-slate-700">
+                  <div><span class="font-medium">{{ item.contract.employment_type }}</span> (週{{ item.contract.weekly_hours or 40.0 }}h / 日{{ item.contract.daily_hours or 8.0 }}h)</div>
+                  <div class="text-slate-500">
+                    36協定: {% if item.contract.has_36_agreement %}締結あり{% else %}なし{% endif %} |
+                    変形労働: {% if item.contract.variable_working_hours %}対象{% else %}なし{% endif %}
+                  </div>
+                </div>
+              {% else %}
+                <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                  🟡 未設定（既定 40h/8h）
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-600">
+              {% if item.preference %}
+                {% if item.preference.avoid_early %}<span class="inline-block bg-slate-100 rounded px-1.5 py-0.5 mr-1 text-slate-700">早番避</span>{% endif %}
+                {% if item.preference.avoid_late %}<span class="inline-block bg-slate-100 rounded px-1.5 py-0.5 mr-1 text-slate-700">遅番避</span>{% endif %}
+                {% if not item.preference.avoid_early and not item.preference.avoid_late %}-{% endif %}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-xs">
+              <details class="cursor-pointer">
+                <summary class="text-indigo-600 hover:text-indigo-800 font-medium">編集・追加</summary>
+                <div class="mt-2 p-3 bg-slate-50 rounded border border-slate-200 space-y-3 min-w-[280px]">
+                  <!-- 資格追加フォーム -->
+                  <form method="post" action="/shifts/staff/{{ item.user_id_hex }}/qualifications" class="space-y-1">
+                    <div class="font-semibold text-slate-700">資格追加:</div>
+                    <select name="role" class="w-full text-xs rounded border border-slate-300 p-1">
+                      {% for ro in role_options %}
+                        <option value="{{ ro }}">{{ ro }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="flex gap-1">
+                      <input type="date" name="effective_from" value="{{ today }}" required class="text-xs rounded border border-slate-300 p-1 w-1/2">
+                      <input type="date" name="effective_to" placeholder="終了日" class="text-xs rounded border border-slate-300 p-1 w-1/2">
+                    </div>
+                    <button type="submit" class="w-full rounded bg-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-300">資格登録</button>
+                  </form>
+                  <hr class="border-slate-200">
+                  <!-- 契約登録フォーム -->
+                  <form method="post" action="/shifts/staff/{{ item.user_id_hex }}/contract" class="space-y-1">
+                    <div class="font-semibold text-slate-700">雇用契約登録:</div>
+                    <select name="employment_type" class="w-full text-xs rounded border border-slate-300 p-1">
+                      {% for eo in employment_options %}
+                        <option value="{{ eo }}" {% if item.contract and item.contract.employment_type == eo %}selected{% endif %}>{{ eo }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="flex gap-1">
+                      <input type="number" step="0.5" name="weekly_hours" placeholder="週契約時間 (40.0)" value="{{ item.contract.weekly_hours if item.contract else '' }}" class="text-xs rounded border border-slate-300 p-1 w-1/2">
+                      <input type="number" step="0.5" name="daily_hours" placeholder="1日所定 (8.0)" value="{{ item.contract.daily_hours if item.contract else '' }}" class="text-xs rounded border border-slate-300 p-1 w-1/2">
+                    </div>
+                    <div class="flex items-center gap-3 text-[11px] text-slate-700">
+                      <label><input type="checkbox" name="has_36_agreement" value="true" {% if not item.contract or item.contract.has_36_agreement %}checked{% endif %}> 36協定</label>
+                      <label><input type="checkbox" name="variable_working_hours" value="true" {% if item.contract and item.contract.variable_working_hours %}checked{% endif %}> 変形労働制</label>
+                    </div>
+                    <input type="date" name="effective_from" value="{{ today }}" required class="w-full text-xs rounded border border-slate-300 p-1">
+                    <button type="submit" class="w-full rounded bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">契約保存</button>
+                  </form>
+                </div>
+              </details>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+

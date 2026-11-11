@@ -1,0 +1,510 @@
+{% extends "toukouen/base.html" %}
+
+{% block title %}
+  {% if mode == 'check_in' %}🌅 登園打刻
+  {% elif mode == 'check_out' %}🌇 降園打刻
+  {% else %}🤒 欠席連絡
+  {% endif %} | 園児を選択
+{% endblock %}
+
+{% block header_mode_badge %}
+  <span id="header-mode-badge" class="transition">
+    {% if mode == 'check_in' %}
+      <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+        <span>🌅</span><span>登園モード</span>
+      </span>
+    {% elif mode == 'check_out' %}
+      <span class="bg-amber-100 text-amber-800 border border-amber-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+        <span>🌇</span><span>降園モード</span>
+      </span>
+    {% else %}
+      <span class="bg-rose-100 text-rose-800 border border-rose-300 text-sm font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+        <span>🤒</span><span>欠席登録モード</span>
+      </span>
+    {% endif %}
+  </span>
+{% endblock %}
+
+{% block content %}
+<div class="flex-1 flex flex-col w-full">
+
+  <!-- 操作バー: TOPへ戻る & QR入力 & 放置タイマー (提案1: 画面遷移なしクイック切替) -->
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
+    <div class="flex items-center gap-3">
+      <a href="/toukouen" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-300 transition text-sm sm:text-base">
+        <span>⌂</span>
+        <span>TOPへ戻る</span>
+      </a>
+      <span class="text-xs sm:text-sm text-slate-500 font-medium hidden md:inline">
+        お名前をタッチするか、QRコードをリーダーにかざしてください
+      </span>
+    </div>
+
+    <!-- QR/バーコードリーダー常時フォーカス入力フィールド (F-03) -->
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+        <span>📷</span>
+        <span>QR待受</span>
+        <input type="text" id="qr-input" autocomplete="off"
+               class="w-20 sm:w-24 text-xs px-1.5 py-0.5 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 font-mono"
+               placeholder="ID読取">
+      </div>
+      <!-- 放置タイマーインジケーター (F-07) -->
+      <span id="idle-timer-badge" class="text-xs bg-slate-100 text-slate-400 px-2 py-1 rounded-md" title="無操作で自動復帰">
+        自動復帰: <span id="idle-countdown">35</span>s
+      </span>
+    </div>
+  </div>
+
+  <!-- 大型モード切替スイッチャー (提案1: 画面遷移なしで即座に切替) -->
+  <div class="mb-4 grid grid-cols-3 gap-2 sm:gap-3 bg-slate-200/70 p-1.5 rounded-2xl">
+    <!-- 🌅 登園タブ -->
+    <button type="button" data-mode-btn="check_in"
+            class="mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm
+            {% if mode == 'check_in' %}bg-emerald-600 text-white ring-2 ring-emerald-400{% else %}bg-white/80 text-slate-600 hover:bg-white{% endif %}">
+      <span class="text-xl sm:text-2xl">🌅</span>
+      <span>登 園</span>
+      <span class="hidden sm:inline text-xs font-normal opacity-90">(朝)</span>
+    </button>
+
+    <!-- 🌇 降園タブ -->
+    <button type="button" data-mode-btn="check_out"
+            class="mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm
+            {% if mode == 'check_out' %}bg-amber-600 text-white ring-2 ring-amber-400{% else %}bg-white/80 text-slate-600 hover:bg-white{% endif %}">
+      <span class="text-xl sm:text-2xl">🌇</span>
+      <span>降 園</span>
+      <span class="hidden sm:inline text-xs font-normal opacity-90">(お迎え)</span>
+    </button>
+
+    <!-- 🤒 欠席タブ -->
+    <button type="button" data-mode-btn="absence"
+            class="mode-switch-btn flex items-center justify-center gap-1.5 sm:gap-2 py-3 px-2 rounded-xl font-black text-sm sm:text-lg transition-all duration-150 shadow-sm
+            {% if mode == 'absence' %}bg-rose-600 text-white ring-2 ring-rose-400{% else %}bg-white/80 text-slate-600 hover:bg-white{% endif %}">
+      <span class="text-xl sm:text-2xl">🤒</span>
+      <span>欠 席</span>
+      <span class="hidden sm:inline text-xs font-normal opacity-90">(病欠・都合)</span>
+    </button>
+  </div>
+
+  <!-- クラスタブ切り替え (F-02) -->
+  <div class="mb-3 flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200 scrollbar-none">
+    <button type="button" data-class-tab="all"
+            class="class-tab px-4 sm:px-5 py-2 rounded-xl font-bold text-sm sm:text-base transition shrink-0 bg-indigo-600 text-white shadow-sm">
+      すべて ({{ children|length }})
+    </button>
+    {% for cname in classrooms %}
+    <button type="button" data-class-tab="{{ cname }}"
+            class="class-tab px-4 sm:px-5 py-2 rounded-xl font-bold text-sm sm:text-base transition shrink-0 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200">
+      {{ cname }} ({{ class_counts.get(cname, 0) }})
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- 園児カードグリッド (F-02, F-04, F-06, 提案2: 状態連動ガード対応) -->
+  <div id="children-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 flex-1">
+    {% for child in children %}
+    {% set st = child_states.get(child.child_id, {}) %}
+    <div class="child-card group bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-slate-200 cursor-pointer transition-all duration-150 flex flex-col justify-between active:scale-[0.98]"
+         data-child-id="{{ child.child_id }}"
+         data-child-name="{{ child.name }}"
+         data-class-name="{{ child.class_name }}"
+         data-family-id="{{ child.family_id or '' }}"
+         data-siblings='{{ child_siblings.get(child.child_id, [])|tojson }}'
+         data-status="{{ st.get('status', '未登園') }}"
+         data-detail="{{ st.get('detail', '-') }}"
+         data-checkin-time="{{ st.get('check_in_time') or '' }}"
+         data-checkout-time="{{ st.get('check_out_time') or '' }}">
+      
+      <div>
+        <!-- クラス名 & ステータスバッジ (F-06) -->
+        <div class="flex items-center justify-between gap-1 mb-2">
+          <span class="text-[11px] font-semibold text-slate-400 truncate">{{ child.class_name }}</span>
+          <span class="card-status-badge text-[11px] font-bold px-2 py-0.5 rounded-full {{ st.get('badge_class', 'badge-not-arrived') }}">
+            {{ st.get('status', '未登園') }}{% if st.get('detail') and st.get('detail') != '-' %} {{ st.get('detail') }}{% endif %}
+          </span>
+        </div>
+
+        <!-- ふりがな -->
+        <div class="text-xs text-slate-400 font-medium truncate mb-0.5">{{ child.kana or '' }}</div>
+        <!-- 園児氏名 -->
+        <div class="card-child-name text-xl sm:text-2xl font-black text-slate-800 transition truncate">
+          {{ child.name }}
+        </div>
+      </div>
+
+      <!-- 下部アイコン・世帯表示 ＆ 操作アクションラベル -->
+      <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+        <span>
+          {% if child.family_id and child_siblings.get(child.child_id) %}
+            <span class="text-indigo-500 font-bold flex items-center gap-0.5">👨‍👩‍👧 兄弟</span>
+          {% else %}
+            <span>ID: {{ child.child_id }}</span>
+          {% endif %}
+        </span>
+        <!-- アクション誘導インジケーター (提案2: 状態により動的変化) -->
+        <span class="card-action-label font-bold text-slate-600 transition">
+          {% if mode == 'check_in' %}登園 ➔
+          {% elif mode == 'check_out' %}降園 ➔
+          {% else %}欠席 ➔
+          {% endif %}
+        </span>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-span-full py-12 text-center text-slate-400">
+      園児が登録されていません。「コドモンCSV取込」または「園児管理」から園児を登録してください。
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<!-- モーダル①: 兄弟一括打刻特大2択モーダル (F-04) -->
+<div id="sibling-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border-4 border-indigo-200 animate-in fade-in zoom-in duration-150">
+    <div class="text-center mb-6">
+      <span class="text-5xl mb-2 inline-block">👨‍👩‍👧</span>
+      <h3 class="text-2xl sm:text-3xl font-black text-slate-800">兄弟がいっしょにいます</h3>
+      <p class="text-slate-500 text-sm mt-1">打刻方法をお選びください</p>
+    </div>
+
+    <div class="space-y-4">
+      <!-- 選択肢①: 兄弟いっしょに打刻 -->
+      <button type="button" id="btn-punch-siblings"
+              class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-2xl p-5 shadow-lg active:scale-[0.98] transition flex flex-col items-center justify-center border-2 border-white">
+        <span class="text-xl sm:text-2xl font-black flex items-center gap-2">
+          <span>👨‍👩‍👧</span>
+          <span>兄弟いっしょに【<span id="sibling-mode-label">打刻</span>】</span>
+        </span>
+        <span id="sibling-names-text" class="text-sm sm:text-base font-semibold text-indigo-100 mt-1">
+          （児童A・児童B）
+        </span>
+      </button>
+
+      <!-- 選択肢②: 本人だけ単独打刻 -->
+      <button type="button" id="btn-punch-single"
+              class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl p-4 font-bold text-lg active:scale-[0.98] transition border border-slate-300 flex items-center justify-center gap-2">
+        <span>👤</span>
+        <span><span id="single-child-name">〇〇</span> さんだけ【<span id="single-mode-label">打刻</span>】</span>
+      </button>
+
+      <!-- キャンセルボタン -->
+      <button type="button" id="btn-close-sibling-modal"
+              class="w-full text-slate-500 hover:text-slate-700 text-sm font-semibold py-2">
+        キャンセル
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル②: 欠席理由選択モーダル（ピムス準拠3区分） (F-05) -->
+<div id="absence-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border-4 border-rose-200 animate-in fade-in zoom-in duration-150">
+    <div class="text-center mb-6">
+      <span class="text-5xl mb-2 inline-block">🤒</span>
+      <h3 class="text-2xl sm:text-3xl font-black text-slate-800"><span id="absence-child-name">〇〇</span> さんの欠席理由</h3>
+      <p class="text-slate-500 text-sm mt-1">ピムス規定の理由を選択してください</p>
+    </div>
+
+    <div class="space-y-3">
+      <!-- 病欠等 -->
+      <button type="button" data-absence-reason="病欠等"
+              class="btn-absence-option w-full bg-rose-50 hover:bg-rose-100 text-rose-800 border-2 border-rose-300 rounded-2xl p-4 font-black text-xl text-left flex items-center justify-between active:scale-[0.98] transition">
+        <span class="flex items-center gap-3">
+          <span class="text-3xl">🤒</span>
+          <span>病欠等</span>
+        </span>
+        <span class="text-xs text-rose-500 font-normal">病気・感染症など</span>
+      </button>
+
+      <!-- 都合 -->
+      <button type="button" data-absence-reason="都合"
+              class="btn-absence-option w-full bg-amber-50 hover:bg-amber-100 text-amber-800 border-2 border-amber-300 rounded-2xl p-4 font-black text-xl text-left flex items-center justify-between active:scale-[0.98] transition">
+        <span class="flex items-center gap-3">
+          <span class="text-3xl">🏠</span>
+          <span>都合</span>
+        </span>
+        <span class="text-xs text-amber-500 font-normal">保護者都合・家庭都合</span>
+      </button>
+
+      <!-- 災害 -->
+      <button type="button" data-absence-reason="災害"
+              class="btn-absence-option w-full bg-slate-50 hover:bg-slate-100 text-slate-800 border-2 border-slate-300 rounded-2xl p-4 font-black text-xl text-left flex items-center justify-between active:scale-[0.98] transition">
+        <span class="flex items-center gap-3">
+          <span class="text-3xl">⚠️</span>
+          <span>災害</span>
+        </span>
+        <span class="text-xs text-slate-500 font-normal">自然災害・休園等</span>
+      </button>
+
+      <!-- キャンセルボタン -->
+      <button type="button" id="btn-close-absence-modal"
+              class="w-full text-slate-500 hover:text-slate-700 text-sm font-semibold py-2 mt-2">
+        キャンセル
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const CURRENT_MODE = "{{ mode }}"; // 'check_in' | 'check_out' | 'absence'
+  const MODE_LABELS = {
+    'check_in': '登園',
+    'check_out': '降園',
+    'absence': '欠席'
+  };
+  const currentModeLabel = MODE_LABELS[CURRENT_MODE] || '打刻';
+
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  // 1. 放置タイマー (35秒無操作でTOPへ自動復帰) - F-07
+  let idleTime = 35;
+  const idleCountdownEl = document.getElementById('idle-countdown');
+  let idleInterval = null;
+
+  function resetIdleTimer() {
+    idleTime = 35;
+    if (idleCountdownEl) idleCountdownEl.textContent = idleTime;
+  }
+
+  function startIdleMonitor() {
+    ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, resetIdleTimer, { passive: true });
+    });
+    idleInterval = setInterval(() => {
+      idleTime--;
+      if (idleCountdownEl) idleCountdownEl.textContent = Math.max(0, idleTime);
+      if (idleTime <= 0) {
+        clearInterval(idleInterval);
+        window.location.href = '/toukouen';
+      }
+    }, 1000);
+  }
+  startIdleMonitor();
+
+  // 2. クラスタブ切り替え (F-02)
+  const tabs = document.querySelectorAll('.class-tab');
+  const cards = document.querySelectorAll('.child-card');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const selectedClass = tab.dataset.classTab;
+      tabs.forEach(t => {
+        t.className = "class-tab px-5 py-2.5 rounded-xl font-bold text-base transition shrink-0 bg-white text-slate-700 hover:bg-slate-50 border border-slate-200";
+      });
+      tab.className = "class-tab px-5 py-2.5 rounded-xl font-bold text-base transition shrink-0 bg-indigo-600 text-white shadow-sm";
+
+      cards.forEach(card => {
+        if (selectedClass === 'all' || card.dataset.className === selectedClass) {
+          card.style.display = '';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+      keepQrFocus();
+    });
+  });
+
+  // 3. QR/バーコードリーダー常時フォーカス維持 (F-03)
+  const qrInput = document.getElementById('qr-input');
+  function keepQrFocus() {
+    if (qrInput && !document.querySelector('#sibling-modal:not(.hidden)') && !document.querySelector('#absence-modal:not(.hidden)')) {
+      qrInput.focus();
+    }
+  }
+  window.addEventListener('click', (e) => {
+    if (!e.target.closest('button, a, input, select')) {
+      keepQrFocus();
+    }
+  });
+  keepQrFocus();
+
+  if (qrInput) {
+    qrInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const code = qrInput.value.trim();
+        qrInput.value = '';
+        if (code) {
+          handleQrScan(code);
+        }
+      }
+    });
+  }
+
+  function handleQrScan(code) {
+    const card = Array.from(cards).find(c => c.dataset.childId === code);
+    if (card) {
+      handleChildClick(card);
+    } else {
+      showToast(`園児ID: ${code} が見つかりませんでした`, true);
+    }
+  }
+
+  // 4. 園児カードタップ処理
+  let activeChildData = null;
+
+  cards.forEach(card => {
+    card.addEventListener('click', () => {
+      handleChildClick(card);
+    });
+  });
+
+  function handleChildClick(card) {
+    const childId = card.dataset.childId;
+    const childName = card.dataset.childName;
+    const familyId = card.dataset.familyId;
+    let siblings = [];
+    try {
+      siblings = JSON.parse(card.dataset.siblings || '[]');
+    } catch(e) {}
+
+    activeChildData = {
+      childId,
+      childName,
+      familyId,
+      siblings
+    };
+
+    if (CURRENT_MODE === 'absence') {
+      // 欠席モード -> 理由選択モーダル表示 (F-05)
+      openAbsenceModal(childName);
+      return;
+    }
+
+    // 登園・降園モード
+    // F-04: 世帯IDが一致する園児が2名以上いる場合のみモーダル表示
+    // 世帯IDが空欄、または単独世帯は即時単独打刻
+    if (familyId && familyId.trim() && siblings.length > 0) {
+      openSiblingModal(childName, siblings);
+    } else {
+      // 単独打刻即時実行
+      executePunch([childId], currentModeLabel);
+    }
+  }
+
+  // 5. 兄弟モーダル制御 (F-04)
+  const siblingModal = document.getElementById('sibling-modal');
+  const siblingModeLabel = document.getElementById('sibling-mode-label');
+  const siblingNamesText = document.getElementById('sibling-names-text');
+  const singleChildName = document.getElementById('single-child-name');
+  const singleModeLabel = document.getElementById('single-mode-label');
+  const btnPunchSiblings = document.getElementById('btn-punch-siblings');
+  const btnPunchSingle = document.getElementById('btn-punch-single');
+  const btnCloseSiblingModal = document.getElementById('btn-close-sibling-modal');
+
+  function openSiblingModal(targetName, siblings) {
+    siblingModeLabel.textContent = currentModeLabel;
+    singleModeLabel.textContent = currentModeLabel;
+    singleChildName.textContent = targetName;
+
+    const allNames = [targetName, ...siblings.map(s => s.name)];
+    siblingNamesText.textContent = `（${allNames.join('・')}）`;
+
+    siblingModal.classList.remove('hidden');
+  }
+
+  function closeSiblingModal() {
+    siblingModal.classList.add('hidden');
+    keepQrFocus();
+  }
+
+  btnCloseSiblingModal.addEventListener('click', closeSiblingModal);
+
+  btnPunchSiblings.addEventListener('click', () => {
+    if (!activeChildData) return;
+    const allChildIds = [activeChildData.childId, ...activeChildData.siblings.map(s => s.child_id)];
+    closeSiblingModal();
+    executePunch(allChildIds, currentModeLabel);
+  });
+
+  btnPunchSingle.addEventListener('click', () => {
+    if (!activeChildData) return;
+    const singleId = [activeChildData.childId];
+    closeSiblingModal();
+    executePunch(singleId, currentModeLabel);
+  });
+
+  // 6. 欠席モーダル制御 (F-05)
+  const absenceModal = document.getElementById('absence-modal');
+  const absenceChildName = document.getElementById('absence-child-name');
+  const btnCloseAbsenceModal = document.getElementById('btn-close-absence-modal');
+  const absenceButtons = document.querySelectorAll('.btn-absence-option');
+
+  function openAbsenceModal(targetName) {
+    absenceChildName.textContent = targetName;
+    absenceModal.classList.remove('hidden');
+  }
+
+  function closeAbsenceModal() {
+    absenceModal.classList.add('hidden');
+    keepQrFocus();
+  }
+
+  btnCloseAbsenceModal.addEventListener('click', closeAbsenceModal);
+
+  absenceButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const reason = btn.dataset.absenceReason;
+      if (!activeChildData) return;
+      closeAbsenceModal();
+      executePunch([activeChildData.childId], '欠席', reason);
+    });
+  });
+
+  // 7. 打刻実行APIリクエスト ＆ 電子音 ＆ トースト ＆ 2.5秒オートリセット (F-02, F-07)
+  let isSubmitting = false;
+
+  async function executePunch(childIds, punchType, absenceReason = null) {
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    try {
+      const formData = new URLSearchParams();
+      childIds.forEach(id => formData.append('child_ids', id));
+      formData.append('punch_type', punchType);
+      if (absenceReason) {
+        formData.append('absence_reason', absenceReason);
+      }
+      formData.append('csrf_token', csrfToken);
+
+      const resp = await fetch('/toukouen/punch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      });
+
+      const res = await resp.json();
+      if (!resp.ok || !res.success) {
+        showToast(res.error || '打刻処理に失敗しました', true);
+        isSubmitting = false;
+        return;
+      }
+
+      // F-02: Web Audio API 電子音再生 (880Hz, 120ms)
+      playSuccessBeep();
+
+      // F-02: トースト通知
+      showToast(res.message || `${punchType}を記録しました`);
+
+      // F-07: 打刻完了から2.5秒後に自動でTOP画面へ復帰
+      setTimeout(() => {
+        window.location.href = '/toukouen';
+      }, 2500);
+
+    } catch (err) {
+      console.error(err);
+      showToast('通信エラーが発生しました', true);
+      isSubmitting = false;
+    }
+  }
+
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,110 @@
+{% extends "toukouen/base.html" %}
+
+{% block title %}コドモン公金管理CSV取込 | 登降園管理・ピムス連携システム{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl w-full mx-auto py-8">
+
+  <div class="mb-6 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <a href="/toukouen" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-300 text-sm font-semibold transition">
+        ← TOPへ戻る
+      </a>
+      <h1 class="text-2xl font-black text-slate-800">コドモンCSV取込（公金管理システム連携.csv）</h1>
+    </div>
+  </div>
+
+  {% if result %}
+  <div class="mb-6 bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-6 shadow-sm">
+    <div class="flex items-center space-x-2 text-emerald-800 font-bold text-lg mb-2">
+      <span>✅</span>
+      <span>CSVの取り込みが完了しました</span>
+    </div>
+    <div class="grid grid-cols-3 gap-4 text-center mt-4">
+      <div class="bg-white rounded-xl p-3 border border-emerald-200">
+        <div class="text-xs text-slate-500 font-semibold">新規追加児童</div>
+        <div class="text-2xl font-extrabold text-emerald-700 mt-1">{{ result.new_children }}<span class="text-xs font-normal text-slate-500 ml-1">名</span></div>
+      </div>
+      <div class="bg-white rounded-xl p-3 border border-emerald-200">
+        <div class="text-xs text-slate-500 font-semibold">マスタ補完児童</div>
+        <div class="text-2xl font-extrabold text-blue-700 mt-1">{{ result.updated_children }}<span class="text-xs font-normal text-slate-500 ml-1">名</span></div>
+      </div>
+      <div class="bg-white rounded-xl p-3 border border-emerald-200">
+        <div class="text-xs text-slate-500 font-semibold">実績打刻ログ</div>
+        <div class="text-2xl font-extrabold text-purple-700 mt-1">{{ result.new_logs }}<span class="text-xs font-normal text-slate-500 ml-1">件</span></div>
+      </div>
+    </div>
+    <div class="mt-4 text-center">
+      <a href="/toukouen" class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl transition shadow">
+        登降園TOPへ戻る
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="mb-6 bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 text-rose-800 font-bold flex items-center space-x-2">
+    <span>⚠️</span>
+    <span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
+    <form method="post" action="/toukouen/import/codmon" enctype="multipart/form-data" class="space-y-6">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+
+      <div>
+        <label class="block text-sm font-bold text-slate-700 mb-2">
+          コドモン出力ファイル（公金管理システム連携.csv）を選択
+        </label>
+        <div class="border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-2xl p-8 text-center transition bg-slate-50">
+          <input type="file" name="csv_file" accept=".csv" required id="csv-file-input" class="hidden">
+          <label for="csv-file-input" class="cursor-pointer flex flex-col items-center">
+            <span class="text-4xl mb-2">📄</span>
+            <span id="file-name-label" class="text-base font-bold text-indigo-600 hover:underline">
+              クリックしてファイルを選択
+            </span>
+            <span class="text-xs text-slate-400 mt-1">
+              対応形式: UTF-8（BOM付き含む）/ Shift_JIS 自動判定
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 仕様説明 -->
+      <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs text-slate-600 space-y-2">
+        <div class="font-bold text-slate-700 text-sm">💡 自動処理される内容</div>
+        <ul class="list-disc list-inside space-y-1">
+          <li><strong>マスタ自動補完</strong>: 既存園児の氏名（スペース除去して照合）と一致した場合、空欄となっているフリガナや生年月日を自動更新します。</li>
+          <li><strong>未登録園児の追加</strong>: マスタに存在しない園児は、新規園児マスタレコードとして自動作成します。</li>
+          <li><strong>実績登録</strong>: 登園時刻、退園時刻（降園）、欠席理由（病欠等・都合・災害）を打刻トランザクションログへ一括登録します。</li>
+        </ul>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3">
+        <a href="/toukouen" class="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 font-bold transition text-sm">
+          キャンセル
+        </a>
+        <button type="submit" class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition shadow-md hover:shadow-lg text-sm flex items-center gap-1.5">
+          <span>📥</span>
+          <span>取り込みを実行する</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+
+<script>
+  const fileInput = document.getElementById('csv-file-input');
+  const fileLabel = document.getElementById('file-name-label');
+  if (fileInput && fileLabel) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        fileLabel.textContent = fileInput.files[0].name;
+      }
+    });
+  }
+</script>
+{% endblock %}
+

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{% block title %}登降園管理・ピムス連携システム{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="csrf-token" content="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+  <style>
+    /* タブレットタッチ向けタップハイライト防止・視認性強化 */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .badge-checkin { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .badge-checkout { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+    .badge-absence { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .badge-not-arrived { background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
+  <!-- ヘッダー -->
+  <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center space-x-4">
+      <a href="/toukouen" class="flex items-center space-x-2 text-2xl font-bold text-indigo-700 hover:text-indigo-900 transition">
+        <span>🏫</span>
+        <span>登降園・ピムス連携</span>
+      </a>
+      {% block header_mode_badge %}{% endblock %}
+    </div>
+
+    <!-- リアルタイム時計 -->
+    <div class="flex items-center space-x-6">
+      <div id="live-clock" class="text-right">
+        <div id="clock-date" class="text-sm text-slate-500 font-medium">----年--月--日 ( - )</div>
+        <div id="clock-time" class="text-2xl font-black text-slate-700 font-mono tracking-wider">--:--:--</div>
+      </div>
+      <a href="/" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-300 transition flex items-center gap-1">
+        <span>← 管理ポータル</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- トースト通知コンテナ (提案1: スキップ対応 ＆ 提案2: Undo対応) -->
+  <div id="toast-container" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-4 max-w-xl w-11/12 sm:w-auto">
+    <div id="toast-message" class="bg-emerald-600 text-white text-base sm:text-xl font-bold px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 border-2 border-white pointer-events-auto">
+      <div class="flex items-center space-x-3">
+        <span id="toast-icon">✨</span>
+        <span id="toast-text">メッセージ</span>
+      </div>
+      <div id="toast-actions" class="hidden flex items-center gap-2">
+        <button type="button" id="btn-toast-undo" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 active:bg-white/40 text-white text-sm font-bold rounded-xl border border-white/40 transition flex items-center gap-1 shadow-sm">
+          <span>↩</span><span>取り消す</span>
+        </button>
+        <button type="button" id="btn-toast-skip" class="px-3 py-1.5 bg-white text-emerald-800 hover:bg-slate-100 active:scale-95 text-sm font-black rounded-xl transition flex items-center gap-1 shadow-sm">
+          <span>次へ</span><span>➔</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- フッター -->
+  <footer class="bg-white border-t border-slate-200 py-3 px-6 text-center text-xs text-slate-400">
+    登降園管理・企業主導型保育ピムス（PIMS）公式9列フォーマット連携システム
+  </footer>
+
+  <!-- 共通スクリプト: 時計、音声再生、トースト -->
+  <script>
+    // 時計更新
+    function updateClock() {
+      const now = new Date();
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      const dateStr = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 (${days[now.getDay()]})`;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      
+      const dateEl = document.getElementById('clock-date');
+      const timeEl = document.getElementById('clock-time');
+      if (dateEl) dateEl.textContent = dateStr;
+      if (timeEl) timeEl.textContent = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Web Audio API 電子音再生 (880Hz, 120ms) - F-02
+    function playSuccessBeep() {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // 880Hz (ラ/A5)
+        
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12); // 120ms
+      } catch (err) {
+        console.warn('Web Audio API play error:', err);
+      }
+    }
+
+    // トースト表示・非表示管理 (提案1: スキップ ＆ 提案2: Undo対応)
+    let toastTimeout = null;
+
+    function hideToast() {
+      const container = document.getElementById('toast-container');
+      const actions = document.getElementById('toast-actions');
+      if (container) {
+        container.classList.remove('opacity-100', 'translate-y-0');
+        container.classList.add('opacity-0', '-translate-y-4');
+      }
+      if (actions) actions.classList.add('hidden');
+      if (toastTimeout) {
+        clearTimeout(toastTimeout);
+        toastTimeout = null;
+      }
+    }
+
+    function showToast(message, isError = false, undoCallback = null, durationMs = 4500) {
+      const container = document.getElementById('toast-container');
+      const text = document.getElementById('toast-text');
+      const icon = document.getElementById('toast-icon');
+      const box = document.getElementById('toast-message');
+      const actions = document.getElementById('toast-actions');
+      const undoBtn = document.getElementById('btn-toast-undo');
+      const skipBtn = document.getElementById('btn-toast-skip');
+
+      if (!container || !text) return;
+
+      if (toastTimeout) {
+        clearTimeout(toastTimeout);
+        toastTimeout = null;
+      }
+
+      text.textContent = message;
+      if (isError) {
+        box.className = "bg-rose-600 text-white text-base sm:text-xl font-bold px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 border-2 border-white pointer-events-auto";
+        icon.textContent = "⚠️";
+        if (actions) actions.classList.add('hidden');
+      } else {
+        box.className = "bg-emerald-600 text-white text-base sm:text-xl font-bold px-6 py-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 border-2 border-white pointer-events-auto";
+        icon.textContent = "✨";
+        if (actions && undoCallback) {
+          actions.classList.remove('hidden');
+          undoBtn.onclick = (e) => {
+            e.stopPropagation();
+            hideToast();
+            undoCallback();
+          };
+          skipBtn.onclick = (e) => {
+            e.stopPropagation();
+            hideToast();
+          };
+        } else if (actions) {
+          actions.classList.add('hidden');
+        }
+      }
+
+      container.classList.remove('opacity-0', '-translate-y-4');
+      container.classList.add('opacity-100', 'translate-y-0');
+
+      toastTimeout = setTimeout(() => {
+        hideToast();
+      }, durationMs);
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+

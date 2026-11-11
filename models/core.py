@@ -966,6 +966,7 @@ class AttendanceRecord(SQLModel, table=True):
     attendance_date: date = Field(index=True)
     check_in_at: Optional[datetime] = None
     check_out_at: Optional[datetime] = None
+    planned_check_in_time: Optional[str] = None
     planned_pickup_time: Optional[str] = None
     pickup_person: Optional[str] = None
     snack_required: bool = Field(default=False)

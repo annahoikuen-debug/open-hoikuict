@@ -10,12 +10,22 @@ from typing import NamedTuple
 
 from sqlmodel import Session, select
 
-from models import AttendanceRecord, Child, User
+from models import (
+    AttendanceRecord,
+    AttendanceVerification,
+    ChildCareCertification,
+    User,
+)
 from shiftai.domain import ChildPlan
 from shiftai.standards import build_requirements
 from shiftai.local_rules import build_standard
-from ..bridge import age_class_on, build_facility_settings, build_staff_member
-from ..db_models import ShiftPlanCells, ChildPlannedArrivalDefaults
+from ..bridge import (
+    active_children,
+    build_child_plan,
+    build_facility_settings,
+    build_staff_member,
+)
+from ..db_models import ShiftFacilityClosedDays, ShiftPlanCells, ChildPlannedArrivalDefaults
 from ..store import ShiftRepositoryDep
 
 
@@ -47,14 +57,14 @@ def detect_day_gap(
 
     standard = build_standard(plan.staffing_standard_key)
 
-    # 園児プランの収集
-    children = session.exec(select(Child)).all()
+    # 園児プランの収集（bridge.build_child_plan の再利用に統一）
+    children = active_children(session, target_date)
     child_plans: list[ChildPlan] = []
     for c in children:
         rec = session.exec(
             select(AttendanceRecord).where(
                 AttendanceRecord.child_id == c.id,
-                AttendanceRecord.target_date == target_date,
+                AttendanceRecord.attendance_date == target_date,
             )
         ).first()
         planned_def = session.exec(
@@ -65,45 +75,54 @@ def detect_day_gap(
                 ChildPlannedArrivalDefaults.effective_from <= target_date,
             )
         ).first()
-
-        arrive = None
-        if rec and rec.check_in_at:
-            arrive = rec.check_in_at.time()
-        elif rec and rec.planned_check_in_time:
-            from datetime import time
-            arrive = time.fromisoformat(rec.planned_check_in_time)
-        elif planned_def:
-            from datetime import time
-            arrive = time.fromisoformat(planned_def.planned_check_in_time)
-
-        depart = None
-        if rec and rec.planned_pickup_time:
-            from datetime import time
-            depart = time.fromisoformat(rec.planned_pickup_time)
-
-        from datetime import time
-        arrive = arrive or time(8, 0)
-        depart = depart or time(18, 0)
-
-        if depart > arrive:
-            child_plans.append(
-                ChildPlan(
-                    child_id=str(c.id),
-                    name=c.full_name,
-                    day=target_date,
-                    age_class=age_class_on(target_date, c.birth_date),
-                    arrive=arrive,
-                    depart=depart,
-                    is_short_time=bool(c.care_time_category == "short"),
-                    absent=bool(rec and rec.is_absent),
-                )
+        cert = session.exec(
+            select(ChildCareCertification).where(
+                ChildCareCertification.child_id == c.id,
+                ChildCareCertification.is_active == True,  # noqa: E712
+                ChildCareCertification.effective_from <= target_date,
+                (ChildCareCertification.effective_to.is_(None))
+                | (ChildCareCertification.effective_to >= target_date),
             )
+        ).first()
+        verif = session.exec(
+            select(AttendanceVerification).where(
+                AttendanceVerification.child_id == c.id,
+                AttendanceVerification.target_date == target_date,
+            )
+        ).first()
 
-    # 必要人員要件の算出
-    requirements = build_requirements(
-        settings=facility_settings,
-        standard=standard,
-        plans=child_plans,
+        cp = build_child_plan(
+            session,
+            c,
+            target_date,
+            attendance_record=rec,
+            planned_arrival_default=planned_def,
+            certification=cert,
+            verification=verif,
+        )
+        if cp is not None:
+            child_plans.append(cp)
+
+    # 休園日・祝日
+    closed_rows = session.exec(
+        select(ShiftFacilityClosedDays).where(
+            ShiftFacilityClosedDays.setting_id == (facility_row.id or 1),
+            ShiftFacilityClosedDays.target_date == target_date,
+        )
+    ).all()
+    closed_days = [r.target_date for r in closed_rows if r.kind == "closed"]
+    holiday_dates = [r.target_date for r in closed_rows if r.kind == "holiday"]
+
+    # 必要人員要件の算出（正シグネチャ）
+    req_table = build_requirements(
+        child_plans,
+        [target_date],
+        standard,
+        day_open=facility_settings.day_open,
+        day_close=facility_settings.day_close,
+        granularity_min=facility_settings.granularity_min,
+        closed_days=closed_days,
+        holiday_dates=holiday_dates,
     )
 
     # シフト表からの供給人員集計
@@ -115,13 +134,26 @@ def detect_day_gap(
     ).all()
 
     work_staff_ids = {
-        c.staff_user_id for c in cells if c.slot_label not in ("OFF", "unspecified", "休み")
+        c.staff_user_id for c in cells if c.slot_label not in ("OFF", "unspecified", "休み") and c.cell_state != "OFF"
     }
 
     # 供給可能保育士数
     actual_count = 0
+    import uuid
     for uid in work_staff_ids:
-        user = session.get(User, uid)
+        # uid は hex または UUID 文字列、もしくは UUID オブジェクト
+        user = None
+        target_uuid = None
+        if isinstance(uid, uuid.UUID):
+            target_uuid = uid
+        elif isinstance(uid, str):
+            try:
+                target_uuid = uuid.UUID(hex=uid) if len(uid) == 32 else uuid.UUID(uid)
+            except Exception:
+                target_uuid = None
+
+        if target_uuid is not None:
+            user = session.get(User, target_uuid)
         if user:
             sm = build_staff_member(session, user)
             if sm and sm.is_placeable:
@@ -129,20 +161,19 @@ def detect_day_gap(
 
     warnings: list[GapWarning] = []
     # 各スロットでの不足チェック
-    for req in requirements:
-        if req.day == target_date:
-            needed = req.required_staff
-            if actual_count < needed:
-                shortfall = needed - actual_count
-                warnings.append(
-                    GapWarning(
-                        target_date=target_date,
-                        slot_label=req.slot.label,
-                        required_count=needed,
-                        actual_count=actual_count,
-                        shortfall=shortfall,
-                        message=f"{target_date.isoformat()} {req.slot.label}: 保育士が {shortfall}名 不足しています (必要 {needed}名 / 配置 {actual_count}名)",
-                    )
+    for req in req_table.for_day(target_date):
+        needed = req.needed_staff
+        if actual_count < needed:
+            shortfall = needed - actual_count
+            warnings.append(
+                GapWarning(
+                    target_date=target_date,
+                    slot_label=req.slot.label,
+                    required_count=needed,
+                    actual_count=actual_count,
+                    shortfall=shortfall,
+                    message=f"{target_date.isoformat()} {req.slot.label}: 保育士が {shortfall}名 不足しています (必要 {needed}名 / 配置 {actual_count}名)",
                 )
+            )
 
     return warnings

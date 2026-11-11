@@ -103,6 +103,9 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("035_document_export_permissions", _migrate_document_export_permissions),
         ("036_document_export_history", _migrate_document_export_history),
         ("037_medication_administrations", _migrate_medication_administrations),
+        ("038_shift_contracts_36_and_variable", _migrate_shift_schedule_tables),
+        ("039_unavailability_status", _migrate_shift_schedule_tables),
+        ("040_pims_attendance_tables", _migrate_pims_attendance_tables),
     ]
 
 
@@ -1927,6 +1930,32 @@ def _migrate_shift_schedule_tables() -> None:
                         "WHERE cell_state = 'pinned'"
                     )
                 )
+            # staff_contracts: 36協定・変形労働制フラグ
+            contract_cols = _table_columns("staff_contracts")
+            if contract_cols:
+                if "has_36_agreement" not in contract_cols:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE staff_contracts "
+                            "ADD COLUMN has_36_agreement BOOLEAN DEFAULT 1 NOT NULL"
+                        )
+                    )
+                if "variable_working_hours" not in contract_cols:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE staff_contracts "
+                            "ADD COLUMN variable_working_hours BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    )
+            # staff_shift_unavailability: status 列
+            unavail_cols = _table_columns("staff_shift_unavailability")
+            if unavail_cols and "status" not in unavail_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE staff_shift_unavailability "
+                        "ADD COLUMN status VARCHAR(16) DEFAULT 'approved' NOT NULL"
+                    )
+                )
             conn.commit()
     except Exception as exc:
         _log_migration_skip("shift schedule tables", exc)
@@ -1998,3 +2027,16 @@ def _migrate_document_export_history() -> None:
             )
     except Exception as exc:
         _log_migration_skip("document export history", exc)
+
+
+def _migrate_pims_attendance_tables() -> None:
+    """Create punch_children and punch_logs tables for PIMS attendance system."""
+    try:
+        from models.pims import PunchChild, PunchLog
+        with engine.begin() as conn:
+            PunchChild.metadata.create_all(
+                conn, tables=[PunchChild.__table__, PunchLog.__table__]
+            )
+    except Exception as exc:
+        _log_migration_skip("pims attendance tables", exc)
+

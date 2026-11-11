@@ -29,7 +29,8 @@ def plans_edit_cell(
 ) -> RedirectResponse:
     from sqlmodel import select
     from ..contracts import SolveJobStatus
-    from ..db_models import ShiftSolveJobs
+    from ..db_models import ShiftDutyPatterns, ShiftSolveJobs
+    from ..services.solve_inputs import resolve_slot_to_time_window
 
     plan = repo.get_plan(plan_id)
     if plan is None:
@@ -47,6 +48,24 @@ def plans_edit_cell(
     ).first()
     if active_job is not None:
         raise HTTPException(status_code=409, detail="求解ジョブ実行中はセルを編集できません")
+
+    # スロットラベル検証（ステップ12）: 勤務パターンまたはスロット形式、OFFのいずれかに解決可能か
+    cleaned_label = (slot_label or "").strip()
+    upper_label = cleaned_label.upper()
+    is_off = upper_label in ("OFF", "休", "公休", "休暇") or cell_state == "OFF"
+    if not is_off:
+        duty_patterns = repo.session.exec(select(ShiftDutyPatterns)).all()
+        fs = repo.facility_settings()
+        windows = resolve_slot_to_time_window(cleaned_label, settings=fs, duty_patterns=duty_patterns)
+        # 形式チェック: "HH:MM-HH:MM" 形式か、あるいは既知パターン
+        valid = False
+        if windows and any("-" in w and ":" in w for w in windows):
+            valid = True
+        if not valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"無効なスロットラベルです: {slot_label}。有効な時間帯（HH:MM-HH:MM）または登録された勤務パターンを指定してください。",
+            )
 
     parsed_date = date.fromisoformat(target_date)
     existing_cell = repo.get_plan_cell(plan_id, staff_user_id, parsed_date)

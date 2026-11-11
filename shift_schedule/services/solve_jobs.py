@@ -178,7 +178,15 @@ def _run_solve_sync(
         all_violations: list[ShiftViolations] = []
 
         # 園児・職員一覧を事前取得（N+1クエリ完全解消）
-        children = session.exec(select(Child)).all()
+        # 園児は月末日時点で在籍しうる園児を一括取得し、日ごとに判定
+        from models import ChildStatus
+        candidate_children = session.exec(
+            select(Child).where(
+                Child.status == ChildStatus.enrolled,
+                Child.enrollment_date <= end_date,
+                (Child.withdrawal_date.is_(None)) | (Child.withdrawal_date >= start_date),
+            )
+        ).all()
         users = session.exec(select(User)).all()
 
         # 全日登園記録の一括プリロード
@@ -187,6 +195,15 @@ def _run_solve_sync(
         ).all()
         att_map: dict[tuple[int, date], AttendanceRecord] = {
             (ar.child_id, ar.attendance_date): ar for ar in att_records if ar.child_id is not None
+        }
+
+        # 当該月出欠確認の一括取得
+        from models import AttendanceVerification
+        verif_records = session.exec(
+            select(AttendanceVerification).where(AttendanceVerification.target_date.in_(all_days))
+        ).all()
+        verif_map: dict[tuple[int, date], AttendanceVerification] = {
+            (vr.child_id, vr.target_date): vr for vr in verif_records if vr.child_id is not None
         }
 
         all_defaults = session.exec(
@@ -200,9 +217,28 @@ def _run_solve_sync(
         for d in all_defaults:
             defaults_by_child.setdefault(d.child_id, []).append(d)
 
+        # 園児全件の有効認定を一括取得
+        from models import ChildCareCertification
+        all_certs = session.exec(
+            select(ChildCareCertification).where(
+                ChildCareCertification.is_active == True,  # noqa: E712
+                ChildCareCertification.effective_from <= end_date,
+            ).order_by(ChildCareCertification.effective_from.desc(), ChildCareCertification.id.desc())
+        ).all()
+        certs_by_child: dict[int, list[ChildCareCertification]] = {}
+        for c in all_certs:
+            certs_by_child.setdefault(c.child_id, []).append(c)
+
         day_plans = []
         for day_date in all_days:
-            for child in children:
+            # 当該日に在籍している園児のみ抽出
+            active_kids = [
+                c
+                for c in candidate_children
+                if c.enrollment_date <= day_date
+                and (c.withdrawal_date is None or c.withdrawal_date > day_date)
+            ]
+            for child in active_kids:
                 attendance_record = att_map.get((child.id, day_date)) if child.id else None
                 planned_default = None
                 child_defs = defaults_by_child.get(child.id, []) if child.id else []
@@ -212,12 +248,23 @@ def _run_solve_sync(
                     ):
                         planned_default = cd
                         break
+                effective_cert = None
+                child_certs = certs_by_child.get(child.id, []) if child.id else []
+                for cc in child_certs:
+                    if cc.effective_from <= day_date and (
+                        cc.effective_to is None or cc.effective_to >= day_date
+                    ):
+                        effective_cert = cc
+                        break
+
                 cp = build_child_plan(
                     session,
                     child,
                     day_date,
                     attendance_record=attendance_record,
                     planned_arrival_default=planned_default,
+                    certification=effective_cert,
+                    verification=verif_map.get((child.id, day_date)),
                 )
                 if cp is not None:
                     day_plans.append(cp)
@@ -235,6 +282,7 @@ def _run_solve_sync(
         ).all()
         contracts_by_user = {str(c.staff_user_id): c for c in all_contracts}
 
+        excluded_staff_members: list[User] = []
         for user in users:
             sm = build_staff_member(session, user)
             if sm is not None:
@@ -242,6 +290,33 @@ def _run_solve_sync(
                 day_preferences[str(user.id)] = build_staff_preferences(session, user)
                 if str(user.id) in contracts_by_user:
                     contracts_map[str(user.id)] = contracts_by_user[str(user.id)]
+            else:
+                excluded_staff_members.append(user)
+
+        # 資格または契約が無く除外された職員を ShiftViolations (WARNING) として記録
+        for ex_u in excluded_staff_members:
+            ex_name = ex_u.display_name or ex_u.email
+            all_violations.append(
+                ShiftViolations(
+                    plan_id=plan_id,
+                    target_date=start_date,
+                    slot_label="all",
+                    severity="WARNING",
+                    code="STAFF_EXCLUDED",
+                    message=f"職員「{ex_name}」は有効な資格または契約情報が登録されていないため、求解対象から除外されました。",
+                )
+            )
+
+        # 休園日・祝日の一括取得
+        from shift_schedule.db_models import ShiftFacilityClosedDays
+        closed_rows = session.exec(
+            select(ShiftFacilityClosedDays).where(
+                ShiftFacilityClosedDays.setting_id == (facility_settings_row.id or 1),
+                ShiftFacilityClosedDays.target_date.in_(all_days),
+            )
+        ).all()
+        closed_days = [r.target_date for r in closed_rows if r.kind == "closed"]
+        holiday_dates = [r.target_date for r in closed_rows if r.kind == "holiday"]
 
         # 全月間の必要人員テーブルを一括構築
         requirements = build_requirements(
@@ -251,6 +326,8 @@ def _run_solve_sync(
             day_open=facility_settings.day_open,
             day_close=facility_settings.day_close,
             granularity_min=facility_settings.granularity_min,
+            closed_days=closed_days,
+            holiday_dates=holiday_dates,
         )
 
         # 前月最終週の連続勤務履歴（バッファ）取得

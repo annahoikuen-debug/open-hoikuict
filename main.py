@@ -24,6 +24,7 @@ from database import (
 )
 from routers.attendance import router as attendance_router
 from routers.attendance_checks import router as attendance_checks_router
+from routers.pims_attendance import router as pims_attendance_router
 from routers.billing import router as billing_router
 from routers.backups import router as backups_router
 from routers.restores import router as restores_router
@@ -84,6 +85,10 @@ from shift_schedule.routers.facility import router as shift_facility_router
 from shift_schedule.routers.home import router as shift_home_router
 from shift_schedule.routers.plans import router as shift_plans_router
 from shift_schedule.routers.plans_edit import router as shift_plans_edit_router
+from shift_schedule.routers.staff_master import router as shift_staff_master_router
+from shift_schedule.routers.staff_portal_requests import router as shift_portal_requests_router
+from shift_schedule.routers.staff_requests_admin import router as shift_requests_admin_router
+from shift_schedule.routers.nushift_export import router as shift_nushift_export_router
 from shift_schedule.services.solve_jobs import solver_available as solver_available_check, solve_worker_loop
 from parent_push_runtime import parent_push_worker_enabled, parent_push_worker_loop
 from parent_push_operations import apply_parent_push_retention
@@ -177,6 +182,7 @@ app.include_router(child_health_router)
 app.include_router(child_change_requests_router)
 app.include_router(attendance_router)
 app.include_router(attendance_checks_router)
+app.include_router(pims_attendance_router)
 app.include_router(extended_care_fees_router)
 app.include_router(billing_router)
 app.include_router(backups_router)
@@ -229,6 +235,10 @@ app.include_router(shift_facility_router, dependencies=[Depends(get_current_staf
 app.include_router(shift_contracts_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
 app.include_router(shift_plans_router, dependencies=[Depends(get_current_staff_user)])
 app.include_router(shift_plans_edit_router, dependencies=[Depends(get_current_staff_user), Depends(require_can_edit)])
+app.include_router(shift_staff_master_router, dependencies=[Depends(get_current_staff_user), Depends(require_can_edit)])
+app.include_router(shift_portal_requests_router, dependencies=[Depends(get_current_staff_user), Depends(require_can_edit)])
+app.include_router(shift_requests_admin_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
+app.include_router(shift_nushift_export_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
 app.include_router(shift_exports_router, dependencies=[Depends(get_current_staff_user)])
 
 @app.get("/switch-role", dependencies=[Depends(require_mock_staff_auth)])

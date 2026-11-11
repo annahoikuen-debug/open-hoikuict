@@ -7,6 +7,7 @@ POST /shifts/plans/{id}/solve - 求解ジョブ発行
 
 from __future__ import annotations
 
+import logging
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,6 +20,7 @@ from ..services.solve_jobs import cbc_available, schedule_solve
 from ..store import ShiftRepository, ShiftRepositoryDep
 
 router = APIRouter(prefix="/shifts", tags=["shift_schedule"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/plans", response_class=HTMLResponse)
@@ -84,18 +86,21 @@ def plans_detail(
     # 配置割れギャップ検査（今日以降またはプラン月最初の日のギャップチェック）
     gap_warnings = []
     if cells:
-        from .services.gap_detector import detect_day_gap
+        from ..services.gap_detector import detect_day_gap
 
         target_dates = sorted({c.target_date for c in cells})
         for td in target_dates[:3]:  # 最大3日分プレビュー
-            gap_warnings.extend(detect_day_gap(repo.session, plan_id, td))
+            try:
+                gap_warnings.extend(detect_day_gap(repo.session, plan_id, td))
+            except Exception:
+                logger.exception("detect_day_gap failed for plan %s on %s", plan_id, td)
 
     # 微調整③: 不足枠（BLOCKER）に対する「処方箋（ヘルプ提案）」の生成
     prescriptions = []
     shortfall_violations = [v for v in violations if v.severity == "BLOCKER" and "SHORTFALL" in v.code]
     if shortfall_violations:
         from models import User
-        users = repo.session.exec(select(User).where(User.status == "active")).all()
+        users = repo.session.exec(select(User).where(User.is_active == True)).all()  # noqa: E712
         seen_targets = set()
         for sv in shortfall_violations:
             key = (sv.target_date, sv.slot_label)
@@ -107,8 +112,8 @@ def plans_detail(
             
             candidate_names = []
             for u in users:
-                if str(u.id) not in working_user_ids:
-                    candidate_names.append(u.name)
+                if str(u.id) not in working_user_ids and u.id.hex not in working_user_ids:
+                    candidate_names.append(u.display_name or u.email)
                 if len(candidate_names) >= 2:
                     break
             
@@ -122,6 +127,28 @@ def plans_detail(
             })
             if len(prescriptions) >= 4:
                 break
+
+    # スロット選択肢の動的生成（既存セル + 勤務パターン + 既定）
+    from ..db_models import ShiftDutyPatterns
+    duty_patterns = repo.session.exec(select(ShiftDutyPatterns)).all()
+    dynamic_slots = set()
+    for c in cells:
+        if c.slot_label and c.slot_label != "OFF":
+            dynamic_slots.add(c.slot_label)
+    for dp in duty_patterns:
+        dynamic_slots.add(f"{dp.start_time}-{dp.end_time}")
+        if dp.name:
+            dynamic_slots.add(dp.name)
+    slot_options = sorted(dynamic_slots)
+
+    # 職員名マッピング (UUID hex/str -> display_name)
+    from models import User
+    all_users = repo.session.exec(select(User)).all()
+    staff_names: dict[str, str] = {}
+    for u in all_users:
+        name = u.display_name or u.email
+        staff_names[str(u.id)] = name
+        staff_names[u.id.hex] = name
 
     from template_utils import create_templates
 
@@ -138,6 +165,8 @@ def plans_detail(
             "jobs": jobs,
             "gap_warnings": gap_warnings,
             "prescriptions": prescriptions,
+            "slot_options": slot_options,
+            "staff_names": staff_names,
             "cbc_available": cbc_available(),
         },
     )
