@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Optional
 
-from sqlalchemy import CHAR, Column, ForeignKey
+from sqlalchemy import CHAR, Column, ForeignKey, JSON
 from sqlmodel import Field, SQLModel
 
 from time_utils import utc_now
@@ -219,4 +219,34 @@ class ShiftPlanningAudits(SQLModel, table=True):
     action: str = Field(max_length=32)
     summary: Optional[str] = Field(default=None, max_length=512)
     audit_metadata: Optional[str] = Field(default=None, max_length=2048)  # JSON
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ShiftFacilityConstraintWeights(SQLModel, table=True):
+    """施設別の制約重み設定。What-if 調整用 (改善案 2)。"""
+
+    __tablename__ = "shift_facility_constraint_weights"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    facility_id: int = Field(default=1, index=True)
+    constraint_id: str = Field(max_length=64, index=True)
+    weight: float = Field(default=1.0)
+    is_enabled: bool = Field(default=True)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ShiftPlanProposals(SQLModel, table=True):
+    """シフト再計画・変更提案。差分レビュー・適用ワークフロー用 (改善案 7)。"""
+
+    __tablename__ = "shift_plan_proposals"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plan_id: int = Field(foreign_key="shift_plans.id", index=True)
+    job_id: int = Field(foreign_key="shift_solve_jobs.id", index=True)
+    status: str = Field(default="pending", max_length=16)  # pending / accepted / rejected
+    hard_score: int = Field(default=0)
+    soft_score: float = Field(default=0.0)
+    score_explanation: Optional[str] = Field(default=None, sa_column=Column(JSON))
+    diff_summary: Optional[str] = Field(default=None, sa_column=Column(JSON))
+    proposal_cells: Optional[str] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utc_now)

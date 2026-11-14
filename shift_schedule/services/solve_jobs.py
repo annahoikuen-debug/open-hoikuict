@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from pulp import PULP_CBC_CMD
 from sqlmodel import Session, select
 
+from shiftai.domain import ObjectiveWeights
 from shiftai.local_rules import build_standard
 from shiftai.shift_patterns import default_patterns
 from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift  # noqa: F401
@@ -35,6 +36,7 @@ from ..bridge import (
 from ..contracts import PlanStatus, SolveJobStatus
 from ..db_models import (
     ChildPlannedArrivalDefaults,
+    ShiftFacilityConstraintWeights,
     ShiftPlanCells,
     ShiftPlans,
     ShiftSolveJobs,
@@ -353,6 +355,8 @@ def _run_solve_sync(
             fixed_assignments=fixed_assignments,
             prior_duty_history=prior_streaks,
             monthly_holiday_target=monthly_holiday_target,
+            children=day_plans,
+            standard=staffing_standard,
         )
 
         # 月次一括階層的求解の実行
@@ -415,9 +419,24 @@ def _run_solve_sync(
         plan.updated_at = utc_now()
         session.add(plan)
 
+        score_dict = {}
+        if getattr(result, "score", None):
+            try:
+                score_dict = result.score.to_dict()
+            except Exception:
+                pass
+
+        import json
+
         job.status = SolveJobStatus.SUCCEEDED
         job.finished_at = utc_now()
-        job.stats = f"cells={len(all_cells)} violations={len(all_violations)}"
+        stats_payload = {
+            "cells": len(all_cells),
+            "violations": len(all_violations),
+            "backend_solver": get_configured_solver_name(),
+            "score": score_dict,
+        }
+        job.stats = json.dumps(stats_payload, ensure_ascii=False)
         session.add(job)
 
         session.commit()
