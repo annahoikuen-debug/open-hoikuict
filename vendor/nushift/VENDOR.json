@@ -31,7 +31,7 @@
     "standards.py": "5792ae265fa1d69df16fa0af0a55f27c2fa75bcbf7220488fb727875aa9781ec",
     "statutory_rules.py": "5cecdf6d25dabe688e98a1f993fd102fa3fd84f5458311d0c10b3e4ae2207e2c",
     "ui/__init__.py": "0cc314dd076a32b3f6ee3d9d702b25e9430c1e5186174613da6929974a386287",
-    "ui/components.py": "32f521daf60d503dea9928f0231b08cfefa0a39750c016df7a2b3a4f61aed761",
+    "ui/components.py": "33500c7a1294fb3cd87224b3dcd0603a758f008efcf4674cf2dcd4230def6a23",
     "ui/edit_history.py": "fac2b970298aa7f7c0eab3ff2facc582fde6efdb6e260470fb161ed32377683a",
     "ui/gantt.py": "08feb9f75c18ab671ce731ad4529b00b78380611dad32ee8041a958f2e0be4d1",
     "ui/sidebar.py": "ac5283c605b41cdbccd45d0d2c02136f6b21773c62aa40a3daf80b89c79f4f08",

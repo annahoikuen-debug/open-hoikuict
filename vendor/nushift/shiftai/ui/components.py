@@ -996,17 +996,6 @@ def violation_targets(
     return targets
 
 
-def unfixable_violations(violations: Sequence[Violation]) -> list[Violation]:
-    """セルを 1 つ指定して直せない違反を返す。
-
-    日付・時間帯・職員ID のどれかが欠けるものは、どのセルを変えればよいか
-    特定できないため修正ボタンを持たせられない。放置すると
-    「ダウンロードできない」のまま出口がなくなるので、これらの件数と
-    内容を明示する必要がある。
-    """
-    return [v for v in violations if v.day is None or v.slot is None or not v.staff_id]
-
-
 def render_violation_actions(violations: Sequence[Violation], *, key_prefix: str) -> None:
     """違反一覧の下に修正ボタンを並べる。
 
