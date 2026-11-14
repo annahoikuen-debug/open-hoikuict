@@ -437,10 +437,27 @@ class BillingZenginTests(unittest.TestCase):
         self.assertEqual(len(data2["issues"]), 1)
         self.assertEqual(data2["issues"][0]["issue_type"], "invalid_holder_kana")
 
-        # 4. 半角カナに修正 -> 事前チェック完全合格 (can_export == True)
+        # 4. カナを修正し、口座振替ステータスを paper_received (書類受領・未承認) にする -> inactive_status (danger) 検出
         with Session(self.engine) as session:
             profile = session.exec(select(FamilyBillingProfile).where(FamilyBillingProfile.family_id == family_id)).one()
             profile.account_holder_kana = "ﾔﾏﾀﾞ ﾀﾛｳ"
+            profile.direct_debit_status = DirectDebitStatus.paper_received
+            session.add(profile)
+            session.commit()
+
+        res2_5 = client.get(f"/billing/zengin/{cycle_id}/preflight")
+        self.assertEqual(res2_5.status_code, 200)
+        data2_5 = res2_5.json()
+        self.assertFalse(data2_5["can_export"])
+        self.assertEqual(len(data2_5["issues"]), 1)
+        self.assertEqual(data2_5["issues"][0]["issue_type"], "inactive_status")
+        self.assertEqual(data2_5["issues"][0]["severity"], "danger")
+        self.assertIn("有効（active）ではありません", data2_5["issues"][0]["message"])
+
+        # 5. active に変更 -> 事前チェック完全合格 (can_export == True)
+        with Session(self.engine) as session:
+            profile = session.exec(select(FamilyBillingProfile).where(FamilyBillingProfile.family_id == family_id)).one()
+            profile.direct_debit_status = DirectDebitStatus.active
             session.add(profile)
             session.commit()
 

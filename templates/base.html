@@ -1186,13 +1186,24 @@ current_path.startswith('/parent-accounts/registration-qr') %}
 
       document.addEventListener("click", (e) => {
         const anchor = e.target.closest("a");
-        if (anchor && anchor.href && !anchor.target && !anchor.href.startsWith("javascript:") && !anchor.href.includes("#")) {
-          if (isFormDirty) {
-            const ok = confirm("⚠️ 入力中の内容が保存されていません。\nこのまま移動すると入力した内容が破棄されます。本当に移動しますか？\n（[キャンセル] を押すと編集画面に留まります）");
-            if (!ok) {
-              e.preventDefault();
-              e.stopPropagation();
-            }
+        if (!anchor || !anchor.href || anchor.target || anchor.href.startsWith("javascript:")) {
+          return;
+        }
+        // 同一ページ内のアンカーリンク（スクロール等）のみを除外
+        const isSamePageAnchor = anchor.origin === window.location.origin &&
+                                 anchor.pathname === window.location.pathname &&
+                                 anchor.search === window.location.search &&
+                                 anchor.hash !== "";
+        if (isSamePageAnchor) {
+          return;
+        }
+        if (isFormDirty) {
+          const ok = confirm("⚠️ 入力中の内容が保存されていません。\nこのまま移動すると入力した内容が破棄されます。本当に移動しますか？\n（[キャンセル] を押すと編集画面に留まります）");
+          if (!ok) {
+            e.preventDefault();
+            e.stopPropagation();
+          } else {
+            isFormDirty = false;
           }
         }
       });

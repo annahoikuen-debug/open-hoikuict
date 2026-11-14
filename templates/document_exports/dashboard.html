@@ -89,6 +89,16 @@
 </div>
 
 <script>
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 async function openDocPreview(exportType) {
     const modal = document.getElementById('preview-modal');
     const body = document.getElementById('preview-body');
@@ -103,21 +113,32 @@ async function openDocPreview(exportType) {
         const p = data.preview_data;
         title.textContent = `👁️ ${p.title} プレビュー`;
 
+        let sampleNoticeHtml = '';
+        if (p.is_sample && p.sample_notice) {
+            sampleNoticeHtml = `
+                <div class="mb-3 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-center gap-1.5">
+                    <span>ℹ️</span>
+                    <span>${escapeHtml(p.sample_notice)}</span>
+                </div>
+            `;
+        }
+
         let html = `
+            ${sampleNoticeHtml}
             <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
                 <div class="text-center font-bold text-slate-800 text-base border-b border-slate-300 pb-2 mb-3">
-                    ${p.title}
+                    ${escapeHtml(p.title)}
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-3">
-                    <div>施設名: <strong>${p.facility_name || '-'}</strong></div>
-                    <div>対象月: <strong>${p.target_month || '-'}</strong></div>
+                    <div>施設名: <strong>${escapeHtml(p.facility_name || '-')}</strong></div>
+                    <div>対象月: <strong>${escapeHtml(p.target_month || '-')}</strong></div>
                 </div>
         `;
 
         if (p.sections) {
             html += '<div class="space-y-1 mb-3">';
             for (const s of p.sections) {
-                html += `<div class="text-xs text-slate-600"><span class="font-semibold text-slate-700">${s.label}:</span> ${s.value}</div>`;
+                html += `<div class="text-xs text-slate-600"><span class="font-semibold text-slate-700">${escapeHtml(s.label)}:</span> ${escapeHtml(s.value)}</div>`;
             }
             html += '</div>';
         }
@@ -127,10 +148,10 @@ async function openDocPreview(exportType) {
                 <div class="overflow-x-auto mt-3">
                     <table class="min-w-full text-xs border border-slate-200 bg-white">
                         <thead class="bg-slate-100">
-                            <tr>${p.sample_headers.map(h => `<th class="border px-2 py-1.5 text-left font-semibold">${h}</th>`).join('')}</tr>
+                            <tr>${p.sample_headers.map(h => `<th class="border px-2 py-1.5 text-left font-semibold">${escapeHtml(h)}</th>`).join('')}</tr>
                         </thead>
                         <tbody>
-                            ${p.sample_rows.map(r => `<tr>${r.map(c => `<td class="border px-2 py-1.5">${c}</td>`).join('')}</tr>`).join('')}
+                            ${p.sample_rows.map(r => `<tr>${r.map(c => `<td class="border px-2 py-1.5">${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -142,8 +163,8 @@ async function openDocPreview(exportType) {
             for (const f of p.fields) {
                 html += `
                     <div class="border rounded p-2.5 bg-white text-xs">
-                        <div class="font-bold text-slate-800 mb-1">${f.name}</div>
-                        <div class="text-slate-600">${f.content}</div>
+                        <div class="font-bold text-slate-800 mb-1">${escapeHtml(f.name)}</div>
+                        <div class="text-slate-600">${escapeHtml(f.content)}</div>
                     </div>
                 `;
             }
@@ -153,7 +174,7 @@ async function openDocPreview(exportType) {
         html += '</div>';
         body.innerHTML = html;
     } catch (err) {
-        body.innerHTML = `<div class="text-rose-600 text-center py-8">⚠️ ${err.message}</div>`;
+        body.innerHTML = `<div class="text-rose-600 text-center py-8">⚠️ ${escapeHtml(err.message)}</div>`;
     }
 }
 

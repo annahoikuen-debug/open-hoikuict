@@ -148,6 +148,8 @@ def get_document_preview(
         "export_type_label": EXPORT_TYPE_LABELS.get(export_type, export_type),
         "target_month": month_str,
         "facility_name": "社会福祉法人 ぬのはな保育園",
+        "is_sample": True,
+        "sample_notice": "※表示されている内容は書面レイアウトおよび配置基準の確認用サンプルです。",
     }
 
     if export_type == "attendance":

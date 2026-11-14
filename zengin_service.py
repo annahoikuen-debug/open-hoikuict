@@ -822,8 +822,8 @@ def scan_zengin_preflight(session: Session, cycle_id: int) -> dict[str, Any]:
                     "family_name": family_name,
                     "children_names": children,
                     "issue_type": "inactive_status",
-                    "severity": "warning",
-                    "message": f"口座振替状態が有効（active）ではありません（現在: {status_val}）。金融機関の承認状態を確認してください。",
+                    "severity": "danger",
+                    "message": f"口座振替状態が有効（active）ではありません（現在: {status_val}）。金融機関の承認状態を確認し、有効に変更してください。",
                     "fix_url": fix_url,
                 }
             )

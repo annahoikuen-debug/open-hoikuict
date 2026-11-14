@@ -82,6 +82,8 @@ class DocumentExportsTests(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["export_type"], "attendance")
         self.assertEqual(data["target_month"], "2026-11")
+        self.assertTrue(data["preview_data"]["is_sample"])
+        self.assertIn("サンプル", data["preview_data"]["sample_notice"])
         self.assertIn("勤 務 割 実 績 表", data["preview_data"]["title"])
         self.assertIn("sample_headers", data["preview_data"])
 
