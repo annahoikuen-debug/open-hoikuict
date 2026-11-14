@@ -35,7 +35,7 @@ function showSolvingProgress(e) {
       <p class="mt-2 text-sm text-slate-600">ステータス: {{ plan.status }}</p>
     </div>
     <div class="flex gap-2">
-      {% if plan.status != "approved" and cbc_available %}
+      {% if plan.status != "approved" and (solver_available or cbc_available) %}
       <form method="post" action="/shifts/plans/{{ plan.id }}/solve" class="flex items-center gap-2 mt-0" id="solveForm" onsubmit="showSolvingProgress(event)">
         <input type="hidden" name="time_limit_sec" value="30">
         <label class="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-1.5 rounded-lg cursor-pointer">
@@ -46,8 +46,8 @@ function showSolvingProgress(e) {
           <span id="solveIcon">⚡</span> <span id="solveBtnText">シフトを再生成</span>
         </button>
       </form>
-      {% elif not cbc_available %}
-      <button class="rounded-xl bg-slate-400 px-4 py-2 text-sm font-medium text-white" disabled>CBC 未検出</button>
+      {% elif not solver_available and not cbc_available %}
+      <button class="rounded-xl bg-slate-400 px-4 py-2 text-sm font-medium text-white" disabled>ソルバー未検出</button>
       {% endif %}
 
       {% if plan.status != "approved" and cells %}

@@ -16,7 +16,7 @@ from sqlmodel import select
 from auth import require_can_edit
 from ..contracts import PlanStatus
 from ..db_models import ShiftPlans, ShiftSolveJobs
-from ..services.solve_jobs import cbc_available, schedule_solve
+from ..services.solve_jobs import schedule_solve, solver_available
 from ..store import ShiftRepository, ShiftRepositoryDep
 
 router = APIRouter(prefix="/shifts", tags=["shift_schedule"])
@@ -38,7 +38,8 @@ def plans_list(
         {
             "request": request,
             "plans": plans,
-            "cbc_available": cbc_available(),
+            "solver_available": solver_available(),
+            "cbc_available": solver_available(),
         },
     )
 
@@ -167,7 +168,8 @@ def plans_detail(
             "prescriptions": prescriptions,
             "slot_options": slot_options,
             "staff_names": staff_names,
-            "cbc_available": cbc_available(),
+            "solver_available": solver_available(),
+            "cbc_available": solver_available(),
         },
     )
 
@@ -191,12 +193,12 @@ def plans_solve(
 
         raise HTTPException(status_code=409, detail="Approved plan cannot be re-solved")
 
-    if not cbc_available():
+    if not solver_available():
         from fastapi import HTTPException
 
         raise HTTPException(
             status_code=400,
-            detail="シフト最適化ソルバー (CBC) がサーバー上で利用できません。管理者に環境設定を確認してください。",
+            detail="シフト最適化ソルバー (HiGHS / CBC) がサーバー上で利用できません。管理者に環境設定を確認してください。",
         )
 
     # 認証職員情報の解決

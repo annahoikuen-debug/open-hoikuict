@@ -23,6 +23,7 @@ EXPORT_TYPE_LABELS = {
     "zengin": "Zengin",
     "monthly_plan": "月案",
     "billing": "請求明細",
+    "nushift": "NuShiftデータ",
 }
 
 EXPORT_FORMAT_LABELS = {
@@ -30,6 +31,7 @@ EXPORT_FORMAT_LABELS = {
     "xlsx": "Excel",
     "pdf": "PDF",
     "txt": "テキスト",
+    "zip": "ZIP",
 }
 
 STATUS_LABELS = {

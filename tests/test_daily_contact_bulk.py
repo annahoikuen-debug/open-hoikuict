@@ -15,6 +15,7 @@ from models import (
     ParentChildLink,
     AttendanceRecord,
 )
+from time_utils import local_today
 from daily_contact_service import (
     extract_copyable_fields,
     load_latest_previous_contact,
@@ -321,7 +322,7 @@ class TestDailyContactPreviousCopy(unittest.TestCase):
     def test_save_bulk_parent_contacts_success(self):
         from daily_contact_service import save_bulk_parent_contacts
 
-        target_date = date(2026, 11, 11)
+        target_date = local_today()
         common_data = {
             "planned_pickup_time": "17:15",
             "pickup_person": "母",
@@ -408,7 +409,7 @@ class TestDailyContactPreviousCopy(unittest.TestCase):
     def test_save_bulk_parent_contacts_validation_error_rolls_back(self):
         from daily_contact_service import save_bulk_parent_contacts
 
-        target_date = date(2026, 11, 12)
+        target_date = local_today()
         common_data = {
             "planned_pickup_time": "17:00",
             "pickup_person": "父",

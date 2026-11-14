@@ -90,10 +90,33 @@ def sync(source_repo: Path) -> None:
     commit_hash = get_git_commit(source_repo)
     print(f"Syncing from {src_dir} (commit: {commit_hash}) to {DEST_SHIFTAI}...")
 
-    # Copy files
+    # Safe copy with backup
+    backup_dir = VENDOR_DIR / "shiftai.bak"
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+
     if DEST_SHIFTAI.exists():
-        shutil.rmtree(DEST_SHIFTAI)
-    shutil.copytree(src_dir, DEST_SHIFTAI)
+        shutil.copytree(DEST_SHIFTAI, backup_dir)
+
+    try:
+        if DEST_SHIFTAI.exists():
+            shutil.rmtree(DEST_SHIFTAI)
+        shutil.copytree(
+            src_dir,
+            DEST_SHIFTAI,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git*"),
+        )
+    except Exception as exc:
+        print(f"Error during copy: {exc}. Rolling back from backup...", file=sys.stderr)
+        if backup_dir.exists():
+            if DEST_SHIFTAI.exists():
+                shutil.rmtree(DEST_SHIFTAI)
+            shutil.copytree(backup_dir, DEST_SHIFTAI)
+        raise exc
+
+    # Remove backup upon success
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
 
     # Update README
     if README_FILE.exists():

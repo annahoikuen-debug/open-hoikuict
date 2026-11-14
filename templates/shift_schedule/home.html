@@ -13,10 +13,10 @@
     <a href="/shifts/plans" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">新しいシフトプランを作成</a>
   </div>
 
-  {% if not cbc_available %}
+  {% if not solver_available and not cbc_available %}
   <div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
-    <h2 class="font-semibold text-rose-900">CBC ソルバ未検出</h2>
-    <p class="mt-1 text-sm text-rose-700">PULP_CBC_CMD が見つかりません。シフト自動作成は利用できません。</p>
+    <h2 class="font-semibold text-rose-900">最適化ソルバー未検出</h2>
+    <p class="mt-1 text-sm text-rose-700">HiGHS または CBC ソルバーが見つかりません。シフト自動作成は利用できません。</p>
   </div>
   {% endif %}
 

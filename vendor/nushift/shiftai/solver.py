@@ -133,6 +133,14 @@ def is_highs_available() -> bool:
         return False
 
 
+def is_cbc_available() -> bool:
+    """CBC ソルバーが利用可能か判定する。"""
+    try:
+        return bool(pulp.PULP_CBC_CMD(msg=False).available())
+    except Exception:
+        return False
+
+
 def available_solvers() -> list[str]:
     """PuLP 経由で利用可能な MILP ソルバーの一覧を返す。"""
     try:
@@ -142,6 +150,42 @@ def available_solvers() -> list[str]:
         return solvers
     except Exception:
         return []
+
+
+def select_optimal_solver(preference: str = "auto") -> tuple[str, bool]:
+    """最適なソルバー名と利用可能性を判定して返す。
+
+    Returns:
+        tuple[str, bool]: (選択されたソルバー名, 利用可能フラグ)
+    """
+    pref = (preference or "auto").strip().lower()
+    if pref in ("highs", "highspy"):
+        if is_highs_available():
+            return "HiGHS", True
+        return "PULP_CBC_CMD", is_cbc_available()
+    if pref in ("cbc", "pulp_cbc_cmd"):
+        return "PULP_CBC_CMD", is_cbc_available()
+
+    # auto: HiGHS 優先、なければ CBC
+    if is_highs_available():
+        return "HiGHS", True
+    if is_cbc_available():
+        return "PULP_CBC_CMD", True
+    return "NONE", False
+
+
+def solver_diagnostic_info() -> dict[str, Any]:
+    """ソルバー診断情報を辞書形式で返す。UI やヘルスチェックで使用。"""
+    highs_ok = is_highs_available()
+    cbc_ok = is_cbc_available()
+    optimal, any_ok = select_optimal_solver()
+    return {
+        "optimal_solver": optimal,
+        "is_available": any_ok,
+        "highs_available": highs_ok,
+        "cbc_available": cbc_ok,
+        "available_solvers": available_solvers(),
+    }
 
 
 def _get_solver(
@@ -154,10 +198,7 @@ def _get_solver(
     limit = max(1, int(limit_sec))
     chosen = (solver_name or "auto").strip()
     if chosen == "auto":
-        if is_highs_available():
-            chosen = "HiGHS"
-        else:
-            chosen = "PULP_CBC_CMD"
+        chosen, _ = select_optimal_solver("auto")
 
     if chosen.lower() in ("highs", "highspy") and is_highs_available():
         try:
@@ -2060,8 +2101,11 @@ def solve_shift(
                     standard=payload.standard,
                 )
                 warm_assignments = g_res.assignments
-            except Exception:
+            except Exception as exc:
+                # ウォームスタートは任意最適化なので失敗しても続行するが、
+                # 系統的なクラッシュは stats に記録して診断可能にする。
                 warm_assignments = None
+                stats["warm_start_error"] = f"{type(exc).__name__}: {exc}"
         if warm_assignments:
             applied_count = apply_warm_start(ctx, slots, warm_assignments)
             stats["warm_start_applied"] = applied_count > 0
@@ -2256,8 +2300,16 @@ def _best_effort(
             require_leader=payload.require_leader,
             require_opening_closing_skill=payload.require_opening_closing_skill,
         )
-    except Exception:
-        return _greedy(payload, stats, started, _INFEASIBLE_FALLBACK_MESSAGE, diagnosis)
+    except Exception as exc:
+        # pass1 と違い根本原因を握りつぶさない。pass2 だけのモデルバグを
+        # 「PuLP では解なし」に偽装すると、利用者が時間制限だと誤解する。
+        return _greedy(
+            payload,
+            {**stats, "pass2_build_error": f"{type(exc).__name__}: {exc}"},
+            started,
+            _INFEASIBLE_FALLBACK_MESSAGE,
+            diagnosis,
+        )
 
     if payload.warm_start and payload.warm_start_assignments:
         apply_warm_start(soft, tuple(payload.requirements.slots), payload.warm_start_assignments)
@@ -2306,7 +2358,9 @@ def _greedy(
     )
     result.messages = [message, *(diagnosis or []), *result.messages]
     result.stats.update({k: v for k, v in stats.items() if k != "solver"})
-    result.stats["solver"] = "PULP_CBC_CMD"
+    # 実際に走ったのは貪欲法なので solver 名を偽らない
+    # （``PULP_CBC_CMD`` 固定だと HiGHS 環境で診断が誤解される）。
+    result.stats["solver"] = "greedy"
     result.stats["fallback"] = "greedy"
     return result
 
@@ -3176,25 +3230,112 @@ def repair_shift_absence(
     time_limit_sec: int = 10,
     prefer_on_duty_extension: bool = True,
 ) -> SolveResult:
-    """当日の急な突発欠勤に対する局所安定リアルタイム穴埋め（動的リペア）。"""
-    from shiftai.solver_core.repair import repair_shift_absence as _repair
-    return _repair(
-        existing_result=existing_result,
-        absent_staff_id=absent_staff_id,
-        target_date=target_date,
+    """当日の急な突発欠勤に対する局所安定リアルタイム穴埋め（動的リペア）。
+
+    確定済みシフト（``existing_result``）のうち、欠勤日以外のすべて、および
+    当日に出勤予定のない職員の勤務状態を手動固定（fixed_assignments）として維持し、
+    「欠勤者のみ OFF」に変更した上で、
+    1. 当日すでに出勤している職員の勤務時間延長（残業・枠拡大）を優先
+    2. それでも不足する場合に公休職員の応援出勤（ヘルプ）を開放
+    3. 別日への波及再編（カスケード変動）を100%防止（局所ピン留め）
+    して配置基準の不足を最小の変更手数で埋める。
+    """
+    fixed: dict[tuple[str, date, str], CellState] = {}
+
+    # 当日に出勤予定だった職員と公休だった職員を把握
+    on_duty_staff_ids = set()
+    off_duty_staff_ids = set()
+
+    for a in existing_result.assignments:
+        if a.day == target_date:
+            if a.state in (CellState.WORK, CellState.BREAK):
+                on_duty_staff_ids.add(a.staff_id)
+            else:
+                off_duty_staff_ids.add(a.staff_id)
+
+    # 1. 別日のシフトは完全に維持固定（局所ピン留め: 他の日には一切波及させない）
+    for a in existing_result.assignments:
+        sid = a.staff_id
+        d = a.day
+        slot_label = a.slot.label
+        if d != target_date:
+            fixed[(sid, d, slot_label)] = a.state
+
+    # 2. 欠勤者は公休(OFF)に固定
+    for slot in requirements.slots:
+        fixed[(absent_staff_id, target_date, slot.label)] = CellState.OFF
+
+    # 3. 当日の他職員の固定戦略
+    if prefer_on_duty_extension:
+        # パス1: 出勤中職員の勤務枠をベースに延長（公休職員はOFF固定）
+        for a in existing_result.assignments:
+            if a.day != target_date:
+                continue
+            sid = a.staff_id
+            if sid == absent_staff_id:
+                continue
+            if a.state in (CellState.WORK, CellState.BREAK):
+                fixed[(sid, target_date, a.slot.label)] = a.state
+            elif sid in off_duty_staff_ids:
+                fixed[(sid, target_date, a.slot.label)] = CellState.OFF
+
+        # まず出勤中職員の延長のみで解けるか試行
+        res = solve_shift(
+            children=children,
+            staff=staff,
+            requirements=requirements,
+            preferences=preferences,
+            weights=weights,
+            fixed_assignments=fixed,
+            settings=settings,
+            standard=standard,
+            patterns=patterns,
+            pattern_mode=True,
+            pairing_rules=pairing_rules,
+            classrooms=classrooms,
+            require_leader=require_leader,
+            require_opening_closing_skill=require_opening_closing_skill,
+            time_limit_sec=max(3, time_limit_sec // 2),
+        )
+        # ``ok`` は PARTIAL も含むため、不足が残っていれば pass 2
+        # （公休職員のヘルプ出勤開放）に進む。ショートフォールが
+        # 解消された完全解のときだけここで返す。
+        if res.ok and not res.has_shortfall:
+            return res
+
+        # パス2: 出勤中職員の延長だけでは足りない場合、公休職員のOFF固定を解除してヘルプ出勤を開放
+        for sid in off_duty_staff_ids:
+            if sid == absent_staff_id:
+                continue
+            for slot in requirements.slots:
+                fixed.pop((sid, target_date, slot.label), None)
+
+    else:
+        # 従来動作: 出勤中職員の勤務枠は維持し、公休職員をすべて調整弁として開放
+        for a in existing_result.assignments:
+            if a.day != target_date:
+                continue
+            sid = a.staff_id
+            if sid == absent_staff_id:
+                continue
+            if a.state in (CellState.WORK, CellState.BREAK):
+                fixed[(sid, target_date, a.slot.label)] = a.state
+
+    return solve_shift(
         children=children,
         staff=staff,
         requirements=requirements,
         preferences=preferences,
         weights=weights,
+        fixed_assignments=fixed,
         settings=settings,
         standard=standard,
         patterns=patterns,
+        pattern_mode=True,
         pairing_rules=pairing_rules,
         classrooms=classrooms,
         require_leader=require_leader,
         require_opening_closing_skill=require_opening_closing_skill,
         time_limit_sec=time_limit_sec,
-        prefer_on_duty_extension=prefer_on_duty_extension,
     )
 
