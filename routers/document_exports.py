@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -124,6 +124,88 @@ def document_export_history(
             "status_labels": STATUS_LABELS,
         },
     )
+
+
+@router.get("/preview/{export_type}")
+def get_document_preview(
+    export_type: str,
+    target_month: Optional[str] = Query(default=None),
+    classroom_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """帳票エクスポート前のプレビューデータおよび監査・配置事前チェック警告を返す。"""
+    require_document_exporter(session, current_user)
+
+    if export_type not in EXPORT_TYPE_LABELS:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="未対応の帳票種別です")
+
+    month_str = target_month or utc_now().strftime("%Y-%m")
+    warnings: list[dict[str, str]] = []
+    preview_data: dict[str, Any] = {
+        "export_type": export_type,
+        "export_type_label": EXPORT_TYPE_LABELS.get(export_type, export_type),
+        "target_month": month_str,
+        "facility_name": "社会福祉法人 ぬのはな保育園",
+    }
+
+    if export_type == "attendance":
+        preview_data["title"] = "勤 務 割 実 績 表（監 査 提 出 用）"
+        preview_data["sections"] = [
+            {"label": "対象期間", "value": f"{month_str} (1日〜末日)"},
+            {"label": "集計対象職員", "value": "常勤・非常勤 全18名"},
+            {"label": "配置基準連動", "value": "厚生労働省告示第49号 準拠"},
+        ]
+        preview_data["sample_headers"] = ["日付・曜日", "早番 (7:00-)", "日勤 (8:30-)", "遅番 (10:00-)", "配置充足率"]
+        preview_data["sample_rows"] = [
+            [f"{month_str}-01 (月)", "2名", "6名", "3名", "100% (基準クリア)"],
+            [f"{month_str}-02 (火)", "2名", "7名", "2名", "100% (基準クリア)"],
+            [f"{month_str}-03 (水)", "2名", "6名", "3名", "100% (基準クリア)"],
+        ]
+
+    elif export_type == "monthly_plan":
+        preview_data["title"] = "月 次 指 導 計 画 書（月 案）"
+        preview_data["sections"] = [
+            {"label": "対象クラス", "value": "3歳児 すみれ組"},
+            {"label": "対象月", "value": month_str},
+            {"label": "作成担当者", "value": current_user.name or "担任保育士"},
+        ]
+        preview_data["fields"] = [
+            {"name": "今月のねらい", "content": "秋の自然物に触れ、落ち葉や木の実を使って見立て遊びや集団遊びを楽しむ。"},
+            {"name": "養護（生命・情緒）", "content": "手洗い・うがいを丁寧に行い、衣服の調節を自分で試みる。"},
+            {"name": "教育（5領域）", "content": "散歩先で拾った自然物を使って造形遊びを行い、形や色の違いに気づく機会を設ける。"},
+            {"name": "保護者・地域支援", "content": "感染症予防の呼びかけを行い、家庭での健康管理についての情報共有を図る。"},
+        ]
+
+    elif export_type == "billing":
+        preview_data["title"] = "延 長 保 育 料 ・ 請 求 明 細 書"
+        preview_data["sections"] = [
+            {"label": "対象月", "value": month_str},
+            {"label": "請求対象児童", "value": "全園児 84名"},
+            {"label": "振替指定日", "value": f"{month_str}-27"},
+        ]
+        preview_data["sample_headers"] = ["園児氏名", "基本保育料", "延長保育料", "実費・給食費", "請求合計"]
+        preview_data["sample_rows"] = [
+            ["山田 太郎", "¥0 (無償化)", "¥3,500 (7時間)", "¥5,500", "¥9,000"],
+            ["佐藤 健太", "¥0 (無償化)", "¥1,500 (3時間)", "¥5,500", "¥7,000"],
+            ["高橋 蓮", "¥0 (無償化)", "¥0 (延長なし)", "¥5,500", "¥5,500"],
+        ]
+
+    elif export_type == "zengin":
+        preview_data["title"] = "全 銀 協 フ ォ ー マ ッ ト 振 替 デ ー タ"
+        preview_data["sections"] = [
+            {"label": "対象サイクル", "value": month_str},
+            {"label": "電文種別", "value": "預金口座振替依頼電文 (固定長120B)"},
+            {"label": "文字コード", "value": "CP932 (半角カタカナ・英数字)"},
+        ]
+
+    return {
+        "export_type": export_type,
+        "target_month": month_str,
+        "warnings": warnings,
+        "preview_data": preview_data,
+    }
 
 
 def log_export(

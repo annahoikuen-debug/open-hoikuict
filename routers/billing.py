@@ -32,6 +32,7 @@ from models import (
     ZenginExportStatus,
 )
 from staff_permissions import (
+    can_export_zengin,
     can_manage_billing_accounts,
     require_billing_account_manager,
     require_zengin_exporter,
@@ -592,6 +593,7 @@ async def billing_dashboard(
             "export_rows": export_rows,
             "setting": setting,
             "can_manage_billing_accounts": can_manage_billing_accounts(session, current_user),
+            "can_export_zengin": can_export_zengin(session, current_user),
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
         },

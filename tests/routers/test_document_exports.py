@@ -74,3 +74,25 @@ class DocumentExportsTests(unittest.TestCase):
         authenticate_mock_staff(viewer_client, role=Role.VIEW_ONLY)
         resp = viewer_client.get("/document-exports")
         self.assertEqual(resp.status_code, 403)
+
+    def test_preview_endpoint_returns_layout_and_metadata(self):
+        """帳票プレビューAPIがレイアウトとメタデータを正しく返却すること。"""
+        resp = self.client.get("/document-exports/preview/attendance?target_month=2026-11")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["export_type"], "attendance")
+        self.assertEqual(data["target_month"], "2026-11")
+        self.assertIn("勤 務 割 実 績 表", data["preview_data"]["title"])
+        self.assertIn("sample_headers", data["preview_data"])
+
+        # 月案プレビュー
+        resp_plan = self.client.get("/document-exports/preview/monthly_plan?target_month=2026-11")
+        self.assertEqual(resp_plan.status_code, 200)
+        data_plan = resp_plan.json()
+        self.assertEqual(data_plan["export_type"], "monthly_plan")
+        self.assertIn("月 次 指 導 計 画 書", data_plan["preview_data"]["title"])
+        self.assertIn("fields", data_plan["preview_data"])
+
+        # 未対応種別は 400
+        resp_bad = self.client.get("/document-exports/preview/unknown_type")
+        self.assertEqual(resp_bad.status_code, 400)

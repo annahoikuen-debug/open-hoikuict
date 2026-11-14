@@ -20,10 +20,25 @@ from zengin_service import (
     generate_zengin_validation_report,
     import_result_file,
     mark_zengin_export_submitted,
+    scan_zengin_preflight,
     supersede_zengin_export,
 )
 
 router = APIRouter(prefix="/billing/zengin", tags=["zengin"])
+
+
+@router.get("/{cycle_id}/preflight")
+def preflight_check(
+    cycle_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """Zengin振替データ作成前の事前チェックを実行し、不備一覧とサマリーを返す。"""
+    require_zengin_exporter(session, current_user)
+    try:
+        return scan_zengin_preflight(session, cycle_id)
+    except ZenginError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{cycle_id}/create")

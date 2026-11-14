@@ -21,6 +21,7 @@ from models import (
     ZenginExportLine,
     ZenginExportStatus,
 )
+from models.core import Child, Family
 from time_utils import utc_now
 
 
@@ -712,3 +713,225 @@ def generate_zengin_validation_report(
         rows.append(row)
 
     return rows, errors
+
+
+def scan_zengin_preflight(session: Session, cycle_id: int) -> dict[str, Any]:
+    """Zengin振替データ作成前の整合性を事前スキャンし、不備一覧とサマリーを返す。
+
+    1件のエラーで中断せず、全請求対象・口座プロファイルを網羅的に検証して
+    具体的な修正手順と直行リンクを提供する。
+    """
+    cycle = session.get(BillingCycle, cycle_id)
+    if cycle is None:
+        raise ZenginError("請求月が見つかりません")
+
+    settings_errors: list[str] = []
+    issues: list[dict[str, Any]] = []
+
+    if cycle.status != BillingCycleStatus.confirmed:
+        settings_errors.append(f"請求月が確定状態（confirmed）ではありません（現在の状態: {cycle.status.value}）")
+
+    settings = session.exec(select(BillingSetting).order_by(BillingSetting.id)).first()
+    if settings is None:
+        settings_errors.append("園の請求・口座振替設定が未登録です")
+    else:
+        try:
+            validate_billing_setting(settings)
+        except ZenginError as exc:
+            settings_errors.append(f"請求設定の不備: {exc}")
+
+    claims = session.exec(
+        select(BillingClaim)
+        .where(BillingClaim.billing_cycle_id == cycle_id)
+        .where(BillingClaim.status == BillingClaimStatus.confirmed)
+        .where(BillingClaim.payment_method == BillingPaymentMethod.direct_debit)
+        .where(BillingClaim.total_amount > 0)
+        .order_by(BillingClaim.id)
+    ).all()
+
+    total_amount = sum(claim.total_amount for claim in claims)
+    family_ids = [claim.family_id for claim in claims if claim.family_id is not None]
+
+    profiles_by_family: dict[int, FamilyBillingProfile] = {}
+    if family_ids:
+        all_profiles = session.exec(
+            select(FamilyBillingProfile).where(FamilyBillingProfile.family_id.in_(family_ids))
+        ).all()
+        for p in all_profiles:
+            if p.family_id is not None:
+                profiles_by_family[p.family_id] = p
+
+    # 家族・園児マッピングを事前取得
+    families_by_id: dict[int, Family] = {}
+    children_by_family: dict[int, list[str]] = {}
+    if family_ids:
+        f_list = session.exec(select(Family).where(Family.id.in_(family_ids))).all()
+        for f in f_list:
+            if f.id is not None:
+                families_by_id[f.id] = f
+
+        c_list = session.exec(select(Child).where(Child.family_id.in_(family_ids))).all()
+        for c in c_list:
+            if c.family_id is not None:
+                children_by_family.setdefault(c.family_id, []).append(c.full_name)
+
+    for claim in claims:
+        fid = claim.family_id
+        if fid is None:
+            continue
+
+        family = families_by_id.get(fid)
+        family_name = family.family_name if family and family.family_name else f"家族ID {fid}"
+        children = children_by_family.get(fid, [])
+        fix_url = f"/billing/accounts?family_id={fid}#family-{fid}"
+
+        profile = profiles_by_family.get(fid)
+        if profile is None:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "missing_profile",
+                    "severity": "danger",
+                    "message": "口座振替情報が未登録です。銀行・支店・口座番号を登録してください。",
+                    "fix_url": fix_url,
+                }
+            )
+            continue
+
+        # 各項目の具体的チェック
+        if profile.payment_method != BillingPaymentMethod.direct_debit:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_payment_method",
+                    "severity": "danger",
+                    "message": "支払方法が口座振替に設定されていません。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        if profile.direct_debit_status != DirectDebitStatus.active:
+            status_val = profile.direct_debit_status.value if profile.direct_debit_status else "未設定"
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "inactive_status",
+                    "severity": "warning",
+                    "message": f"口座振替状態が有効（active）ではありません（現在: {status_val}）。金融機関の承認状態を確認してください。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 銀行コード
+        try:
+            format_n(profile.bank_code, 4)
+        except Exception:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_bank_code",
+                    "severity": "danger",
+                    "message": f"金融機関コードが不正です（4桁の半角数字が必要です。現在: {profile.bank_code or '未入力'}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 支店コード
+        try:
+            format_n(profile.branch_code, 3)
+        except Exception:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_branch_code",
+                    "severity": "danger",
+                    "message": f"支店コードが不正です（3桁の半角数字が必要です。現在: {profile.branch_code or '未入力'}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 預金種目
+        if profile.account_type not in {"1", "2", "3", "9"}:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_account_type",
+                    "severity": "danger",
+                    "message": f"預金種目が不正です（1:普通, 2:当座, 3:納税準備, 9:その他。現在: {profile.account_type or '未選択'}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 口座番号
+        try:
+            format_n(profile.account_number, 7)
+        except Exception:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_account_number",
+                    "severity": "danger",
+                    "message": f"口座番号が不正です（7桁の半角数字が必要です。現在: {profile.account_number or '未入力'}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 名義人カナ
+        try:
+            format_c(profile.account_holder_kana, 30)
+        except Exception as exc:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_holder_kana",
+                    "severity": "danger",
+                    "message": f"名義人カナが不正です（半角カタカナ・英数字・記号のみ、30文字以内。エラー: {exc}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+        # 顧客番号
+        try:
+            format_n(profile.customer_number, 20)
+        except Exception:
+            issues.append(
+                {
+                    "family_id": fid,
+                    "family_name": family_name,
+                    "children_names": children,
+                    "issue_type": "invalid_customer_number",
+                    "severity": "danger",
+                    "message": f"顧客番号が不正です（20桁以内の半角数字が必要です。現在: {profile.customer_number or '未設定'}）。",
+                    "fix_url": fix_url,
+                }
+            )
+
+    can_export = len(settings_errors) == 0 and len(issues) == 0 and len(claims) > 0
+
+    return {
+        "cycle_id": cycle.id,
+        "year_month": cycle.year_month,
+        "withdrawal_date": str(cycle.withdrawal_date) if cycle.withdrawal_date else None,
+        "total_claims_count": len(claims),
+        "total_claims_amount": total_amount,
+        "can_export": can_export,
+        "settings_errors": settings_errors,
+        "issues": issues,
+    }
+

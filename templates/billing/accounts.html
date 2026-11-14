@@ -2,6 +2,13 @@
 {% block title %}口座情報管理 | open-hoikuict{% endblock %}
 
 {% block content %}
+<style>
+  :target {
+    background-color: #fef3c7 !important;
+    transition: background-color 0.5s ease;
+  }
+</style>
+
 <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
   <div>
     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">Billing Accounts</p>
@@ -51,7 +58,7 @@
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for row in account_rows %}
-        <tr class="hover:bg-slate-50">
+        <tr id="family-{{ row.family.id if row.family else row.representative_child.family_id }}" class="hover:bg-slate-50">
           <td class="px-5 py-3 font-medium text-slate-900">{{ row.family.family_name if row.family else '家族ID ' ~ row.representative_child.family_id }}</td>
           <td class="px-5 py-3 text-slate-700">
             {% for child in row.children %}

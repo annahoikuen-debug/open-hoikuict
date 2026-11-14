@@ -35,7 +35,7 @@ def test_vendor_tree_present() -> None:
 def test_provenance_is_recorded() -> None:
     readme = (VENDOR_ROOT / "README.md").read_text(encoding="utf-8")
     assert "annahoikuen-debug/nushift" in readme
-    assert "e3f673e" in readme
+    assert "fc558ff" in readme
 
 
 def test_import_works_without_install_and_without_streamlit() -> None:

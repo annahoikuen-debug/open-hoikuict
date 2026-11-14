@@ -41,6 +41,47 @@ STAFF_PERMISSION_DEFINITIONS = (
 )
 
 
+PERMISSION_GUIDANCE: dict[str, dict[str, str]] = {
+    "admin": {
+        "title": "管理者権限が必要です",
+        "description": "システム設定や職員の権限管理を行うには、施設管理者（園長・主任等）のアカウントが必要です。",
+        "contact": "園長またはシステム管理者へ権限の付与をご依頼ください。",
+    },
+    "can_manage_child_records": {
+        "title": "園児台帳管理権限が必要です",
+        "description": "園児情報や保護者情報の登録・更新を行うには、園児台帳管理の権限が必要です。",
+        "contact": "園長または主任へ権限の付与をご依頼ください。",
+    },
+    "can_manage_billing_accounts": {
+        "title": "請求・口座情報管理権限が必要です",
+        "description": "保護者の口座情報や振替設定を閲覧・変更するには、請求・口座情報管理の権限が必要です。",
+        "contact": "園長または経理担当管理者へ権限の付与をご依頼ください。",
+    },
+    "can_export_documents": {
+        "title": "帳票出力権限が必要です",
+        "description": "各種公的書類・監査帳票・出勤簿・月案等のエクスポートを行うには、帳票出力の権限が必要です。",
+        "contact": "園長または主任へ権限の付与をご依頼ください。",
+    },
+    "can_export_zengin": {
+        "title": "Zengin出力権限が必要です",
+        "description": "銀行伝送用Zenginデータの作成・ダウンロード・振替結果の取込には、Zengin出力の権限が必要です。",
+        "contact": "園長または経理担当管理者へ権限の付与をご依頼ください。",
+    },
+}
+
+
+def get_permission_guidance(permission_key: str) -> dict[str, str]:
+    """権限不足時の明確な理由と依頼先ガイダンスを返す。"""
+    return PERMISSION_GUIDANCE.get(
+        permission_key,
+        {
+            "title": "アクセス権限が不足しています",
+            "description": "この操作を実行するための権限がアカウントに付与されていません。",
+            "contact": "施設管理者へお問い合わせください。",
+        },
+    )
+
+
 def get_live_staff_user(session: Session, current_user: StaffUser) -> User | None:
     if current_user.user_id is None:
         return None

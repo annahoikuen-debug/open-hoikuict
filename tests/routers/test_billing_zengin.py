@@ -344,6 +344,114 @@ class BillingZenginTests(unittest.TestCase):
         with self.assertRaises(BillingCalculationError):
             validate_charge_amount(BillingChargeSourceType.meal_auto, -500)
 
+    def test_preflight_check_detects_issues_and_passes_when_fixed(self):
+        client = self._zengin_client()
+        with Session(self.engine) as session:
+            setting = BillingSetting(
+                facility_name="HOIKU",
+                collector_code="1234567890",
+                collector_name_kana="HOIKU",
+                customer_number_facility_code="001",
+                withdrawal_bank_code="0001",
+                withdrawal_bank_name_kana="BANK",
+                withdrawal_branch_code="001",
+                withdrawal_branch_name_kana="BRANCH",
+                collector_account_type="1",
+                collector_account_number="1234567",
+            )
+            session.add(setting)
+
+            family = Family(family_name="山田家")
+            session.add(family)
+            session.commit()
+            session.refresh(family)
+
+            child = Child(
+                family_id=family.id,
+                last_name="山田",
+                first_name="太郎",
+                last_name_kana="ヤマダ",
+                first_name_kana="タロウ",
+                birth_date=date(2021, 4, 1),
+                enrollment_date=date(2024, 4, 1),
+                status=ChildStatus.enrolled,
+            )
+            session.add(child)
+
+            cycle = BillingCycle(
+                year_month="2026-12",
+                period_start=date(2026, 12, 1),
+                period_end=date(2026, 12, 31),
+                withdrawal_date=date(2026, 12, 27),
+                due_date=date(2026, 12, 27),
+                status=BillingCycleStatus.confirmed,
+            )
+            session.add(cycle)
+            session.commit()
+            session.refresh(cycle)
+
+            claim = BillingClaim(
+                billing_cycle_id=cycle.id,
+                family_id=family.id,
+                payment_method=BillingPaymentMethod.direct_debit,
+                status=BillingClaimStatus.confirmed,
+                total_amount=15000,
+            )
+            session.add(claim)
+            session.commit()
+            cycle_id = cycle.id
+            family_id = family.id
+
+        # 2. 口座プロフィール未登録の状態で事前チェック実行 -> 不備検出
+        res = client.get(f"/billing/zengin/{cycle_id}/preflight")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertFalse(data["can_export"])
+        self.assertEqual(len(data["issues"]), 1)
+        self.assertEqual(data["issues"][0]["issue_type"], "missing_profile")
+        self.assertEqual(data["issues"][0]["family_id"], family_id)
+        self.assertIn("口座振替情報が未登録", data["issues"][0]["message"])
+        self.assertIn("山田 太郎", data["issues"][0]["children_names"])
+
+        # 3. 不備のある口座プロフィール（カナ不正）を登録 -> カナ不備検出
+        with Session(self.engine) as session:
+            profile = FamilyBillingProfile(
+                family_id=family_id,
+                payment_method=BillingPaymentMethod.direct_debit,
+                direct_debit_status=DirectDebitStatus.active,
+                bank_code="0005",
+                branch_code="001",
+                account_type="1",
+                account_number="7654321",
+                account_holder_kana="ヤマダ タロウ",
+                customer_number="00000000000000000001",
+                new_code="0",
+            )
+            session.add(profile)
+            session.commit()
+
+        res2 = client.get(f"/billing/zengin/{cycle_id}/preflight")
+        self.assertEqual(res2.status_code, 200)
+        data2 = res2.json()
+        self.assertFalse(data2["can_export"])
+        self.assertEqual(len(data2["issues"]), 1)
+        self.assertEqual(data2["issues"][0]["issue_type"], "invalid_holder_kana")
+
+        # 4. 半角カナに修正 -> 事前チェック完全合格 (can_export == True)
+        with Session(self.engine) as session:
+            profile = session.exec(select(FamilyBillingProfile).where(FamilyBillingProfile.family_id == family_id)).one()
+            profile.account_holder_kana = "ﾔﾏﾀﾞ ﾀﾛｳ"
+            session.add(profile)
+            session.commit()
+
+        res3 = client.get(f"/billing/zengin/{cycle_id}/preflight")
+        self.assertEqual(res3.status_code, 200)
+        data3 = res3.json()
+        self.assertTrue(data3["can_export"])
+        self.assertEqual(len(data3["issues"]), 0)
+        self.assertEqual(data3["total_claims_count"], 1)
+        self.assertEqual(data3["total_claims_amount"], 15000)
+
 
 class BillingAccountPermissionTests(unittest.TestCase):
     def setUp(self):

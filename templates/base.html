@@ -33,6 +33,51 @@
         -webkit-print-color-adjust: exact;
       }
     }
+
+    /* 職員権限ツールチップ（403エラー撲滅用） */
+    .permission-btn-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+    .permission-btn-wrapper[data-disabled="true"] > * {
+      pointer-events: none;
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .permission-tooltip-box {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #f8fafc;
+      text-align: left;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      width: 250px;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+      z-index: 50;
+      transition: opacity 0.2s, visibility 0.2s;
+      pointer-events: none;
+    }
+    .permission-tooltip-box::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: #0f172a transparent transparent transparent;
+    }
+    .permission-btn-wrapper:hover .permission-tooltip-box {
+      visibility: visible;
+      opacity: 1;
+    }
   </style>
   {% if request is defined and request and request.url.path.startswith('/plans') %}
   <style>
@@ -1109,6 +1154,47 @@ current_path.startswith('/parent-accounts/registration-qr') %}
       }))).observe(document.documentElement, { childList: true, subtree: true });
       document.body.addEventListener("htmx:configRequest", (event) => {
         event.detail.headers["X-CSRF-Token"] = token;
+      });
+    })();
+  </script>
+
+  <!-- 未保存入力の誤離脱防止ガード (BeforeUnload Guard) -->
+  <script>
+    (() => {
+      let isFormDirty = false;
+
+      document.addEventListener("input", (e) => {
+        const tag = e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+          const form = e.target.closest("form");
+          if (form && (form.method.toLowerCase() === "post" || form.dataset.protectUnsaved !== undefined)) {
+            isFormDirty = true;
+          }
+        }
+      });
+
+      document.addEventListener("submit", () => {
+        isFormDirty = false;
+      });
+
+      window.addEventListener("beforeunload", (e) => {
+        if (isFormDirty) {
+          e.preventDefault();
+          e.returnValue = "";
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        const anchor = e.target.closest("a");
+        if (anchor && anchor.href && !anchor.target && !anchor.href.startsWith("javascript:") && !anchor.href.includes("#")) {
+          if (isFormDirty) {
+            const ok = confirm("⚠️ 入力中の内容が保存されていません。\nこのまま移動すると入力した内容が破棄されます。本当に移動しますか？\n（[キャンセル] を押すと編集画面に留まります）");
+            if (!ok) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }
+        }
       });
     })();
   </script>
