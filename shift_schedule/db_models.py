@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Optional
 
-from sqlalchemy import CHAR, Column, ForeignKey, JSON
+from sqlalchemy import CHAR, Column, ForeignKey, JSON, Text
 from sqlmodel import Field, SQLModel
 
 from time_utils import utc_now
@@ -174,13 +174,14 @@ class ShiftPlanCells(SQLModel, table=True):
 
 
 class ShiftSolveJobs(SQLModel, table=True):
-    """ソルバ実行ジョブ。CBC はバックグラウンドワーカーで実行。"""
+    """ソルバ実行ジョブ。CBC/HiGHS はバックグラウンドワーカーで実行。"""
 
     __tablename__ = "shift_solve_jobs"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     plan_id: int = Field(foreign_key="shift_plans.id", index=True)
     status: str = Field(default="queued", max_length=16)  # queued/running/succeeded/failed/cancelled
+    priority: int = Field(default=2, index=True)  # 1: URGENT_REPLAN, 2: INTERACTIVE, 3: BATCH
     requested_by_user_id: Optional[int] = Field(default=None, index=True)
     requested_at: datetime = Field(default_factory=utc_now)
     started_at: Optional[datetime] = Field(default=None)
@@ -188,7 +189,7 @@ class ShiftSolveJobs(SQLModel, table=True):
     time_limit_sec: int = Field(default=30)
     relax_level: int = Field(default=0)
     is_approved_snapshot: bool = Field(default=False)
-    stats: Optional[str] = Field(default=None, max_length=4096)  # JSON
+    stats: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON
     error_message: Optional[str] = Field(default=None, max_length=1024)
 
 

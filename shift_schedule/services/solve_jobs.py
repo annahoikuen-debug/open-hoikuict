@@ -44,6 +44,8 @@ from ..db_models import (
     StaffContracts,
 )
 from ..store import ShiftRepository, ShiftRepositoryDep
+from .diff_review import create_proposal
+from .solver_manager import JobPriority, solver_manager
 from database import engine
 from models import AttendanceRecord, Child, User
 from time_utils import utc_now
@@ -120,6 +122,15 @@ def _run_solve_sync(
         job = repo.get_job(job_id)
         if job is None:
             return
+
+        if solver_manager.is_cancelled(job_id) or job.status == SolveJobStatus.CANCELLED:
+            job.status = SolveJobStatus.CANCELLED
+            job.finished_at = utc_now()
+            repo.save_job(job)
+            return
+
+        token = solver_manager.get_token(job_id)
+
         job.status = SolveJobStatus.RUNNING
         job.started_at = utc_now()
         repo.save_job(job)
@@ -360,12 +371,18 @@ def _run_solve_sync(
         )
 
         # 月次一括階層的求解の実行
+        def _on_solve_progress(p: dict) -> None:
+            solver_manager.update_progress(job_id, p)
+
         try:
             result = solve_monthly_hierarchical(
                 session=session,
                 context=context,
                 time_limit_sec=time_limit_sec,
                 solver_name=get_configured_solver_name(),
+                progress_callback=_on_solve_progress,
+                cancellation_token=token,
+                parallel_workers=min(4, os.cpu_count() or 1),
             )
         except Exception as exc:  # noqa: BLE001
             job.status = SolveJobStatus.FAILED
@@ -373,6 +390,8 @@ def _run_solve_sync(
             job.finished_at = utc_now()
             repo.save_job(job)
             return
+
+        is_job_cancelled = solver_manager.is_cancelled(job_id) or getattr(result, "stats", {}).get("cancelled", False)
 
         # 結果をセルに変換
         for sd in getattr(result, "shift_days", []):
@@ -409,6 +428,27 @@ def _run_solve_sync(
             )
             all_violations.append(violation)
 
+        score_dict = {}
+        if getattr(result, "score", None):
+            try:
+                score_dict = result.score.to_dict()
+            except Exception:
+                pass
+
+        # 差分提案テーブル (ShiftPlanProposals) に記録
+        proposal_id = None
+        try:
+            proposal = create_proposal(
+                session=session,
+                plan_id=plan_id,
+                job_id=job_id,
+                proposal_cells=all_cells,
+                score_dict=score_dict,
+            )
+            proposal_id = proposal.id
+        except Exception:
+            pass
+
         # 既存セル・違反を保存
         for c in all_cells:
             session.add(c)
@@ -419,22 +459,17 @@ def _run_solve_sync(
         plan.updated_at = utc_now()
         session.add(plan)
 
-        score_dict = {}
-        if getattr(result, "score", None):
-            try:
-                score_dict = result.score.to_dict()
-            except Exception:
-                pass
-
         import json
 
-        job.status = SolveJobStatus.SUCCEEDED
+        job.status = SolveJobStatus.CANCELLED if is_job_cancelled else SolveJobStatus.SUCCEEDED
         job.finished_at = utc_now()
         stats_payload = {
             "cells": len(all_cells),
             "violations": len(all_violations),
             "backend_solver": get_configured_solver_name(),
             "score": score_dict,
+            "proposal_id": proposal_id,
+            "cancelled": is_job_cancelled,
         }
         job.stats = json.dumps(stats_payload, ensure_ascii=False)
         session.add(job)
@@ -466,8 +501,9 @@ def schedule_solve(
     staffing_standard_key: str,
     requested_by_user_id: int | None,
     time_limit_sec: int = 30,
+    priority: int = JobPriority.INTERACTIVE,
 ) -> int:
-    """求解ジョブをキューに登録し、ジョブIDを返す。"""
+    """求解ジョブをキューに登録し、ジョブIDを返す。優先度（1: URGENT, 2: INTERACTIVE, 3: BATCH）を指定可能。"""
     with Session(engine) as session:
         active_job = session.exec(
             select(ShiftSolveJobs).where(
@@ -484,12 +520,14 @@ def schedule_solve(
         job = ShiftSolveJobs(
             plan_id=plan_id,
             status=SolveJobStatus.QUEUED,
+            priority=priority,
             requested_by_user_id=requested_by_user_id,
             requested_at=utc_now(),
             time_limit_sec=time_limit_sec,
         )
         repo.create_solve_job(job)
         job_id = job.id
+        solver_manager.register_job(job_id)
     finally:
         session.close()
 
@@ -498,13 +536,13 @@ def schedule_solve(
 
 
 def process_next_solve_job() -> bool:
-    """DB上の最古の QUEUED ジョブを取得して求解を実行する。ジョブを処理した場合は True を返す。"""
+    """優先度付きキュー（PriorityQueue）順に QUEUED ジョブを取得して求解を実行する。"""
     with _solve_lock:
         with Session(engine) as session:
             next_job = session.exec(
                 select(ShiftSolveJobs)
                 .where(ShiftSolveJobs.status == SolveJobStatus.QUEUED)
-                .order_by(ShiftSolveJobs.requested_at.asc())
+                .order_by(ShiftSolveJobs.priority.asc(), ShiftSolveJobs.requested_at.asc())
             ).first()
 
             if next_job is None:
@@ -513,6 +551,14 @@ def process_next_solve_job() -> bool:
             job_id = next_job.id
             plan_id = next_job.plan_id
             time_limit_sec = next_job.time_limit_sec
+
+            if solver_manager.is_cancelled(job_id):
+                next_job.status = SolveJobStatus.CANCELLED
+                next_job.finished_at = utc_now()
+                next_job.error_message = "実行前にキャンセルされました"
+                session.add(next_job)
+                session.commit()
+                return True
 
             plan = session.exec(select(ShiftPlans).where(ShiftPlans.id == plan_id)).first()
             if plan is None:

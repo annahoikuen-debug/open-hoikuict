@@ -47,10 +47,16 @@ def solve_monthly_hierarchical(
     context: Any,
     time_limit_sec: int = 120,
     solver_name: str | None = None,
+    progress_callback: Any = None,
+    cancellation_token: Any = None,
+    parallel_workers: int = 1,
 ) -> SolveResult:
     """2段階階層的アプローチにより月次一括シフトを求解する（shiftai.monthly へ委譲）。"""
     return shiftai_solve_monthly(
         context=context,
         time_limit_sec=time_limit_sec,
         solver_name=solver_name,
+        progress_callback=progress_callback,
+        cancellation_token=cancellation_token,
+        parallel_workers=parallel_workers,
     )

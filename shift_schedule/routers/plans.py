@@ -291,3 +291,93 @@ def plans_approve(
     plan.status = PlanStatus.APPROVED
     repo.save_plan(plan)
     return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Timefold 思想に基づくリアルタイムジョブ制御 & 差分レビュー API
+# ---------------------------------------------------------------------------
+
+@router.get("/solve-jobs/{job_id}/progress")
+def get_solve_job_progress(job_id: int):
+    """ジョブの求解進捗（フェーズ、進捗率%、暫定スコア）を取得する。"""
+    from ..services.solver_manager import solver_manager
+    return solver_manager.get_progress(job_id)
+
+
+@router.post("/solve-jobs/{job_id}/cancel", dependencies=[Depends(require_can_edit)])
+def cancel_solve_job(job_id: int):
+    """実行中または待機中の求解ジョブを協調的に中断する。"""
+    from ..services.solver_manager import solver_manager
+    success = solver_manager.cancel_job(job_id)
+    return {"job_id": job_id, "cancelled": success}
+
+
+@router.get("/plans/{plan_id}/proposals/latest")
+def get_latest_plan_proposal(
+    plan_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """直近の求解提案と現行シフトの差分（Diff）を取得する。"""
+    import json
+    from ..db_models import ShiftPlanProposals
+
+    proposal = repo.session.exec(
+        select(ShiftPlanProposals)
+        .where(ShiftPlanProposals.plan_id == plan_id)
+        .order_by(ShiftPlanProposals.created_at.desc())
+    ).first()
+
+    if not proposal:
+        return {"proposal": None}
+
+    diff_data = {}
+    if proposal.diff_summary:
+        try:
+            diff_data = json.loads(proposal.diff_summary)
+        except Exception:
+            pass
+
+    return {
+        "proposal_id": proposal.id,
+        "job_id": proposal.job_id,
+        "status": proposal.status,
+        "hard_score": proposal.hard_score,
+        "soft_score": proposal.soft_score,
+        "diff": diff_data,
+        "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
+    }
+
+
+@router.post("/plans/{plan_id}/proposals/{proposal_id}/apply", dependencies=[Depends(require_can_edit)])
+def apply_plan_proposal(
+    plan_id: int,
+    proposal_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """提案されたシフト差分を承認し、本番セルへコミット反映する。"""
+    from ..services.diff_review import apply_proposal
+
+    try:
+        applied_count = apply_proposal(repo.session, proposal_id)
+        return {"success": True, "applied_count": applied_count}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/plans/{plan_id}/proposals/{proposal_id}/reject", dependencies=[Depends(require_can_edit)])
+def reject_plan_proposal(
+    plan_id: int,
+    proposal_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """提案されたシフトを破棄する。"""
+    from ..services.diff_review import reject_proposal
+
+    try:
+        reject_proposal(repo.session, proposal_id)
+        return {"success": True, "rejected": True}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
