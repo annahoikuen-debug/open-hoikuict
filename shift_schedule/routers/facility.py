@@ -70,3 +70,43 @@ def facility_closed_day_add(
     settings = get_or_create_settings(repo)
     add_closed_day(repo, settings.id, date.fromisoformat(target_date), kind)
     return RedirectResponse(url="/shifts/facility", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# 制約重み設定 API (Timefold: Runtime Constraint Weights)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/facilities/{facility_id}/constraint-weights")
+def get_constraint_weights_api(
+    facility_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """施設の制約重み一覧を取得する。"""
+    from ..services.weights import get_facility_constraint_weights
+
+    return get_facility_constraint_weights(repo.session, facility_id=facility_id)
+
+
+@router.put("/facilities/{facility_id}/constraint-weights")
+async def update_constraint_weights_api(
+    facility_id: int,
+    request: Request,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """施設の制約重みを一括更新する。"""
+    from ..services.weights import update_facility_constraint_weights
+
+    body = await request.json()
+    updates = body if isinstance(body, list) else body.get("weights", [])
+
+    user_id = getattr(request.state, "user_id", "admin")
+
+    updated = update_facility_constraint_weights(
+        session=repo.session,
+        facility_id=facility_id,
+        updates=updates,
+        user_id=user_id,
+    )
+    return {"status": "ok", "weights": updated}
+

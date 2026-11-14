@@ -151,6 +151,27 @@ def plans_detail(
         staff_names[str(u.id)] = name
         staff_names[u.id.hex] = name
 
+    # Timefold 思想: 最新提案 (Diff Review) および最新ジョブスコアの取得
+    from ..db_models import ShiftPlanProposals
+    import json
+    latest_proposal = repo.session.exec(
+        select(ShiftPlanProposals)
+        .where(ShiftPlanProposals.plan_id == plan_id, ShiftPlanProposals.status == "pending")
+        .order_by(ShiftPlanProposals.created_at.desc())
+    ).first()
+
+    latest_job = jobs[0] if jobs else None
+    score_info = None
+    if latest_job and latest_job.stats:
+        try:
+            parsed_stats = json.loads(latest_job.stats)
+            score_info = parsed_stats.get("score")
+        except Exception:
+            pass
+
+    fac_setting = repo.facility_settings()
+    facility_id = fac_setting.id if fac_setting else 1
+
     from template_utils import create_templates
 
     templates = create_templates()
@@ -164,6 +185,11 @@ def plans_detail(
             "violations": violations,
             "audits": audits,
             "jobs": jobs,
+            "latest_job": latest_job,
+            "latest_proposal": latest_proposal,
+            "score_info": score_info,
+            "facility_id": facility_id,
+            "all_users": all_users,
             "gap_warnings": gap_warnings,
             "prescriptions": prescriptions,
             "slot_options": slot_options,
@@ -240,7 +266,14 @@ def plans_solve(
         },
     )
 
-    return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)
+    from fastapi.responses import JSONResponse
+    if (
+        request.headers.get("accept") == "application/json"
+        or request.headers.get("x-requested-with") == "XMLHttpRequest"
+    ):
+        return JSONResponse({"status": "ok", "job_id": job_id})
+
+    return RedirectResponse(url=f"/shifts/plans/{plan_id}?job_id={job_id}", status_code=303)
 
 
 @router.get("/plans/{plan_id}/status")

@@ -1,11 +1,11 @@
 [
   {
-    "dataset": "standard_7days",
+    "dataset": "mini_7days",
     "solver": "HiGHS",
     "time_limit_sec": 15,
     "parallel_workers": 1,
     "status": "実行可能解",
-    "elapsed_sec": 2.84,
+    "elapsed_sec": 3.05,
     "hard_score": -14,
     "soft_score": -301.0,
     "blocker_count": 0,
@@ -13,12 +13,12 @@
     "days_solved": 7
   },
   {
-    "dataset": "standard_7days",
+    "dataset": "mini_7days",
     "solver": "HiGHS",
     "time_limit_sec": 15,
     "parallel_workers": 2,
     "status": "実行可能解",
-    "elapsed_sec": 1.83,
+    "elapsed_sec": 1.84,
     "hard_score": -14,
     "soft_score": -301.0,
     "blocker_count": 0,

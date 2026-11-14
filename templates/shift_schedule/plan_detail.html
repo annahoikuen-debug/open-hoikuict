@@ -1,81 +1,228 @@
 {% extends "base.html" %}
 
-{% block title %}シフトプラン詳細 | open-hoikuict
-<script>
-function showSolvingProgress(e) {
-  const bar = document.getElementById("solvingProgressBar");
-  const btn = document.getElementById("solveBtn");
-  const icon = document.getElementById("solveIcon");
-  const btnText = document.getElementById("solveBtnText");
-  const fill = document.getElementById("progressBarFill");
-  
-  if (bar) bar.classList.remove("hidden");
-  if (btn) {
-    btn.disabled = true;
-    btn.classList.add("opacity-75", "cursor-not-allowed");
-  }
-  if (icon) icon.textContent = "⏳";
-  if (btnText) btnText.textContent = "求解中...";
-
-  let pct = 25;
-  const timer = setInterval(() => {
-    pct = Math.min(95, pct + 8);
-    if (fill) fill.style.width = pct + "%";
-  }, 1000);
-}
-</script>
-{% endblock %}
+{% block title %}シフトプラン詳細 (Timefold 最適化) | open-hoikuict{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6">
-  <div class="flex flex-wrap items-start justify-between gap-3">
+<div class="max-w-7xl mx-auto space-y-6">
+  <!-- ヘッダーエリア -->
+  <div class="flex flex-wrap items-start justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
     <div>
-      <p class="text-sm font-semibold text-indigo-600">シフトプラン</p>
-      <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ plan.target_month }}</h1>
-      <p class="mt-2 text-sm text-slate-600">ステータス: {{ plan.status }}</p>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span>⚡</span> Timefold MILP Engine
+        </span>
+        <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold
+          {% if plan.status == 'approved' %}bg-emerald-100 text-emerald-800 border border-emerald-300
+          {% else %}bg-amber-100 text-amber-800 border border-amber-300{% endif %}">
+          ステータス: {{ plan.status }}
+        </span>
+      </div>
+      <h1 class="mt-2 text-2xl font-bold text-slate-900 tracking-tight">{{ plan.target_month }} シフト詳細</h1>
+      <p class="mt-1 text-xs text-slate-500">
+        基準: {{ plan.staffing_standard_key }} ｜ セル数: {{ cells|length }} ｜ 最終更新: {{ plan.updated_at.strftime('%Y-%m-%d %H:%M') if plan.updated_at else '-' }}
+      </p>
     </div>
-    <div class="flex gap-2">
-      {% if plan.status != "approved" and (solver_available or cbc_available) %}
-      <form method="post" action="/shifts/plans/{{ plan.id }}/solve" class="flex items-center gap-2 mt-0" id="solveForm" onsubmit="showSolvingProgress(event)">
-        <input type="hidden" name="time_limit_sec" value="30">
-        <label class="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-1.5 rounded-lg cursor-pointer">
-          <input type="checkbox" name="disallow_split" value="true" checked class="rounded border-slate-300 text-indigo-600">
-          <span>中抜け勤務を禁止</span>
-        </label>
-        <button type="submit" id="solveBtn" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm">
-          <span id="solveIcon">⚡</span> <span id="solveBtnText">シフトを再生成</span>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- 園別制約重み設定ボタン -->
+      <button type="button" onclick="openWeightsModal()" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-all">
+        <span>⚙️</span> <span>制約重み設定</span>
+      </button>
+
+      <!-- 突発欠勤リアルタイム再計画ボタン -->
+      {% if plan.status != 'approved' %}
+      <button type="button" onclick="openReplanModal()" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-100 transition-all">
+        <span>🚨</span> <span>突発欠勤再計画</span>
+      </button>
+      {% endif %}
+
+      <!-- シフト再生成ボタン -->
+      {% if plan.status != 'approved' and (solver_available or cbc_available) %}
+      <form method="post" action="/shifts/plans/{{ plan.id }}/solve" class="flex items-center gap-2 m-0" id="solveForm" onsubmit="handleSolveSubmit(event)">
+        <input type="hidden" name="time_limit_sec" value="60">
+        <button type="submit" id="solveBtn" class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all">
+          <span id="solveIcon">⚡</span> <span id="solveBtnText">全月再生成</span>
         </button>
       </form>
-      {% elif not solver_available and not cbc_available %}
-      <button class="rounded-xl bg-slate-400 px-4 py-2 text-sm font-medium text-white" disabled>ソルバー未検出</button>
       {% endif %}
 
-      {% if plan.status != "approved" and cells %}
-      <form method="post" action="/shifts/plans/{{ plan.id }}/approve" class="mt-0" onsubmit="return confirm('シフトを承認・確定しますか？（承認後は編集・再求解できません）');">
-        <button type="submit" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">シフトを承認・確定</button>
+      <!-- 承認・確定ボタン -->
+      {% if plan.status != 'approved' and cells %}
+      <form method="post" action="/shifts/plans/{{ plan.id }}/approve" class="m-0" onsubmit="return confirm('シフトを承認・確定しますか？（承認後は編集・再求解できません）');">
+        <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all">
+          <span>✓</span> <span>シフト確定</span>
+        </button>
       </form>
       {% endif %}
-      <a href="/shifts/plans" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">一覧へ戻る</a>
+
+      <a href="/shifts/plans" class="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all">一覧へ戻る</a>
     </div>
   </div>
 
-  <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-    <p class="font-semibold">【免責事項】</p>
-    <p class="mt-0.5">本シフト作成案は法令（労働基準法等）および認可・配置基準を満たすための下書きです。急な登降園予定の変更や現場状況に応じた最終確認および配置責任は施設長にあります。</p>
+  <!-- 免責事項 -->
+  <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-800 flex items-start gap-2">
+    <span class="text-base leading-none">ℹ️</span>
+    <div>
+      <span class="font-bold">【免責事項】</span>
+      本シフト案は法令（労働基準法等）および認可配置基準を満たすための下書きです。登降園予定の突発的変更や現場状況に応じた最終確認および配置責任は施設長にあります。
+    </div>
   </div>
 
+  <!-- Timefold 思想: Diff Review（差分レビュー・適用）パネル -->
+  {% if latest_proposal %}
+  <section class="rounded-2xl border-2 border-indigo-500 bg-gradient-to-r from-indigo-50/90 via-white to-blue-50/90 p-5 shadow-md">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="animate-pulse flex h-2.5 w-2.5 rounded-full bg-indigo-600"></span>
+          <h2 class="text-base font-bold text-indigo-950 flex items-center gap-1.5">
+            <span>📋</span> <span>再計画提案の差分レビュー (提案 #{{ latest_proposal.id }})</span>
+          </h2>
+          <span class="text-xs bg-indigo-100 text-indigo-800 font-semibold px-2 py-0.5 rounded-full border border-indigo-200">未承認の変更案</span>
+        </div>
+        <p class="text-xs text-slate-600">
+          局所再計画により生成された新しいシフト配置案です。内容を確認し、本番シフトへ適用または破棄してください。
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <form method="post" action="/shifts/plans/{{ plan.id }}/proposals/{{ latest_proposal.id }}/apply" class="m-0" onsubmit="return confirm('提案された変更を本番シフトセルへ適用しますか？');">
+          <button type="submit" class="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-all">
+            <span>✓</span> <span>この変更を適用する</span>
+          </button>
+        </form>
+        <form method="post" action="/shifts/plans/{{ plan.id }}/proposals/{{ latest_proposal.id }}/reject" class="m-0" onsubmit="return confirm('この提案を破棄しますか？本番シフトは維持されます。');">
+          <button type="submit" class="inline-flex items-center gap-1 rounded-xl border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 transition-all">
+            <span>✕</span> <span>破棄</span>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 差分サマリ内訳 -->
+    {% if latest_proposal.diff_summary %}
+    <div class="mt-4 pt-4 border-t border-indigo-100/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100">
+        <span class="text-slate-500 block">提案 Hard スコア</span>
+        <span class="font-bold text-sm {% if latest_proposal.hard_score == 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
+          {{ latest_proposal.hard_score }} 点
+        </span>
+      </div>
+      <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100">
+        <span class="text-slate-500 block">提案 Soft スコア</span>
+        <span class="font-bold text-sm text-slate-800">{{ latest_proposal.soft_score|round(1) }} 点</span>
+      </div>
+      <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100 col-span-2">
+        <span class="text-slate-500 block">差分サマリ (JSON)</span>
+        <span class="font-mono text-[11px] text-slate-700 truncate block" title="{{ latest_proposal.diff_summary }}">
+          {{ latest_proposal.diff_summary }}
+        </span>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- Timefold 思想: リアルタイム進捗パネル & 中断ボタン -->
+  <div id="realtimeProgressPanel" class="hidden rounded-2xl border-2 border-indigo-400 bg-white p-5 shadow-lg space-y-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-3.5 h-3.5 bg-indigo-600 rounded-full animate-ping"></div>
+        <div>
+          <h3 class="text-sm font-bold text-indigo-950 flex items-center gap-2">
+            <span>数理最適化ソルバー求解中</span>
+            <span id="currentStageBadge" class="text-[11px] font-mono bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-200">
+              STAGE_1_PATTERNS
+            </span>
+          </h3>
+          <p class="text-xs text-slate-500" id="progressDetailText">月間日次パターンの大域探索を実行しています...</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="progressPctText" class="text-xl font-black font-mono text-indigo-600">0%</span>
+        <button type="button" id="cancelJobBtn" onclick="cancelCurrentJob()" class="rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition-all">
+          中断 (暫定解で保存)
+        </button>
+      </div>
+    </div>
+
+    <!-- 進捗プログレスバー -->
+    <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
+      <div id="progressBarFill" class="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-300 ease-out" style="width: 5%"></div>
+    </div>
+
+    <div class="flex items-center justify-between text-xs text-slate-500 font-mono">
+      <span>処理中対象日: <span id="currentDayText" class="font-bold text-slate-700">-</span></span>
+      <span>暫定スコア: <span id="interimScoreText" class="font-bold text-slate-700">-</span></span>
+    </div>
+  </div>
+
+  <!-- Timefold 思想: Score Explanation（スコア詳細説明）カード -->
+  {% if score_info %}
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-base font-bold text-slate-900">最適化スコア評価 (Score Explanation)</span>
+          {% if score_info.hard_score == 0 %}
+          <span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+            ✓ 法令・配置基準 100% 遵守 (Hard: 0)
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300">
+            ⚠️ ハード制約違反あり (Hard: {{ score_info.hard_score }})
+          </span>
+          {% endif %}
+        </div>
+        <p class="mt-1 text-xs text-slate-500">
+          Timefold 思想に基づく多目的スコアリング。Hard制約（法令遵守）を満たした上で、Soft制約（希望・平準化・運用コスト）を最大化しています。
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 text-right">
+        <div class="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+          <span class="text-[11px] text-slate-500 block">ソフト最適度スコア</span>
+          <span class="font-mono text-sm font-bold text-indigo-700">{{ score_info.soft_score|round(1) }} 点</span>
+        </div>
+        <button type="button" onclick="toggleScoreBreakdown()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">
+          内訳を表示 / 非表示
+        </button>
+      </div>
+    </div>
+
+    <!-- 制約別スコア内訳テーブル (アコーディオン) -->
+    <div id="scoreBreakdownArea" class="hidden pt-3 border-t border-slate-100">
+      <h4 class="text-xs font-bold text-slate-700 mb-2">制約別減点内訳</h4>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
+        {% for cid, count in score_info.constraint_breakdown.items() %}
+        <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 flex justify-between items-center">
+          <div>
+            <span class="font-bold text-slate-800">{{ cid }}</span>
+            <span class="text-[11px] text-slate-400 block">制約ID</span>
+          </div>
+          <div class="text-right">
+            <span class="font-mono font-bold text-rose-600">{{ count }} 件</span>
+            <span class="text-[10px] text-slate-400 block">ペナルティ対象</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- 配置割れ警告セクション -->
   {% if gap_warnings %}
   <section class="rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-sm">
     <div class="flex items-center justify-between">
-      <h2 class="font-bold text-rose-900 flex items-center gap-1.5">
+      <h2 class="font-bold text-rose-900 flex items-center gap-1.5 text-sm">
         <span>⚠️</span> 園児予定変更による配置割れ警告 ({{ gap_warnings|length }}件)
       </h2>
-      <span class="text-xs bg-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-semibold">再計算・調整推奨</span>
+      <span class="text-xs bg-rose-200 text-rose-800 px-2 py-0.5 rounded-full font-semibold">再計算推奨</span>
     </div>
-    <p class="mt-1 text-xs text-rose-700">園児の登降園予定変更に伴い、配置基準を満たせない時間帯が検出されました。</p>
-    <div class="mt-3 space-y-1.5">
+    <div class="mt-2.5 space-y-1.5">
       {% for gw in gap_warnings %}
-      <div class="text-xs text-rose-800 bg-white/70 border border-rose-200 rounded px-2.5 py-1.5">
+      <div class="text-xs text-rose-800 bg-white/80 border border-rose-200 rounded-lg p-2.5">
         {{ gw.message }}
       </div>
       {% endfor %}
@@ -83,25 +230,7 @@ function showSolvingProgress(e) {
   </section>
   {% endif %}
 
-  <!-- 微調整②: 求解中リアルタイム進捗インジケーター -->
-  <div id="solvingProgressBar" class="hidden rounded-xl border border-indigo-200 bg-indigo-50/90 p-4 shadow-sm animate-pulse">
-    <div class="flex items-center justify-between mb-2">
-      <div class="flex items-center gap-2">
-        <div class="w-3 h-3 bg-indigo-600 rounded-full animate-ping"></div>
-        <span class="font-bold text-sm text-indigo-900">数理最適化ソルバー実行中...</span>
-      </div>
-      <span class="text-xs font-mono text-indigo-700 font-semibold" id="solvingTimer">約 10〜30 秒で完了します</span>
-    </div>
-    <div class="w-full bg-indigo-200 rounded-full h-2.5 overflow-hidden">
-      <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" id="progressBarFill" style="width: 25%"></div>
-    </div>
-    <div class="mt-2 text-xs text-indigo-700 flex justify-between">
-      <span>混合整数線形計画法 (MILP) による配置充足計算 & 労基法第32条チェック</span>
-      <span class="text-slate-500">※ 画面を閉じずにお待ちください</span>
-    </div>
-  </div>
-
-  <!-- 微調整③: 人員不足（BLOCKER）のワンタップ処方箋（ヘルプ提案） -->
+  <!-- 処方箋（ヘルプ提案） -->
   {% if prescriptions %}
   <section class="rounded-xl border border-amber-300 bg-amber-50/90 p-4 shadow-sm">
     <div class="flex items-center justify-between">
@@ -110,18 +239,17 @@ function showSolvingProgress(e) {
       </h2>
       <span class="text-xs bg-amber-200 text-amber-800 px-2.5 py-0.5 rounded-full font-semibold">提案あり</span>
     </div>
-    <p class="mt-1 text-xs text-amber-700">配置基準を満たせない枠に対し、勤務枠に余裕のある職員への打診候補を表示しています。</p>
-    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+    <div class="mt-3 grid gap-2.5 sm:grid-cols-2">
       {% for pr in prescriptions %}
-      <div class="rounded-lg border border-amber-200 bg-white p-3 shadow-xs">
+      <div class="rounded-xl border border-amber-200 bg-white p-3 shadow-xs">
         <div class="flex justify-between items-center text-xs">
           <span class="font-bold text-slate-800">{{ pr.date }} [{{ pr.slot }}]</span>
           <span class="text-rose-600 font-semibold text-[11px] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">{{ pr.code }}</span>
         </div>
         <p class="mt-1 text-xs text-slate-600">{{ pr.message }}</p>
         <div class="mt-2 pt-2 border-t border-amber-100 flex items-center justify-between">
-          <span class="text-xs text-indigo-700 font-medium">候補: {{ pr.suggested_helpers }}</span>
-          <span class="text-[11px] text-slate-400">※該当枠のセルで指定可能</span>
+          <span class="text-xs text-indigo-700 font-medium">打診候補: {{ pr.suggested_helpers }}</span>
+          <span class="text-[11px] text-slate-400">※該当枠で指定可能</span>
         </div>
       </div>
       {% endfor %}
@@ -129,83 +257,70 @@ function showSolvingProgress(e) {
   </section>
   {% endif %}
 
-  <!-- ステップ 19: マスタ未登録による除外職員の可視化セクション -->
-  {% set excluded_violations = violations | selectattr("code", "equalto", "STAFF_EXCLUDED") | list %}
-  {% if excluded_violations %}
-  <section class="rounded-xl border border-amber-300 bg-amber-50/90 p-4 shadow-sm">
-    <div class="flex items-center justify-between">
-      <h2 class="font-bold text-amber-900 flex items-center gap-1.5 text-sm">
-        <span>⚠️</span> 職員マスタ未登録のため除外された職員 ({{ excluded_violations|length }}名)
-      </h2>
-      <a href="/shifts/staff" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline">
-        職員マスタ設定へ →
-      </a>
-    </div>
-    <p class="mt-1 text-xs text-amber-700">有効な資格または契約情報が未登録のため、求解計算のシフト配置対象から除外されています。マスタ設定から資格・契約を登録してください。</p>
-    <div class="mt-3 space-y-1.5">
-      {% for ev in excluded_violations %}
-      <div class="text-xs bg-white rounded border border-amber-200 p-2 text-slate-700 flex justify-between items-center">
-        <span>{{ ev.message }}</span>
-        <a href="/shifts/staff" class="text-[11px] text-indigo-600 hover:underline">登録する</a>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
+  <!-- 検出違反一覧 -->
   {% if violations %}
-  <section class="rounded-xl border border-rose-200 bg-rose-50 p-4">
-    <h2 class="font-semibold text-rose-900">検出違反 ({{ violations|length }})</h2>
-    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+  <section class="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
+    <h2 class="font-semibold text-rose-900 text-sm">検出された制約違反 ({{ violations|length }}件)</h2>
+    <div class="mt-2.5 grid gap-2 sm:grid-cols-2">
       {% for v in violations %}
-      <span class="text-xs px-2 py-1 rounded border
-        {% if v.severity == 'BLOCKER' %}border-rose-500 bg-rose-100 text-rose-800 font-semibold
-        {% elif v.severity == 'WARNING' %}border-amber-500 bg-amber-100 text-amber-800
-        {% else %}border-slate-300 bg-slate-100 text-slate-600{% endif %}
-      ">[{{ v.severity }}] {{ v.code }}: {{ v.message }}</span>
+      <span class="text-xs px-2.5 py-1.5 rounded-lg border
+        {% if v.severity == 'BLOCKER' %}border-rose-400 bg-rose-100 text-rose-900 font-semibold
+        {% elif v.severity == 'WARNING' %}border-amber-400 bg-amber-100 text-amber-900
+        {% else %}border-slate-300 bg-white text-slate-700{% endif %}">
+        [{{ v.severity }}] {{ v.code }}: {{ v.message }}
+      </span>
       {% endfor %}
     </div>
   </section>
   {% endif %}
 
+  <!-- シフトセル一覧テーブル -->
   {% if cells %}
-  <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-slate-900">シフトセル ({{ cells|length }})</h2>
-      <span class="text-xs text-slate-500">※ セルを変更すると即時保存されます</span>
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="text-base font-bold text-slate-900">シフト割り当てセル ({{ cells|length }}件)</h2>
+        <p class="text-xs text-slate-500">ピン留めしたセルはソルバー再生成時にも変更されず保持されます。</p>
+      </div>
     </div>
-    <div class="mt-4 overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+    <div class="overflow-x-auto max-h-[500px] overflow-y-auto rounded-xl border border-slate-200">
+      <table class="min-w-full divide-y divide-slate-200 text-xs">
+        <thead class="bg-slate-50 sticky top-0 z-10 text-left uppercase tracking-wide text-slate-500">
           <tr>
-            <th class="px-3 py-3">職員ID</th>
-            <th class="px-3 py-3">日付</th>
-            <th class="px-3 py-3">スロット枠</th>
-            <th class="px-3 py-3">状態</th>
-            <th class="px-3 py-3">変更</th>
+            <th class="px-3 py-2.5">職員名</th>
+            <th class="px-3 py-2.5">日付</th>
+            <th class="px-3 py-2.5">時間帯スロット</th>
+            <th class="px-3 py-2.5">状態</th>
+            <th class="px-3 py-2.5">手動調整</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for cell in cells %}
-          <tr>
-            <td class="px-3 py-3 font-medium" title="{{ cell.staff_user_id }}">
+          <tr class="hover:bg-slate-50/50">
+            <td class="px-3 py-2.5 font-medium text-slate-800" title="{{ cell.staff_user_id }}">
               {{ staff_names.get(cell.staff_user_id, cell.staff_user_id) }}
             </td>
-            <td class="px-3 py-3">{{ cell.target_date }}</td>
-            <td class="px-3 py-3">
-              <span class="inline-flex rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{{ cell.slot_label }}</span>
+            <td class="px-3 py-2.5 text-slate-600">{{ cell.target_date }}</td>
+            <td class="px-3 py-2.5">
+              <span class="inline-flex rounded-md bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 border border-indigo-100">
+                {{ cell.slot_label }}
+              </span>
             </td>
-            <td class="px-3 py-3">
-              <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium {% if cell.cell_state == 'pinned' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-700{% endif %}">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex rounded-md px-2 py-0.5 font-medium
+                {% if cell.cell_state in ('WORK', 'specified') %}bg-blue-50 text-blue-700 border border-blue-200
+                {% elif cell.cell_state == 'BREAK' %}bg-amber-50 text-amber-700 border border-amber-200
+                {% elif cell.cell_state in ('pinned', 'PINNED') %}bg-purple-50 text-purple-700 border border-purple-200
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
                 {{ cell.cell_state }}
               </span>
             </td>
-            <td class="px-3 py-3">
+            <td class="px-3 py-2.5">
               {% if plan.status != "approved" %}
               <form method="post" action="/shifts/plans/{{ plan.id }}/cells" class="flex items-center gap-1.5 m-0">
                 <input type="hidden" name="staff_user_id" value="{{ cell.staff_user_id }}">
                 <input type="hidden" name="target_date" value="{{ cell.target_date }}">
-                <select name="slot_label" class="rounded border border-slate-300 py-0.5 px-2 text-xs">
+                <select name="slot_label" class="rounded border border-slate-300 py-0.5 px-1.5 text-xs">
                   <option value="{{ cell.slot_label }}">{{ cell.slot_label }} (現在)</option>
                   {% for opt in slot_options %}
                     {% if opt != cell.slot_label %}
@@ -214,16 +329,16 @@ function showSolvingProgress(e) {
                   {% endfor %}
                   <option value="OFF">公休 (OFF)</option>
                 </select>
-                <select name="cell_state" class="rounded border border-slate-300 py-0.5 px-2 text-xs">
+                <select name="cell_state" class="rounded border border-slate-300 py-0.5 px-1.5 text-xs">
                   <option value="WORK" {% if cell.cell_state in ('specified', 'pinned', 'WORK') %}selected{% endif %}>勤務</option>
                   <option value="BREAK" {% if cell.cell_state == 'BREAK' %}selected{% endif %}>休憩</option>
                   <option value="OFF" {% if cell.cell_state == 'OFF' %}selected{% endif %}>公休</option>
                 </select>
-                <label class="inline-flex items-center gap-1 text-xs text-slate-600">
+                <label class="inline-flex items-center gap-1 text-[11px] text-slate-600">
                   <input type="checkbox" name="is_pinned" value="true" {% if cell.is_pinned or cell.cell_state == 'pinned' %}checked{% endif %} class="rounded border-slate-300 text-indigo-600">
-                  ピン
+                  固定
                 </label>
-                <button type="submit" class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">更新</button>
+                <button type="submit" class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200">保存</button>
               </form>
               {% else %}
               <span class="text-xs text-slate-400">確定済み</span>
@@ -237,4 +352,373 @@ function showSolvingProgress(e) {
   </section>
   {% endif %}
 </div>
+
+<!-- ========================================================================= -->
+<!-- 突発欠勤リアルタイム再計画モーダル (Replan Modal) -->
+<!-- ========================================================================= -->
+<div id="replanModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🚨</span>
+        <h3 class="text-base font-bold text-slate-900">突発欠勤リアルタイム再計画</h3>
+      </div>
+      <button type="button" onclick="closeReplanModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+    </div>
+
+    <p class="text-xs text-slate-600 leading-relaxed">
+      病休・突発欠勤が発生した日と対象職員を選択してください。月全体を再計算せず、<strong>該当日の出勤可能職員のみを 1〜2秒で安全に再計画</strong>し、差分提案を作成します。
+    </p>
+
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">対象日</label>
+        <input type="date" id="replanTargetDate" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden" value="{{ plan.target_month }}-01">
+      </div>
+
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">欠勤する職員（複数選択可）</label>
+        <div class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2.5 space-y-1.5 bg-slate-50/50">
+          {% for u in all_users %}
+          <label class="flex items-center gap-2 text-xs text-slate-700 p-1 rounded hover:bg-white cursor-pointer">
+            <input type="checkbox" name="absentStaff" value="{{ u.id }}" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+            <span class="font-medium">{{ u.display_name or u.email }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+      <button type="button" onclick="closeReplanModal()" class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">キャンセル</button>
+      <button type="button" id="executeReplanBtn" onclick="submitRealtimeReplan()" class="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-700 transition-all flex items-center gap-1.5">
+        <span>⚡</span> <span>再計画を実行 (約2秒)</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- 園別制約重み設定モーダル (Constraint Weights Modal) -->
+<!-- ========================================================================= -->
+<div id="weightsModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-2xl w-full p-6 space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">⚙️</span>
+        <div>
+          <h3 class="text-base font-bold text-slate-900">施設固有の制約重み設定 (What-if 調整)</h3>
+          <p class="text-[11px] text-slate-500">園の方針に合わせて制約の有効/無効および最適化優先度を調整できます。</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeWeightsModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+    </div>
+
+    <div id="weightsLoadingArea" class="py-8 text-center text-xs text-slate-500">
+      制約定義を読み込み中...
+    </div>
+
+    <div id="weightsListArea" class="hidden max-h-96 overflow-y-auto space-y-2 pr-1 text-xs">
+      <!-- JavaScript で動的生成 -->
+    </div>
+
+    <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+      <span class="text-[11px] text-slate-400">※ 法令・配置基準 (Hard) は安全のため無効化できません。</span>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeWeightsModal()" class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">閉じる</button>
+        <button type="button" id="saveWeightsBtn" onclick="saveConstraintWeights()" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition-all">設定を保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- JavaScript: リアルタイム進捗・ポーリング・モーダル制御 -->
+<!-- ========================================================================= -->
+<script>
+let currentJobId = null;
+let pollTimer = null;
+const PLAN_ID = {{ plan.id }};
+const FACILITY_ID = {{ facility_id }};
+
+// 画面読み込み時の初期化
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const jobIdFromUrl = urlParams.get("job_id");
+
+  {% if latest_job and latest_job.status in ('queued', 'running', 'QUEUED', 'RUNNING') %}
+  startJobPolling({{ latest_job.id }});
+  {% elif False %}
+  {% endif %}
+
+  if (jobIdFromUrl) {
+    startJobPolling(parseInt(jobIdFromUrl, 10));
+  }
+});
+
+// シフト再生成フォームの送信処理
+async function handleSolveSubmit(e) {
+  e.preventDefault();
+  const form = document.getElementById("solveForm");
+  const btn = document.getElementById("solveBtn");
+  const btnText = document.getElementById("solveBtnText");
+  const icon = document.getElementById("solveIcon");
+
+  btn.disabled = true;
+  btnText.textContent = "リクエスト中...";
+  icon.textContent = "⏳";
+
+  try {
+    const formData = new FormData(form);
+    const resp = await fetch(form.action, {
+      method: "POST",
+      body: formData,
+      headers: { "Accept": "application/json" }
+    });
+
+    if (!resp.ok) throw new Error("求解リクエストに失敗しました");
+    const data = await resp.json();
+    if (data.job_id) {
+      startJobPolling(data.job_id);
+    } else {
+      window.location.reload();
+    }
+  } catch (err) {
+    alert("エラー: " + err.message);
+    btn.disabled = false;
+    btnText.textContent = "全月再生成";
+    icon.textContent = "⚡";
+  }
+}
+
+// 求解進捗ポーリングの開始
+function startJobPolling(jobId) {
+  currentJobId = jobId;
+  const panel = document.getElementById("realtimeProgressPanel");
+  if (panel) panel.classList.remove("hidden");
+
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch(`/shifts/solve-jobs/${jobId}/progress`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      updateProgressUI(data);
+
+      if (data.progress_percent >= 100 || ["succeeded", "failed", "cancelled", "SUCCEEDED", "FAILED", "CANCELLED"].includes(data.status)) {
+        clearInterval(pollTimer);
+        setTimeout(() => {
+          // 完了時は URL から job_id を消してリロード
+          window.location.href = `/shifts/plans/${PLAN_ID}`;
+        }, 1200);
+      }
+    } catch (e) {
+      console.error("Progress polling error", e);
+    }
+  }, 1000);
+}
+
+// 進捗 UI の更新
+function updateProgressUI(data) {
+  const pct = Math.min(100, Math.max(0, data.progress_percent || 0));
+  const fill = document.getElementById("progressBarFill");
+  const pctText = document.getElementById("progressPctText");
+  const stageBadge = document.getElementById("currentStageBadge");
+  const detailText = document.getElementById("progressDetailText");
+  const dayText = document.getElementById("currentDayText");
+  const scoreText = document.getElementById("interimScoreText");
+
+  if (fill) fill.style.width = pct + "%";
+  if (pctText) pctText.textContent = pct + "%";
+  if (stageBadge) stageBadge.textContent = data.stage || "CALCULATING";
+
+  if (data.current_day && dayText) dayText.textContent = data.current_day;
+
+  if (data.hard_score !== undefined && scoreText) {
+    scoreText.textContent = `Hard: ${data.hard_score} / Soft: ${Math.round(data.soft_score || 0)}`;
+  }
+
+  if (detailText) {
+    if (data.stage === "STAGE_1_PATTERNS") detailText.textContent = "月間日次パターンの大域探索を実行しています...";
+    else if (data.stage === "STAGE_1_DONE") detailText.textContent = "Stage 1 パターン割当が完了しました。Stage 2 詳細配置へ移行します。";
+    else if (data.stage === "STAGE_2_SLOTS") detailText.textContent = `30分スロット詳細配置 & 休憩スタッガー最適化中 (${data.completed_days || 0} 日完了)...`;
+    else if (data.stage === "STAGE_2_LOCAL_SEARCH") detailText.textContent = "局所探索 (Ruin & Recreate) により実行可能解を高速修復中...";
+    else if (data.stage === "DONE") detailText.textContent = "最適化計算が完了しました！画面を更新します。";
+  }
+}
+
+// 実行中ジョブの中断キャンセル
+async function cancelCurrentJob() {
+  if (!currentJobId) return;
+  if (!confirm("現在のソルバー計算を中断しますか？直前までの暫定最良解が保存されます。")) return;
+
+  const btn = document.getElementById("cancelJobBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "中断処理中...";
+  }
+
+  try {
+    const resp = await fetch(`/shifts/solve-jobs/${currentJobId}/cancel`, { method: "POST" });
+    if (resp.ok) {
+      alert("計算を中断しました。暫定解を読み込みます。");
+      window.location.href = `/shifts/plans/${PLAN_ID}`;
+    }
+  } catch (e) {
+    alert("キャンセル要求に失敗しました: " + e.message);
+  }
+}
+
+// スコア内訳の表示切替
+function toggleScoreBreakdown() {
+  const area = document.getElementById("scoreBreakdownArea");
+  if (area) area.classList.toggle("hidden");
+}
+
+// 突発欠勤モーダル制御
+function openReplanModal() {
+  document.getElementById("replanModal").classList.remove("hidden");
+}
+function closeReplanModal() {
+  document.getElementById("replanModal").classList.add("hidden");
+}
+
+async function submitRealtimeReplan() {
+  const targetDate = document.getElementById("replanTargetDate").value;
+  const checkboxes = document.querySelectorAll('input[name="absentStaff"]:checked');
+  const absentIds = Array.from(checkboxes).map(cb => cb.value);
+
+  if (!targetDate) {
+    alert("対象日を選択してください");
+    return;
+  }
+  if (absentIds.length === 0) {
+    alert("欠勤する職員を1名以上選択してください");
+    return;
+  }
+
+  const btn = document.getElementById("executeReplanBtn");
+  btn.disabled = true;
+  btn.textContent = "再計画中 (約2秒)...";
+
+  try {
+    const resp = await fetch(`/shifts/plans/${PLAN_ID}/realtime-replan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_dates: [targetDate],
+        absent_staff_user_ids: absentIds,
+        time_limit_sec: 5,
+        direct_apply: false
+      })
+    });
+
+    if (!resp.ok) throw new Error("リアルタイム再計画に失敗しました");
+    const data = await resp.json();
+    closeReplanModal();
+    alert("再計画が完了しました！差分レビューパネルで変更内容を確認してください。");
+    window.location.reload();
+  } catch (e) {
+    alert("エラー: " + e.message);
+    btn.disabled = false;
+    btn.textContent = "再計画を実行 (約2秒)";
+  }
+}
+
+// 園別制約重み設定モーダル制御
+let loadedWeights = [];
+
+async function openWeightsModal() {
+  const modal = document.getElementById("weightsModal");
+  modal.classList.remove("hidden");
+  const loading = document.getElementById("weightsLoadingArea");
+  const listArea = document.getElementById("weightsListArea");
+
+  loading.classList.remove("hidden");
+  listArea.classList.add("hidden");
+
+  try {
+    const resp = await fetch(`/shifts/facilities/${FACILITY_ID}/constraint-weights`);
+    if (!resp.ok) throw new Error("制約設定の取得に失敗しました");
+    loadedWeights = await resp.json();
+    renderWeightsUI(loadedWeights);
+    loading.classList.add("hidden");
+    listArea.classList.remove("hidden");
+  } catch (e) {
+    loading.textContent = "読み込みエラー: " + e.message;
+  }
+}
+
+function closeWeightsModal() {
+  document.getElementById("weightsModal").classList.add("hidden");
+}
+
+function renderWeightsUI(weights) {
+  const listArea = document.getElementById("weightsListArea");
+  listArea.innerHTML = "";
+
+  weights.forEach((w, idx) => {
+    const row = document.createElement("div");
+    row.className = "p-3 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2";
+
+    const isHard = w.is_hard;
+    row.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-slate-800">${w.name}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.2 rounded ${isHard ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'}">
+              ${isHard ? 'Hard' : 'Soft'}
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-0.5">${w.description}</p>
+        </div>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="w_enabled_${idx}" ${w.is_enabled ? 'checked' : ''} ${isHard ? 'disabled' : ''} class="rounded border-slate-300 text-indigo-600">
+          <span class="text-[11px] font-medium text-slate-600">有効</span>
+        </label>
+      </div>
+      <div class="flex items-center gap-3 pt-1">
+        <span class="text-[11px] text-slate-400">重み倍率:</span>
+        <input type="range" id="w_slider_${idx}" min="0.1" max="${isHard ? 10000 : 100}" step="0.5" value="${w.current_weight}" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer" oninput="document.getElementById('w_val_${idx}').value = this.value">
+        <input type="number" id="w_val_${idx}" value="${w.current_weight}" class="w-20 px-2 py-0.5 border border-slate-300 rounded text-right font-mono text-xs" oninput="document.getElementById('w_slider_${idx}').value = this.value">
+      </div>
+    `;
+    listArea.appendChild(row);
+  });
+}
+
+async function saveConstraintWeights() {
+  const btn = document.getElementById("saveWeightsBtn");
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+
+  const updates = loadedWeights.map((w, idx) => {
+    const chk = document.getElementById(`w_enabled_${idx}`);
+    const valInput = document.getElementById(`w_val_${idx}`);
+    return {
+      constraint_id: w.constraint_id,
+      is_enabled: chk ? chk.checked : true,
+      weight: valInput ? parseFloat(valInput.value) : w.default_weight
+    };
+  });
+
+  try {
+    const resp = await fetch(`/shifts/facilities/${FACILITY_ID}/constraint-weights`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weights: updates })
+    });
+    if (!resp.ok) throw new Error("設定の保存に失敗しました");
+    alert("制約重み設定を更新しました！次回の再生成から適用されます。");
+    closeWeightsModal();
+  } catch (e) {
+    alert("保存失敗: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "設定を保存";
+  }
+}
+</script>
 {% endblock %}

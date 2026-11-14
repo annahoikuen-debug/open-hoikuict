@@ -353,6 +353,12 @@ def _run_solve_sync(
             setting_id=facility_settings_row.id or 1,
         )
 
+        # 施設別制約重みの構築 (Timefold: Runtime Constraint Weights)
+        from .weights import build_runtime_objective_weights
+        runtime_weights = build_runtime_objective_weights(
+            session, facility_id=facility_settings_row.id or 1
+        )
+
         # 階層的月次求解コンテキスト構築
         context = MonthlySolveContext(
             target_month=target_month,
@@ -368,6 +374,7 @@ def _run_solve_sync(
             monthly_holiday_target=monthly_holiday_target,
             children=day_plans,
             standard=staffing_standard,
+            weights=runtime_weights,
         )
 
         # 月次一括階層的求解の実行
@@ -383,6 +390,7 @@ def _run_solve_sync(
                 progress_callback=_on_solve_progress,
                 cancellation_token=token,
                 parallel_workers=min(4, os.cpu_count() or 1),
+                weights=runtime_weights,
             )
         except Exception as exc:  # noqa: BLE001
             job.status = SolveJobStatus.FAILED

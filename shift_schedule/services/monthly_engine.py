@@ -33,12 +33,14 @@ def _solve_stage1_daily_patterns(
     context: Any,
     time_limit_sec: int = 30,
     solver_name: str | None = None,
+    weights: Any | None = None,
 ) -> dict[tuple[str, dt.date], str]:
     """Stage 1: 日単位パターン割り当て（shiftai.monthly へ委譲）。"""
     return shiftai_solve_stage1(
         context=context,
         time_limit_sec=time_limit_sec,
         solver_name=solver_name,
+        weights=weights,
     )
 
 
@@ -50,6 +52,7 @@ def solve_monthly_hierarchical(
     progress_callback: Any = None,
     cancellation_token: Any = None,
     parallel_workers: int = 1,
+    weights: Any | None = None,
 ) -> SolveResult:
     """2段階階層的アプローチにより月次一括シフトを求解する（shiftai.monthly へ委譲）。"""
     return shiftai_solve_monthly(
@@ -59,4 +62,5 @@ def solve_monthly_hierarchical(
         progress_callback=progress_callback,
         cancellation_token=cancellation_token,
         parallel_workers=parallel_workers,
+        weights=weights,
     )

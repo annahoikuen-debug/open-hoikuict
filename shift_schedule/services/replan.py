@@ -15,18 +15,29 @@ from typing import Any
 from sqlmodel import Session, select
 
 from database import engine
-from models import Child, User
+from models import (
+    AttendanceRecord,
+    AttendanceVerification,
+    Child,
+    ChildCareCertification,
+    ChildStatus,
+    User,
+)
 from shift_schedule.contracts import SolveJobStatus
 from shift_schedule.db_models import (
+    ChildPlannedArrivalDefaults,
     ShiftFacilityConstraintWeights,
     ShiftPlanCells,
+    ShiftPlanningAudits,
     ShiftPlanProposals,
     ShiftPlans,
     ShiftSolveJobs,
+    StaffContracts,
 )
 from shift_schedule.store import ShiftRepository, ShiftRepositoryDep
 from time_utils import utc_now
 from shift_schedule.services.diff_review import apply_proposal, create_proposal
+from shift_schedule.services.weights import build_runtime_objective_weights
 from shift_schedule.bridge import (
     build_child_plan,
     build_facility_settings,
@@ -50,6 +61,7 @@ from vendor.nushift.shiftai.domain import (
     SolveStatus,
     to_minutes,
 )
+from vendor.nushift.shiftai.local_search import ruin_and_recreate
 from vendor.nushift.shiftai.monthly import MonthlySolveContext
 from vendor.nushift.shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 
@@ -82,6 +94,15 @@ def execute_realtime_replan(
         time_limit_sec=time_limit_sec,
     )
     session.add(job)
+
+    # 監査ログを記録
+    audit = ShiftPlanningAudits(
+        actor_user_id=requested_by_user_id,
+        target_plan_id=plan_id,
+        action="REALTIME_REPLAN_STARTED",
+        summary=f"突発欠勤再計画を開始 (欠勤 {len(absent_staff_set)}名, 日数 {len(target_dates)}日)",
+    )
+    session.add(audit)
     session.commit()
     session.refresh(job)
 
@@ -126,6 +147,9 @@ def execute_realtime_replan(
     staffing_standard = build_standard(plan.staffing_standard_key, overrides={})
 
     # 職員・契約・希望
+    min_target_date = min(target_dates)
+    max_target_date = max(target_dates)
+
     users = session.exec(select(User)).all()
     placeable_staff = []
     day_preferences = {}
@@ -135,17 +159,100 @@ def execute_realtime_replan(
             placeable_staff.append(sm)
             day_preferences[str(u.id)] = build_staff_preferences(session, u)
 
+    # 職員契約
+    all_contracts = session.exec(
+        select(StaffContracts).where(
+            StaffContracts.effective_from <= max_target_date,
+            (StaffContracts.effective_to.is_(None)) | (StaffContracts.effective_to >= min_target_date),
+        )
+    ).all()
+    contracts_by_user = {str(c.staff_user_id): c for c in all_contracts}
+
     # パターン
     facility_setting_id = facility_settings_row.id if facility_settings_row else 1
     duty_patterns = get_active_duty_patterns(session, setting_id=facility_setting_id)
     shiftai_patterns = to_shiftai_patterns(duty_patterns) if duty_patterns else default_patterns()
 
-    # 園児予定
-    children = session.exec(select(Child)).all()
+    # 園児予定（本番データパイプライン完全準拠）
+    candidate_children = session.exec(
+        select(Child).where(
+            Child.status == ChildStatus.enrolled,
+            Child.enrollment_date <= max_target_date,
+            (Child.withdrawal_date.is_(None)) | (Child.withdrawal_date >= min_target_date),
+        )
+    ).all()
+
+    att_records = session.exec(
+        select(AttendanceRecord).where(AttendanceRecord.attendance_date.in_(list(target_dates)))
+    ).all()
+    att_map: dict[tuple[int, date], AttendanceRecord] = {
+        (ar.child_id, ar.attendance_date): ar for ar in att_records if ar.child_id is not None
+    }
+
+    verif_records = session.exec(
+        select(AttendanceVerification).where(AttendanceVerification.target_date.in_(list(target_dates)))
+    ).all()
+    verif_map: dict[tuple[int, date], AttendanceVerification] = {
+        (vr.child_id, vr.target_date): vr for vr in verif_records if vr.child_id is not None
+    }
+
+    all_defaults = session.exec(
+        select(ChildPlannedArrivalDefaults).where(
+            ChildPlannedArrivalDefaults.effective_from <= max_target_date,
+            (ChildPlannedArrivalDefaults.effective_to.is_(None))
+            | (ChildPlannedArrivalDefaults.effective_to >= min_target_date),
+        )
+    ).all()
+    defaults_by_child: dict[int, list[ChildPlannedArrivalDefaults]] = {}
+    for d in all_defaults:
+        defaults_by_child.setdefault(d.child_id, []).append(d)
+
+    all_certs = session.exec(
+        select(ChildCareCertification).where(
+            ChildCareCertification.is_active == True,  # noqa: E712
+            ChildCareCertification.effective_from <= max_target_date,
+        ).order_by(ChildCareCertification.effective_from.desc(), ChildCareCertification.id.desc())
+    ).all()
+    certs_by_child: dict[int, list[ChildCareCertification]] = {}
+    for c in all_certs:
+        certs_by_child.setdefault(c.child_id, []).append(c)
+
     day_plans = []
-    for d in target_dates:
-        for c in children:
-            cp = build_child_plan(session, c, d, planned_arrival_default=None)
+    for day_date in target_dates:
+        active_kids = [
+            c
+            for c in candidate_children
+            if c.enrollment_date <= day_date
+            and (c.withdrawal_date is None or c.withdrawal_date > day_date)
+        ]
+        for child in active_kids:
+            attendance_record = att_map.get((child.id, day_date)) if child.id else None
+            planned_default = None
+            child_defs = defaults_by_child.get(child.id, []) if child.id else []
+            for cd in child_defs:
+                if cd.effective_from <= day_date and (
+                    cd.effective_to is None or cd.effective_to >= day_date
+                ):
+                    planned_default = cd
+                    break
+            effective_cert = None
+            child_certs = certs_by_child.get(child.id, []) if child.id else []
+            for cc in child_certs:
+                if cc.effective_from <= day_date and (
+                    cc.effective_to is None or cc.effective_to >= day_date
+                ):
+                    effective_cert = cc
+                    break
+
+            cp = build_child_plan(
+                session,
+                child,
+                day_date,
+                attendance_record=attendance_record,
+                planned_arrival_default=planned_default,
+                certification=effective_cert,
+                verification=verif_map.get((child.id, day_date)),
+            )
             if cp is not None:
                 day_plans.append(cp)
 
@@ -153,13 +260,15 @@ def execute_realtime_replan(
         children=day_plans,
         days=list(target_dates),
         standard=staffing_standard,
-        day_open=dt.time(7, 30),
-        day_close=dt.time(19, 30),
+        day_open=facility_settings.day_open if facility_settings else dt.time(7, 30),
+        day_close=facility_settings.day_close if facility_settings else dt.time(19, 30),
     )
+
+    # 園別制約重みの注入 (Timefold: Runtime Constraint Weights)
+    weights = build_runtime_objective_weights(session, facility_id=facility_setting_id)
 
     # 対象日スライス求解の実行
     solver_name = "HiGHS" if is_highs_available() else "PULP_CBC_CMD"
-    weights = ObjectiveWeights(split_duty_penalty=5000.0)
 
     sub_res = solve_shift(
         day_plans,
@@ -188,6 +297,25 @@ def execute_realtime_replan(
             settings=facility_settings,
         )
 
+    # Timefold 思想: 解なし・タイムアウト時の局所探索自動フォールバック
+    if sub_res.status not in (SolveStatus.OPTIMAL, SolveStatus.FEASIBLE) or not sub_res.shift_days:
+        try:
+            ls_res = ruin_and_recreate(
+                initial_result=sub_res,
+                requirements=requirements,
+                staff=placeable_staff,
+                preferences=day_preferences,
+                standard=staffing_standard,
+                settings=facility_settings,
+                fixed_assignments=fixed_assignments,
+                patterns=shiftai_patterns,
+                weights=weights,
+            )
+            if ls_res.shift_days:
+                sub_res = ls_res
+        except Exception as e:
+            sub_res.messages.append(f"Local search fallback error: {e}")
+
     # 求解結果をセルに変換
     proposal_cells: list[ShiftPlanCells] = []
     # まず対象外の既存セルを引き継ぎ
@@ -199,12 +327,18 @@ def execute_realtime_replan(
     for sd in getattr(sub_res, "shift_days", []):
         for sid_raw, slot_dict in sd.assignments.items():
             sid_str = str(sid_raw)
+            try:
+                from uuid import UUID
+                sid_clean = UUID(sid_str).hex
+            except (ValueError, AttributeError):
+                sid_clean = sid_str
+
             for slot_label, cell_state in slot_dict.items():
                 st_val = getattr(cell_state, "name", str(cell_state))
                 proposal_cells.append(
                     ShiftPlanCells(
                         plan_id=plan_id,
-                        staff_user_id=sid_str,
+                        staff_user_id=sid_clean,
                         target_date=sd.day,
                         slot_label=slot_label,
                         cell_state=st_val,
@@ -239,6 +373,15 @@ def execute_realtime_replan(
         "score": score_dict,
     }, ensure_ascii=False)
     session.add(job)
+
+    # 監査ログを記録
+    audit = ShiftPlanningAudits(
+        actor_user_id=requested_by_user_id,
+        target_plan_id=plan_id,
+        action="REALTIME_REPLAN_COMPLETED",
+        summary=f"突発欠勤再計画を完了 (欠勤 {len(absent_staff_set)}名, 日数 {len(target_dates)}日)",
+    )
+    session.add(audit)
     session.commit()
 
     applied_count = 0
