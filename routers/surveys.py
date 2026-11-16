@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
@@ -696,3 +696,18 @@ def update_result_viewers(survey_id: int, user_ids: list[str] = Form([]),
         session.add(SurveyResultViewer(survey_id=survey_id, user_id=user_id, granted_by=current_user.name))
     session.commit()
     return RedirectResponse(f"/surveys/{survey_id}/edit", status_code=303)
+
+
+@router.post("/trigger-reminders")
+def trigger_survey_reminders(
+    hours: int = Query(default=24, ge=1, le=168),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """締切間近アンケートのリマインダー送信を実行する (P6-2)。"""
+    if not getattr(current_user, "can_edit", False):
+        raise HTTPException(403, "編集権限が必要です")
+    from notification_hub import send_survey_deadline_reminders
+    notifications = send_survey_deadline_reminders(session, threshold_hours=hours)
+    session.commit()
+    return {"status": "ok", "sent_count": len(notifications)}

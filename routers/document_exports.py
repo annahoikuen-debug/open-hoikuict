@@ -31,6 +31,7 @@ EXPORT_TYPE_LABELS = {
     "attendance": "出勤表",
     "zengin": "Zengin",
     "monthly_plan": "月案",
+    "daily_plan": "日案",
     "billing": "請求明細",
     "nushift": "NuShiftデータ",
     "monthly_class_batch": "複数クラス月案一括(ZIP)",
@@ -192,6 +193,20 @@ def get_document_preview(
             {"name": "養護（生命・情緒）", "content": "手洗い・うがいを丁寧に行い、衣服の調節を自分で試みる。"},
             {"name": "教育（5領域）", "content": "散歩先で拾った自然物を使って造形遊びを行い、形や色の違いに気づく機会を設ける。"},
             {"name": "保護者・地域支援", "content": "感染症予防の呼びかけを行い、家庭での健康管理についての情報共有を図る。"},
+        ]
+
+    elif export_type == "daily_plan":
+        preview_data["title"] = "デ イ リ ー 指 導 計 画（日 案）"
+        preview_data["sections"] = [
+            {"label": "対象クラス", "value": "3歳児 さくら組"},
+            {"label": "対象日", "value": f"{month_str}-16 (月)"},
+            {"label": "作成担当者", "value": current_user.name or "担任保育士"},
+        ]
+        preview_data["fields"] = [
+            {"name": "本日のねらい", "content": "秋の自然物に親しみながら、友達と一緒に集めた落ち葉や木の実を使って見立て遊びを楽しむ。"},
+            {"name": "健康・安全への配慮", "content": "気温の変化に合わせた衣服の調整を行い、外遊び後の手洗い・うがいを丁寧に行う。"},
+            {"name": "1日の主な活動", "content": "近隣公園への散歩（落ち葉拾い）、見立て遊び、給食指導"},
+            {"name": "評価・反省", "content": "公園での落ち葉集めはどの子も意欲的に参加し、見立て遊びへ発展させることができた。"},
         ]
 
     elif export_type == "billing":
@@ -386,6 +401,91 @@ def download_monthly_class_batch(
         media_type="application/zip",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}",
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+@router.get("/download-daily-plan", response_class=Response)
+def download_daily_plan_pdf_route(
+    date_str: Optional[str] = Query(default=None, alias="date"),
+    classroom_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """日案のA4縦PDF帳票を出力・ダウンロードする (P2-1)。"""
+    require_document_exporter(session, current_user)
+    from plan_docs.services.daily_export_layout import render_daily_plan_pdf
+
+    target_date_val = date_str or utc_now().strftime("%Y-%m-%d")
+    cls_name = "さくら組"
+    if classroom_id:
+        cls = session.exec(select(Classroom).where(Classroom.id == classroom_id)).first()
+        if cls:
+            cls_name = cls.name
+
+    sample_plan = {
+        "title": "デイリー指導計画（日案）",
+        "facility_name": "あんな保育園",
+        "target_date": target_date_val,
+        "weather": "晴",
+        "classroom_name": cls_name,
+        "age_class": "3歳児",
+        "owner_name": current_user.name or "担任",
+        "daily_aims": "秋の自然物に親しみながら、友達と一緒に集めた落ち葉や木の実を使って見立て遊びを楽しむ。",
+        "daily_health_safety": "気温の変化に合わせた衣服の調整を行い、外遊び後の手洗い・うがいを丁寧に行う。",
+        "timeline_rows": [
+            {
+                "time_label": "9:00〜9:30",
+                "child_state": "順次登園。身の回りの整理（タオル掛け・シール貼り）を自分で進める。",
+                "support": "笑顔で受け入れ、視診を行い保護者からの引き継ぎ事項を確認する。",
+                "considerations": "健康観察シート記入、室温・湿度管理",
+            },
+            {
+                "time_label": "10:00〜11:15",
+                "child_state": "南児童公園へ散歩。様々な形の落ち葉やどんぐりを友達と見せ合い、袋に集める。",
+                "support": "危険箇所には近寄らないよう見守り、発見した自然物の名前を一緒に調べる。",
+                "considerations": "道路横断時の安全確認、人数確認徹底",
+            },
+            {
+                "time_label": "11:30〜12:30",
+                "child_state": "手洗い・うがいをして給食準備。友達と楽しく食事をする。",
+                "support": "正しい手洗いを援助する。楽しい雰囲気で食事が進むよう声がけする。",
+                "considerations": "アレルギー誤配膳防止の指差し確認",
+            },
+            {
+                "time_label": "12:45〜14:45",
+                "child_state": "着替え、絵本の読み聞かせを聞きながら入眠する。",
+                "support": "背中をやさしくトントンし、安心して眠れるよう配慮する。",
+                "considerations": "午睡チェック（呼吸・顔色）5分間隔記録",
+            },
+        ],
+        "reflection": "公園での落ち葉集めはどの子も意欲的に参加し、見立て遊びへ発展させることができた。道路歩行の際に列が崩れそうになったため、明日はペアの友達と手をつなぎ続ける意識付けを徹底したい。",
+    }
+
+    pdf_bytes_data = render_daily_plan_pdf(sample_plan)
+
+    log_export(
+        session,
+        export_type="daily_plan",
+        export_format="pdf",
+        target_month=target_date_val[:7],
+        exported_by_user_id=getattr(current_user, "user_id", getattr(current_user, "id", None)),
+        exported_by_name=getattr(current_user, "name", None),
+        record_count=1,
+        file_size_bytes=len(pdf_bytes_data),
+        status="success",
+    )
+
+    filename = f"daily_plan_{cls_name}_{target_date_val}.pdf"
+    encoded_filename = quote(filename.encode("utf-8"))
+
+    return Response(
+        content=pdf_bytes_data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
         },

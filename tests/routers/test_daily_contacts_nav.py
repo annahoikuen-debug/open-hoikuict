@@ -110,3 +110,52 @@ class DailyContactsNavigationTests(unittest.TestCase):
         self.assertIn(self.child1_name, resp2.text)
         # child2 は末尾なので次の園児リンクは非アクティブ
         self.assertIn("次の園児", resp2.text)
+
+    def test_copy_previous_day_reply_data_rendered(self):
+        """前日の返信が存在する場合、「前日の返信をコピー」ボタンとデータが提供されること (P4-4)。"""
+        prev_day = date(2026, 11, 15)
+        with Session(engine) as session:
+            prev_reply = DailyContactReply(
+                child_id=self.child2_id,
+                target_date=prev_day,
+                message="昨日は砂場遊びを楽しんでいました。",
+                field_values={"nap_time": "12:30-14:30", "appetite": "完食"},
+                published_at=date(2026, 11, 15),
+            )
+            session.add(prev_reply)
+            session.commit()
+
+        resp = self.client.get(
+            f"/daily-contacts/{self.child2_id}?date={self.day.isoformat()}&classroom_id={self.classroom_id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("copy-previous-reply-btn", resp.text)
+        self.assertIn("前日の返信をコピー", resp.text)
+        self.assertIn("11/15分", resp.text)
+        self.assertIn("previous-reply-json", resp.text)
+
+        # template タグ内の JSON がパース可能で、前日のメッセージと値が含まれていること
+        import json, re
+        match = re.search(r'<template id="previous-reply-json">(.*?)</template>', resp.text)
+        self.assertIsNotNone(match)
+        data = json.loads(match.group(1))
+        self.assertEqual(data["message"], "昨日は砂場遊びを楽しんでいました。")
+        self.assertEqual(data["date_label"], "11/15")
+        self.assertEqual(data["values"].get("appetite"), "完食")
+        self.assertEqual(data["values"].get("nap_time"), "12:30-14:30")
+
+    def test_optimistic_lock_conflict_returns_409(self):
+        """古い revision による返信保存要求に対して HTTP 409 Conflict が返ること (P4-2)。"""
+        resp = self.client.post(
+            f"/daily-contacts/{self.child1_id}/reply",
+            data={
+                "date": self.day.isoformat(),
+                "revision": "outdated_revision_20261116000000",
+                "action": "draft",
+                "reply_message": "上書きテスト",
+            },
+            headers={"X-Reply-Request": "1"},
+        )
+        self.assertEqual(resp.status_code, 409)
+        json_data = resp.json()
+        self.assertIn("別の職員が更新しています", json_data.get("detail", ""))

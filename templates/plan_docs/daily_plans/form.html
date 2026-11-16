@@ -203,6 +203,14 @@
 
     <div class="form-actions">
       <a class="button button--ghost" href="/plans/">戻る</a>
+      <a
+        class="button button--secondary"
+        href="/document-exports/download-daily-plan?date={{ form_values.get('target_date', '') }}"
+        target="_blank"
+        rel="noopener"
+      >
+        📄 帳票PDF出力 (A4縦)
+      </a>
       <button class="button button--primary" type="submit" {% if not user.can_edit %}disabled{% endif %}>下書きを保存</button>
     </div>
   </form>

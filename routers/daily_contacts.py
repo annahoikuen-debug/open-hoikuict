@@ -274,6 +274,23 @@ def _detail_response(request, session, current_user, child_id, day, classroom_id
 
     unreplied_count = sum(1 for c in sorted_peers if c.id not in replied_pids)
 
+    # 直近の過去日の返信を取得（P4-4: 前日の返信をコピー）
+    previous_reply = session.exec(
+        select(DailyContactReply)
+        .where(
+            DailyContactReply.child_id == child_id,
+            DailyContactReply.target_date < day,
+        )
+        .order_by(DailyContactReply.target_date.desc())
+    ).first()
+    previous_reply_data = None
+    if previous_reply:
+        previous_reply_data = {
+            "date_label": previous_reply.target_date.strftime("%m/%d"),
+            "values": reply_values_for_form(previous_reply),
+            "message": previous_reply.message or "",
+        }
+
     prev_child_url = f"/daily-contacts/{prev_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if prev_child else None
     next_child_url = f"/daily-contacts/{next_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if next_child else None
     next_unreplied_url = f"/daily-contacts/{next_unreplied_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if next_unreplied_child else None
@@ -297,6 +314,7 @@ def _detail_response(request, session, current_user, child_id, day, classroom_id
         "child": child, "entry": entry, "reply": reply, "reply_fields": reply_field_definitions(),
         "reply_form_values": attempted if attempted is not None else reply_values_for_form(reply),
         "reply_message_value": attempted.get("message", "") if attempted is not None else message,
+        "previous_reply_data": previous_reply_data,
         "reply_items": [{"label": field.label, "value": reply_values_for_form(reply).get(field.key)}
                         for field in reply_field_definitions() if reply_values_for_form(reply).get(field.key)],
         "notice": notice, "error": error,

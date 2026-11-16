@@ -317,3 +317,91 @@ def notify_families(
             force_push=force_push,
         ))
     return created
+
+
+def send_survey_deadline_reminders(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    threshold_hours: int = 24,
+) -> list[ParentNotification]:
+    """締切間近（デフォルト24時間以内）の保護者向け未回答アンケートに対し、リマインダー通知を送信する (P6-2)。
+
+    - 同一アンケートのリマインダーは各保護者につき1回のみ送信（source_type="survey_reminder" による二重送信防止）
+    - 既に回答済みの保護者には送信しない
+    - 保護者の通知設定（survey_published_enabled）は既存の Push 抑制ロジックにより尊重される
+    """
+    from datetime import timedelta
+    from time_utils import ensure_utc, ensure_utc_from_local, utc_now
+    from models import ParentAccount, ParentAccountStatus, Survey, SurveyAudienceType, SurveyStatus
+    from survey_service import survey_matches_parent_targets
+    from routers.parent_portal import _parent_survey_has_unanswered_scope
+
+    current_time = ensure_utc(now or utc_now())
+    upper_bound = current_time + timedelta(hours=threshold_hours)
+
+    surveys = session.exec(
+        select(Survey)
+        .where(
+            Survey.audience_type == SurveyAudienceType.parent,
+            Survey.status == SurveyStatus.published,
+        )
+    ).all()
+
+    target_surveys = [
+        s for s in surveys
+        if s.closes_at and current_time <= ensure_utc_from_local(s.closes_at) <= upper_bound
+    ]
+
+    if not target_surveys:
+        return []
+
+    active_parents = session.exec(
+        select(ParentAccount)
+        .where(ParentAccount.status == ParentAccountStatus.active)
+    ).all()
+
+    created_notifications: list[ParentNotification] = []
+
+    for survey in target_surveys:
+        close_dt = ensure_utc_from_local(survey.closes_at) if survey.closes_at else None
+        close_label = f"（{close_dt.strftime('%m/%d %H:%M')}まで）" if close_dt else ""
+        title = f"【締切間近】{survey.title} ご回答のお願い"
+        body = f"アンケート「{survey.title}」の回答期限が迫っています{close_label}。お早めにご回答をお願いいたします。"
+        action_url = f"/parent-portal/surveys/{survey.id}"
+
+        for parent in active_parents:
+            if not parent.id:
+                continue
+            # 対象アンケートの対象保護者かチェック
+            if not survey_matches_parent_targets(survey, parent):
+                continue
+            # 未回答かチェック
+            if not _parent_survey_has_unanswered_scope(session, survey, parent):
+                continue
+            # 既にリマインダー送信済みかチェック
+            if _notification_exists(
+                session,
+                parent_account_id=parent.id,
+                kind=ParentNotificationKind.survey_published,
+                source_type="survey_reminder",
+                source_id=str(survey.id),
+            ):
+                continue
+
+            notif = _create_notification(
+                session,
+                parent_account_id=parent.id,
+                child_id=None,
+                kind=ParentNotificationKind.survey_published,
+                title=title,
+                body=body,
+                action_url=action_url,
+                source_type="survey_reminder",
+                source_id=str(survey.id),
+                created_by_name="システムリマインダー",
+                created_at=current_time,
+            )
+            created_notifications.append(notif)
+
+    return created_notifications
