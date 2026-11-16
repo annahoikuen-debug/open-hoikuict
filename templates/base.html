@@ -1315,6 +1315,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
 
   {% if not is_parent_portal %}
   {% include "shared/shortcut_help.html" %}
+  {% include "shared/template_picker.html" %}
   <script src="/static/js/keyboard-shortcuts.js" defer></script>
   <script src="/static/js/onboarding-tour.js" defer></script>
   {% endif %}

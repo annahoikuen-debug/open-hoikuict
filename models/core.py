@@ -3411,3 +3411,17 @@ class DocumentExportLog(SQLModel, table=True):
     error_message: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now)
 
+
+class MessageTemplate(SQLModel, table=True):
+    __tablename__ = "message_templates"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    category: str = Field(default="daily_contact_reply", index=True)  # daily_contact_reply, notice, generic
+    title: str
+    content: str
+    display_order: int = Field(default=0)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+

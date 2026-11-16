@@ -72,6 +72,61 @@
     </div>
 </div>
 
+<!-- 複数クラス帳票一括出力 (ZIP) -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+    <div class="border-b border-slate-200 px-5 py-4 bg-slate-50 flex justify-between items-center">
+        <div>
+            <h2 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span>📦</span> 複数クラス帳票一括出力 (ZIP バッチ)
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">複数クラスの月次指導計画書（月案）を1操作でまとめてZIPアーカイブとして一括ダウンロードできます。</p>
+        </div>
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">ZIP一括ダウンロード</span>
+    </div>
+    <form id="batch-export-form" method="get" action="/document-exports/download/monthly-class-batch" class="p-5 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="batch-month" class="block text-xs font-bold text-slate-700 mb-1">対象月</label>
+                <input type="month" id="batch-month" name="month" class="w-full text-sm rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value="{{ current_month }}">
+            </div>
+            <div>
+                <label for="batch-type" class="block text-xs font-bold text-slate-700 mb-1">帳票種別</label>
+                <select id="batch-type" class="w-full text-sm rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="monthly_class_batch">月次指導計画書（月案一括 ZIP）</option>
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-bold text-slate-700">対象クラス選択（複数選択可）</label>
+                <div class="flex gap-2 text-xs">
+                    <button type="button" onclick="selectAllBatchClasses(true)" class="text-indigo-600 hover:underline">全選択</button>
+                    <span class="text-slate-300">|</span>
+                    <button type="button" onclick="selectAllBatchClasses(false)" class="text-slate-500 hover:underline">全解除</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                {% for classroom in classrooms %}
+                <label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer bg-white p-2 rounded border border-slate-200 hover:bg-slate-100">
+                    <input type="checkbox" name="classroom_ids" value="{{ classroom.id }}" checked class="batch-class-checkbox rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span>{{ classroom.name }}</span>
+                </label>
+                {% else %}
+                <div class="text-xs text-slate-500 col-span-full">登録されているクラスがありません。</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <span id="batch-selection-count" class="text-xs text-slate-500">選択中: {{ classrooms|length }} クラス</span>
+            <button type="submit" id="btn-batch-download" class="inline-flex items-center gap-1.5 px-4 py-2 border border-transparent shadow-sm text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <span>⬇️</span> まとめてZIPダウンロード
+            </button>
+        </div>
+    </form>
+</div>
+
 <!-- プレビューモーダル -->
 <div id="preview-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -181,6 +236,36 @@ async function openDocPreview(exportType) {
 function closeDocPreview() {
     document.getElementById('preview-modal').classList.add('hidden');
 }
+
+function selectAllBatchClasses(checked) {
+    document.querySelectorAll('.batch-class-checkbox').forEach(cb => cb.checked = checked);
+    updateBatchCount();
+}
+
+function updateBatchCount() {
+    const checked = document.querySelectorAll('.batch-class-checkbox:checked').length;
+    const el = document.getElementById('batch-selection-count');
+    if (el) {
+        el.textContent = `選択中: ${checked} クラス`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.batch-class-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBatchCount);
+    });
+
+    const form = document.getElementById('batch-export-form');
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            const checked = document.querySelectorAll('.batch-class-checkbox:checked').length;
+            if (checked === 0) {
+                e.preventDefault();
+                alert('出力対象のクラスを1つ以上選択してください。');
+            }
+        });
+    }
+});
 </script>
 
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

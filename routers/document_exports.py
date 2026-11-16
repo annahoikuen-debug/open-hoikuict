@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import io
+import re
+import zipfile
 from datetime import timedelta
 from typing import Any, Optional
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, func, select
 
 from auth import get_current_staff_user
 from database import get_session
-from models import DocumentExportLog
+from models import Child, Classroom, DocumentExportLog
+from plan_docs.contracts import DocumentType
+from plan_docs.db_models import PlanDocumentRow
+from plan_docs.services.monthly_export import pdf_bytes
+from plan_docs.services.monthly_export_layout import make_layout
+from plan_docs.services.monthly_library import new_sheet
 from staff_permissions import require_document_exporter
 from template_utils import create_templates
 from time_utils import utc_now
@@ -24,6 +33,7 @@ EXPORT_TYPE_LABELS = {
     "monthly_plan": "月案",
     "billing": "請求明細",
     "nushift": "NuShiftデータ",
+    "monthly_class_batch": "複数クラス月案一括(ZIP)",
 }
 
 EXPORT_FORMAT_LABELS = {
@@ -61,6 +71,8 @@ def document_export_dashboard(
     success_count = sum(1 for log in logs if log.status == "success")
     error_count = sum(1 for log in logs if log.status == "error")
 
+    classrooms = session.exec(select(Classroom).order_by(Classroom.display_order, Classroom.id)).all()
+
     return templates.TemplateResponse(
         request,
         "document_exports/dashboard.html",
@@ -71,6 +83,8 @@ def document_export_dashboard(
             "total_count": total_count,
             "success_count": success_count,
             "error_count": error_count,
+            "classrooms": classrooms,
+            "current_month": utc_now().strftime("%Y-%m"),
             "export_type_labels": EXPORT_TYPE_LABELS,
             "export_format_labels": EXPORT_FORMAT_LABELS,
             "status_labels": STATUS_LABELS,
@@ -247,3 +261,132 @@ def log_export(
     )
     session.add(log)
     session.commit()
+
+
+def _determine_classroom_age(session: Session, classroom: Classroom, target_month: str) -> int:
+    """クラスの対象年齢（0〜5歳）を判定する。"""
+    row = session.exec(
+        select(PlanDocumentRow).where(
+            PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN.value,
+            PlanDocumentRow.classroom_ref == classroom.name,
+            PlanDocumentRow.target_month == target_month,
+        )
+    ).first()
+    if row and row.monthly_sheet and "age" in row.monthly_sheet:
+        return int(row.monthly_sheet["age"])
+
+    match = re.search(r"([0-5])歳", classroom.name)
+    if match:
+        return int(match.group(1))
+
+    try:
+        from datetime import date
+        y, m = map(int, target_month.split("-"))
+        ref_date = date(y, m, 1)
+        children = session.exec(select(Child).where(Child.classroom_id == classroom.id)).all()
+        if children:
+            ages = []
+            for child in children:
+                if child.birth_date:
+                    age = ref_date.year - child.birth_date.year - (
+                        (ref_date.month, ref_date.day) < (child.birth_date.month, child.birth_date.day)
+                    )
+                    ages.append(max(0, min(5, age)))
+            if ages:
+                return max(set(ages), key=ages.count)
+    except Exception:
+        pass
+
+    return 3
+
+
+@router.get("/download/monthly-class-batch")
+def download_monthly_class_batch(
+    month: Optional[str] = Query(default=None),
+    classroom_ids: list[int] = Query(default=[]),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """選択された複数クラスの月案PDFを一括でZIPアーカイブ化してダウンロードする。"""
+    require_document_exporter(session, current_user)
+
+    if not classroom_ids:
+        raise HTTPException(status_code=400, detail="対象クラスを1つ以上選択してください")
+
+    month_str = month or utc_now().strftime("%Y-%m")
+    try:
+        y, m = map(int, month_str.split("-"))
+        if not (2000 <= y <= 2100 and 1 <= m <= 12):
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="対象月の形式が正しくありません (YYYY-MM)")
+
+    classrooms = session.exec(
+        select(Classroom).where(Classroom.id.in_(classroom_ids)).order_by(Classroom.display_order, Classroom.id)
+    ).all()
+    if not classrooms:
+        raise HTTPException(status_code=404, detail="指定されたクラスが見つかりません")
+
+    zip_buffer = io.BytesIO()
+    record_count = 0
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for classroom in classrooms:
+            row = session.exec(
+                select(PlanDocumentRow).where(
+                    PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN.value,
+                    PlanDocumentRow.classroom_ref == classroom.name,
+                    PlanDocumentRow.target_month == month_str,
+                )
+            ).first()
+
+            if row and row.monthly_sheet:
+                sheet = row.monthly_sheet
+                owner_name = row.owner_name or (getattr(current_user, "name", None) or "担任")
+                age = sheet.get("age", 3)
+            else:
+                age = _determine_classroom_age(session, classroom, month_str)
+                sheet = new_sheet(session, classroom, month_str, age)
+                owner_name = getattr(current_user, "name", None) or "担任"
+
+            context = {
+                "target_month": month_str,
+                "age": age,
+                "classroom_name": classroom.name,
+                "owner_name": owner_name,
+                "sheet": sheet,
+            }
+            layout = make_layout(context)
+            pdf_data = pdf_bytes(layout)
+
+            pdf_filename = f"{month_str}_{age}歳児_{classroom.name}_月案.pdf"
+            zf.writestr(pdf_filename, pdf_data)
+            record_count += 1
+
+    zip_bytes = zip_buffer.getvalue()
+    file_size = len(zip_bytes)
+
+    log_export(
+        session,
+        export_type="monthly_class_batch",
+        export_format="zip",
+        target_month=month_str,
+        exported_by_user_id=getattr(current_user, "user_id", getattr(current_user, "id", None)),
+        exported_by_name=getattr(current_user, "name", None),
+        record_count=record_count,
+        file_size_bytes=file_size,
+        status="success",
+    )
+
+    zip_filename = f"{month_str}_月案一括_{record_count}クラス.zip"
+    quoted_filename = quote(zip_filename)
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}",
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+        },
+    )
