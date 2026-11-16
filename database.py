@@ -106,6 +106,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("038_shift_contracts_36_and_variable", _migrate_shift_schedule_tables),
         ("039_unavailability_status", _migrate_shift_schedule_tables),
         ("040_pims_attendance_tables", _migrate_pims_attendance_tables),
+        ("041_shift_timefold_enhancements", _migrate_shift_timefold_enhancements),
     ]
 
 
@@ -1956,9 +1957,41 @@ def _migrate_shift_schedule_tables() -> None:
                         "ADD COLUMN status VARCHAR(16) DEFAULT 'approved' NOT NULL"
                     )
                 )
+            # shift_solve_jobs: priority 列
+            job_cols = _table_columns("shift_solve_jobs")
+            if job_cols and "priority" not in job_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE shift_solve_jobs "
+                        "ADD COLUMN priority INTEGER DEFAULT 2 NOT NULL"
+                    )
+                )
             conn.commit()
     except Exception as exc:
         _log_migration_skip("shift schedule tables", exc)
+
+
+def _migrate_shift_timefold_enhancements() -> None:
+    """Add priority column to shift_solve_jobs and ensure timefold tables exist."""
+    try:
+        from shift_schedule.db_models import ShiftFacilityConstraintWeights, ShiftPlanProposals
+        with engine.begin() as conn:
+            job_cols = _table_columns("shift_solve_jobs")
+            if job_cols and "priority" not in job_cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE shift_solve_jobs "
+                        "ADD COLUMN priority INTEGER DEFAULT 2 NOT NULL"
+                    )
+                )
+            ShiftFacilityConstraintWeights.metadata.create_all(
+                conn, tables=[
+                    ShiftFacilityConstraintWeights.__table__,
+                    ShiftPlanProposals.__table__,
+                ]
+            )
+    except Exception as exc:
+        _log_migration_skip("shift timefold enhancements", exc)
 
 
 def _migrate_document_export_permissions() -> None:

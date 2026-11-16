@@ -1262,6 +1262,11 @@ class SolveResult:
     objective_value: float | None = None
     violations: list[Violation] = field(default_factory=list)
     messages: list[str] = field(default_factory=list)
+    shortfall_diagnosis: list[dict] = field(default_factory=list)
+    """配置基準不足の診断データ（UI 表示用の構造化データ）。
+
+    各要素: {day, slot_label, need_all, sup_all, need_q, sup_q, short_all, short_q}
+    """
     stats: dict = field(default_factory=dict)
     """所要時間・変数数・制約数など。"""
     score: ShiftScore | None = None

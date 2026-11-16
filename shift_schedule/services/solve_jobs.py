@@ -50,6 +50,7 @@ from database import engine
 from models import AttendanceRecord, Child, User
 from time_utils import utc_now
 
+from shiftai.domain import CellState
 from .duty_patterns import (
     calculate_monthly_holiday_target,
     get_active_duty_patterns,
@@ -330,6 +331,21 @@ def _run_solve_sync(
         ).all()
         closed_days = [r.target_date for r in closed_rows if r.kind == "closed"]
         holiday_dates = [r.target_date for r in closed_rows if r.kind == "holiday"]
+
+        # 施設設定に休園日・祝日を反映
+        import dataclasses
+        facility_settings = dataclasses.replace(
+            facility_settings,
+            closed_days=frozenset(closed_days),
+            holiday_dates=frozenset(holiday_dates),
+        )
+
+        # 休園日の全職員スロットを OFF 固定として保護
+        slots_list = list(facility_settings_row.slots or []) if hasattr(facility_settings_row, "slots") else []
+        for cd in closed_days:
+            for s in day_staff:
+                for sl_label in [f"{h:02d}:{m:02d}-{(h + (m + 30)//60):02d}:{(m + 30)%60:02d}" for h in range(7, 20) for m in (0, 30)]:
+                    fixed_assignments[(s.staff_id, cd, sl_label)] = CellState.OFF
 
         # 全月間の必要人員テーブルを一括構築
         requirements = build_requirements(

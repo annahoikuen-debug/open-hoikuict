@@ -259,6 +259,8 @@ def build_staff_member(
 
 def build_facility_settings(
     settings: ShiftFacilitySettings | None,
+    closed_days: Any = None,
+    holiday_dates: Any = None,
 ) -> ShiftaiFacilitySettings | None:
     """DB 行から shiftai FacilitySettings を構築。"""
     if settings is None:
@@ -272,4 +274,6 @@ def build_facility_settings(
         day_close=close_t,
         granularity_min=settings.granularity_min,
         capacity=settings.capacity,
+        closed_days=frozenset(closed_days or []),
+        holiday_dates=frozenset(holiday_dates or []),
     )

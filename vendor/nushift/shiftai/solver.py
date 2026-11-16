@@ -2024,7 +2024,7 @@ def solve_shift(
     relaxation: int = int(RelaxLevel.STRICT),
     drop_groups: frozenset[str] = frozenset(),
     solver_name: str = config.DEFAULT_SOLVER,
-    warm_start: bool = True,
+    warm_start: bool = False,
     warm_start_assignments: Mapping[tuple[str, date, str], CellState] | None = None,
     pattern_mode: bool = True,
     pairing_rules: Sequence[PairingRule] | None = None,
@@ -2357,7 +2357,7 @@ def _best_effort(
     pass1_status: str,
 ) -> SolveResult:
     """配置基準を罰変数に置き換えた2パス目（ベストエフォート）を実行する。"""
-    diagnosis = _coverage_diagnosis(payload)
+    diagnosis_msgs, diagnosis_items = _coverage_diagnosis(payload)
     try:
         soft = _build_problem(
             payload.staff,
@@ -2384,7 +2384,8 @@ def _best_effort(
             {**stats, "pass2_build_error": f"{type(exc).__name__}: {exc}"},
             started,
             _INFEASIBLE_FALLBACK_MESSAGE,
-            diagnosis,
+            diagnosis_msgs,
+            diagnosis_items,
         )
 
     if payload.warm_start and payload.warm_start_assignments:
@@ -2401,17 +2402,11 @@ def _best_effort(
     stats["solver"] = actual_solver
     stats["solver_status"] = f"{raw}（配置基準を罰変数化）"
     if status in (SolveStatus.INFEASIBLE, SolveStatus.ERROR):
-        return _greedy(payload, stats, started, _INFEASIBLE_FALLBACK_MESSAGE, diagnosis)
+        return _greedy(payload, stats, started, _INFEASIBLE_FALLBACK_MESSAGE, diagnosis_msgs, diagnosis_items)
     stats["num_variables"], stats["num_constraints"] = soft.counts()
     result = _finish(soft, payload, stats, started, status, pass_no=2, relaxed=True)
-    # この分岐に来るのは **貪欲法の結果ではない**。
-    # ``status`` が INFEASIBLE / ERROR なら上の行で既に ``_greedy`` に
-    # 分岐しているため、ここに到達した結果は必ず MILP 2 パス目の解である。
-    # 修正前: 貪欲法のメッセージを無条件に先頭に置いていたため、
-    # 「貪欲法による暫定シフトを生成しました」と
-    # 「最適解を求めました」が同じ結果に対して同時に表示され、
-    # 利用者が結果全体を信用できなくなる状態になっていた。
-    result.messages = [_SOFT_COVERAGE_MESSAGE, *diagnosis, *result.messages]
+    result.shortfall_diagnosis = diagnosis_items
+    result.messages = [_SOFT_COVERAGE_MESSAGE, *diagnosis_msgs, *result.messages]
     return result
 
 
@@ -2421,6 +2416,7 @@ def _greedy(
     started: float,
     message: str,
     diagnosis: list[str] | None = None,
+    diagnosis_items: list[dict] | None = None,
 ) -> SolveResult:
     """貪欲法による最終保険。"""
     result = solve_shift_greedy(
@@ -2433,6 +2429,8 @@ def _greedy(
         settings=payload.settings,
     )
     result.messages = [message, *(diagnosis or []), *result.messages]
+    if diagnosis_items:
+        result.shortfall_diagnosis = diagnosis_items
     result.stats.update({k: v for k, v in stats.items() if k != "solver"})
     # 実際に走ったのは貪欲法なので solver 名を偽らない
     # （``PULP_CBC_CMD`` 固定だと HiGHS 環境で診断が誤解される）。
@@ -2458,6 +2456,7 @@ def _finish(
     stats["elapsed_sec"] = round(elapsed, 3)
     stats["pass"] = pass_no
     stats["relaxed"] = relaxed
+    stats.setdefault("fallback", None)
     requirements = payload.requirements
     days = requirements.all_days()
     slots = tuple(requirements.slots)
@@ -2539,10 +2538,15 @@ def _solution_messages(
     return out
 
 
-def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> list[str]:
-    """配置基準を満たせない原因を日本語で説明する（需要と供給の不足を提示する）。"""
+def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> tuple[list[str], list[dict]]:
+    """配置基準を満たせない原因を日本語で説明する（需要と供給の不足を提示する）。
+
+    戻り値: (表示用メッセージリスト, 構造化診断データリスト)
+    構造化データの各要素: {day, slot_label, need_all, sup_all, need_q, sup_q, short_all, short_q}
+    """
     rows = _shortfall_supply(payload)
     out: list[str] = []
+    items: list[dict] = []
     if rows:
         out.append(
             f"配置基準を満たせませんでした。需要 > 供給 となる時間帯は {len(rows)} 件です。"
@@ -2551,15 +2555,29 @@ def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> list[str]:
         )
         for day, label, need_all, need_q, sup_all, sup_q, _support in rows[:top]:
             detail = []
+            short_q = max(0, need_q - sup_q)
+            short_all = max(0, need_all - sup_all)
             if sup_q < need_q:
-                detail.append(f"保育士 不足{need_q - sup_q}名（必要{need_q}名/供給{sup_q}名）")
+                detail.append(f"保育士 不足{short_q}名（必要{need_q}名/供給{sup_q}名）")
             if sup_all < need_all:
                 detail.append(
-                    f"人員 不足{need_all - sup_all}名（必要{need_all}名/供給{sup_all}名）"
+                    f"人員 不足{short_all}名（必要{need_all}名/供給{sup_all}名）"
                 )
             out.append(f"  ・{day.isoformat()} {label}: " + "、".join(detail))
+            items.append(
+                {
+                    "day": day.isoformat(),
+                    "slot_label": label,
+                    "need_all": need_all,
+                    "sup_all": sup_all,
+                    "need_q": need_q,
+                    "sup_q": sup_q,
+                    "short_all": short_all,
+                    "short_q": short_q,
+                }
+            )
     out.extend(_staffing_advice(payload, rows))
-    return out
+    return out, items
 
 
 def _staffing_advice(payload: _SolveInput, rows: Sequence[tuple]) -> list[str]:
