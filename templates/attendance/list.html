@@ -73,11 +73,13 @@
               {% if not record or not record.check_in_at %}
               <form method="post" action="/attendance/{{ child.id }}/check-in" class="inline">
                 <input type="hidden" name="date" value="{{ target_date_value }}">
+                <input type="hidden" name="expected_version" value="{{ record.lock_version if record and record.lock_version else 1 }}">
                 <button type="submit" class="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">登園打刻</button>
               </form>
               {% elif not record.check_out_at %}
               <form method="post" action="/attendance/{{ child.id }}/check-out" class="inline">
                 <input type="hidden" name="date" value="{{ target_date_value }}">
+                <input type="hidden" name="expected_version" value="{{ record.lock_version if record and record.lock_version else 1 }}">
                 <button type="submit" class="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">降園打刻</button>
               </form>
               {% else %}
@@ -97,4 +99,6 @@
     </table>
   </div>
 </div>
+
+<script src="/static/js/attendance-offline.js"></script>
 {% endblock %}

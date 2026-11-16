@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_admin, require_can_edit
 from billing_calculation_service import BillingCalculationError, recalculate_claim_total, validate_charge_amount
+from billing_sibling_service import calculate_sibling_discount_for_child
 from database import get_session, run_db_async
 from models import (
     BillingChargeLine,
@@ -1640,6 +1641,29 @@ def audit_billing_cycle(session: Session, cycle_id: int) -> dict[str, object]:
                 "message": f"減免期限満了: {c_name}（{ex.name}）の適用期限が {ex.valid_to.strftime('%Y/%m/%d')} で満了します。翌月以降の更新要否を確認してください。",
             })
 
+    # 5. 兄弟割引・出生順位自動判定チェック (P8-6)
+    sibling_discount_count = 0
+    claim_child_ids = set()
+    for claim in claims:
+        lines = session.exec(
+            select(BillingChargeLine).where(BillingChargeLine.billing_claim_id == claim.id)
+        ).all()
+        for line in lines:
+            if line.child_id:
+                claim_child_ids.add(line.child_id)
+
+    for cid in claim_child_ids:
+        s_info = calculate_sibling_discount_for_child(session, cid, cycle.year_month)
+        if s_info.get("discount_percentage", 0) > 0:
+            sibling_discount_count += 1
+            child = session.get(Child, cid)
+            c_name = child.full_name if child else f"園児ID:{cid}"
+            warnings.append({
+                "type": "sibling_discount_applied",
+                "level": "info",
+                "message": f"兄弟割引判定: {c_name}（{s_info['rank_label']} - 軽減率{s_info['discount_percentage']}%）",
+            })
+
     is_valid = not any(w["level"] == "error" for w in warnings)
 
     return {
@@ -1653,6 +1677,7 @@ def audit_billing_cycle(session: Session, cycle_id: int) -> dict[str, object]:
         "carryover_count": carryover_count,
         "prorated_count": prorated_count,
         "exemptions_count": exemptions_count,
+        "sibling_discount_count": sibling_discount_count,
         "warnings": warnings,
     }
 
@@ -1664,7 +1689,10 @@ def apply_child_exemptions(
     original_amount: int,
     target_date: date,
 ) -> tuple[int, str]:
-    """園児の減免措置を適用した金額と適用理由を返す (P8-3)。
+    """園児の減免措置を適用した金額と適用理由を返す (P8-3 / P8-6)。
+
+    個別登録の減免措置（BillingExemption）を優先適用し、
+    残額がある場合は兄弟出生順位に基づく多子軽減（P8-6）を自動適用します。
 
     返り値: (減免後金額, 備考メッセージ)
     """
@@ -1697,6 +1725,19 @@ def apply_child_exemptions(
             discount = int(applied_amount * ex.discount_rate / 100)
             applied_amount = max(0, applied_amount - discount)
             notes.append(f"{ex.name}({ex.discount_rate}%減額)")
+
+    # 兄弟割引・出生順位自動判定の適用 (P8-6)
+    if applied_amount > 0:
+        target_month_str = target_date.strftime("%Y-%m")
+        s_info = calculate_sibling_discount_for_child(session, child_id, target_month_str)
+        if s_info.get("discount_percentage", 0) > 0:
+            if s_info.get("discount_type") == "full":
+                applied_amount = 0
+                notes.append(f"{s_info['rank_label']}(多子無償化)")
+            elif s_info.get("discount_type") == "percentage":
+                discount = int(applied_amount * s_info["discount_percentage"] / 100)
+                applied_amount = max(0, applied_amount - discount)
+                notes.append(f"{s_info['rank_label']}(多子{s_info['discount_percentage']}%軽減)")
 
     note_str = " / ".join(notes) if notes else ""
     return applied_amount, note_str

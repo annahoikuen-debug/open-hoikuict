@@ -28,6 +28,7 @@ from child_profile_history import (
     record_child_profile_history,
 )
 from profile_photos import PhotoUploads, photo_uploads, save_photo, apply_family_photo_edits, photo_response
+from cache_service import invalidate_children_cache
 from database import get_session
 from family_support import (
     apply_family_shared_data,
@@ -830,6 +831,7 @@ def create_child(
     from pims_service import sync_core_child_to_pims
     sync_core_child_to_pims(session, child)
     session.commit()
+    invalidate_children_cache()
     return RedirectResponse(url="/children/", status_code=303)
 
 
@@ -1284,6 +1286,7 @@ def update_child(
     from pims_service import sync_core_child_to_pims
     sync_core_child_to_pims(session, child)
     session.commit()
+    invalidate_children_cache()
     return RedirectResponse(url="/children/", status_code=303)
 
 

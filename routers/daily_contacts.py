@@ -17,12 +17,12 @@ from daily_contact_reply_fields import (
     reply_values_for_form,
     reply_values_from_mapping,
 )
+from cache_service import get_cached_active_children, get_cached_classrooms
 from database import get_session
 from models import (
     AttendanceRecord,
     Child,
     ChildStatus,
-    Classroom,
     DailyContactEntry,
     DailyContactReply,
     DailyContactReplyStatus,
@@ -155,15 +155,8 @@ def daily_contact_list(
     selected_classroom_id = _parse_optional_int(classroom_id)
     selected_sort = _normalize_sort(sort)
     selected_view = _normalize_view(view)
-    classrooms = session.exec(select(Classroom).order_by(Classroom.display_order, Classroom.id)).all()
-    children_query = (
-        select(Child)
-        .options(selectinload(Child.classroom))
-        .where(Child.status == ChildStatus.enrolled)
-    )
-    if selected_classroom_id:
-        children_query = children_query.where(Child.classroom_id == selected_classroom_id)
-    children = session.exec(children_query).all()
+    classrooms = get_cached_classrooms(session)
+    children = get_cached_active_children(session, selected_classroom_id)
     child_ids = [child.id for child in children if child.id is not None]
     entries = session.exec(
         select(DailyContactEntry)

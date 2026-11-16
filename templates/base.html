@@ -7,6 +7,7 @@
   <title>{% block title %}open-hoikuict{% endblock %}</title>
   <script src="/static/js/tailwindcss.js"></script>
   <script src="/static/js/htmx.min.js"></script>
+  <link rel="stylesheet" href="/static/css/htmx-indicator.css">
   <style>
     @media print {
       .no-print {
@@ -902,6 +903,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
 {% set staff_login_redirect = current_path or '/' %}
 
 <body class="bg-slate-50 text-slate-800">
+  <div id="htmx-global-bar" aria-hidden="true"></div>
   <a href="#main-content" class="skip-link">本文へスキップ</a>
   {% if is_parent_portal %}
   <div class="min-h-screen">

@@ -118,12 +118,24 @@
   <section class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" aria-labelledby="exemptions-heading">
     <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
       <div>
-        <h2 id="exemptions-heading" class="font-bold text-base text-slate-800">園児ごとの減免・免除登録マスタ (P8-3)</h2>
+        <h2 id="exemptions-heading" class="font-bold text-base text-slate-800">園児ごとの減免・免除登録マスタ (P8-3 / P8-6)</h2>
         <span class="text-xs text-slate-400">第3子減免やひとり親就学支援など、請求生成時に自動反映される減免措置です</span>
       </div>
       <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-        登録件数: {{ exemptions | length }} 件
+        個別減免登録: {{ exemptions | length }} 件
       </span>
+    </div>
+
+    <!-- P8-6 兄弟割引自動判定案内バナー -->
+    <div class="mx-5 my-3 p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 flex items-start gap-2.5 text-xs text-indigo-900">
+      <span class="text-base leading-none">👶</span>
+      <div>
+        <p class="font-bold mb-0.5">多子軽減・兄弟割引の自動判定エンジン稼働中 (P8-6)</p>
+        <p class="text-indigo-700 leading-relaxed">
+          同一家族（世帯）に属する在園児の生年月日（年長順）から「第1子（基準）」「第2子（50%免除）」「第3子以降（全額無償）」を請求確定時に自動判定します。<br>
+          月途中の入退園や卒園に伴う順位の繰り上がりも自動追従するため、一般的な多子軽減は下記の手動登録を行わずに自動適用されます。
+        </p>
+      </div>
     </div>
 
     <div class="overflow-x-auto">

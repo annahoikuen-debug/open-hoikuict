@@ -955,6 +955,7 @@ def correction_save(request: Request, child_id: int, date: str = Form(...), oper
 def check_in(
     child_id: int,
     target_date: str = Form(..., alias="date"),
+    expected_version: Optional[int] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
@@ -975,14 +976,20 @@ def check_in(
         )
     ).first()
 
+    if record and expected_version is not None and record.lock_version != expected_version:
+        raise HTTPException(status_code=409, detail="他の端末で打刻が更新されています。最新情報を確認してください。")
+
     now = local_naive_now()
     audit_now = utc_now()
     if record and record.check_out_at:
         raise HTTPException(409, "降園済みです。打刻の取消・履歴から記録を確認してください。")
     if not record:
-        record = AttendanceRecord(child_id=child_id, attendance_date=day, check_in_at=now)
+        record = AttendanceRecord(child_id=child_id, attendance_date=day, check_in_at=now, lock_version=1)
     elif record.check_in_at is None:
         record.check_in_at = now
+        record.lock_version += 1
+    else:
+        record.lock_version += 1
 
     record.updated_at = audit_now
     session.add(record)
@@ -997,6 +1004,7 @@ def check_in(
 def check_out(
     child_id: int,
     target_date: str = Form(..., alias="date"),
+    expected_version: Optional[int] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
@@ -1020,10 +1028,14 @@ def check_out(
     if not record or record.check_in_at is None:
         raise HTTPException(status_code=400, detail="先に登園打刻を行ってください")
 
+    if expected_version is not None and record.lock_version != expected_version:
+        raise HTTPException(status_code=409, detail="他の端末で打刻が更新されています。最新情報を確認してください。")
+
     now = local_naive_now()
     audit_now = utc_now()
     if record.check_out_at is None:
         record.check_out_at = now
+    record.lock_version += 1
     record.updated_at = audit_now
 
     session.add(record)

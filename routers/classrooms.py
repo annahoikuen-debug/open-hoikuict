@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_can_edit
+from cache_service import invalidate_classrooms_cache
 from database import get_session
 from models import ChildStatus, Classroom
 from time_utils import utc_now
@@ -154,6 +155,7 @@ def create_classroom(
     )
     session.add(classroom)
     session.commit()
+    invalidate_classrooms_cache()
     return RedirectResponse(url="/classrooms/", status_code=303)
 
 
@@ -211,4 +213,5 @@ def update_classroom(
     classroom.updated_at = utc_now()
     session.add(classroom)
     session.commit()
+    invalidate_classrooms_cache()
     return RedirectResponse(url="/classrooms/", status_code=303)

@@ -238,6 +238,9 @@ def _migrate_spec_20260924_columns() -> None:
         "facility_settings": {
             "contact_reply_review_required": "BOOLEAN DEFAULT 0",
         },
+        "attendance_records": {
+            "lock_version": "INTEGER DEFAULT 1",
+        },
     }
     with engine.begin() as conn:
         for table, fields in additions.items():

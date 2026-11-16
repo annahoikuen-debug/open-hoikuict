@@ -1,0 +1,63 @@
+/**
+ * htmx 部分更新・通信中ローディングインジケータ & スケルトン表示 (P5-4)
+ */
+
+/* 1. 標準インジケータ制御 */
+.htmx-indicator {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-flex !important;
+  opacity: 1;
+}
+
+/* 2. スピナーアニメーション */
+.htmx-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: currentColor;
+  animation: htmx-spin 0.6s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes htmx-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 3. スケルトンパルス */
+@keyframes htmx-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.htmx-skeleton {
+  background-color: #e2e8f0;
+  border-radius: 0.375rem;
+  animation: htmx-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 4. グローバルリクエスト プログレスバー (画面最上部) */
+#htmx-global-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  z-index: 99999;
+  transition: width 0.3s ease, opacity 0.3s ease;
+  pointer-events: none;
+  opacity: 0;
+}
+
+body.htmx-request #htmx-global-bar {
+  width: 70%;
+  opacity: 1;
+}
