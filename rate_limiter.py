@@ -113,6 +113,21 @@ class RateLimiter:
 DEFAULT_RATE_LIMITER = RateLimiter(max_requests=10, window_seconds=60)
 
 
+def _is_trusted_ip(
+    ip_str: str,
+    trusted_proxies: set[str],
+    trusted_networks: list,
+) -> bool:
+    if ip_str in trusted_proxies:
+        return True
+    try:
+        import ipaddress
+        addr = ipaddress.ip_address(ip_str)
+        return any(addr in net for net in trusted_networks)
+    except ValueError:
+        return False
+
+
 def client_ip(request: Request) -> str:
     """リクエストから信頼できるクライアントIPアドレスを取得する。
 
@@ -129,16 +144,16 @@ def client_ip(request: Request) -> str:
     trusted_raw = forwarded_allow_ips()
     trusted_proxies = set(trusted_raw) if trusted_raw else {"127.0.0.1", "::1", "testserver"}
 
-    is_trusted = client_host in trusted_proxies
-    if not is_trusted:
-        import ipaddress
-        for t in trusted_proxies:
+    trusted_networks = []
+    import ipaddress
+    for t in trusted_proxies:
+        if "/" in t:
             try:
-                if "/" in t and ipaddress.ip_address(client_host) in ipaddress.ip_network(t, strict=False):
-                    is_trusted = True
-                    break
+                trusted_networks.append(ipaddress.ip_network(t, strict=False))
             except ValueError:
                 pass
+
+    is_trusted = _is_trusted_ip(client_host, trusted_proxies, trusted_networks)
 
     if is_trusted:
         forwarded_for = request.headers.get("x-forwarded-for")
@@ -146,7 +161,7 @@ def client_ip(request: Request) -> str:
             # カンマ区切りの右から順に走査し、信頼できるプロキシでない最初のIPを採用
             parts = [p.strip() for p in forwarded_for.split(",") if p.strip()]
             for ip in reversed(parts):
-                if ip not in trusted_proxies:
+                if not _is_trusted_ip(ip, trusted_proxies, trusted_networks):
                     return ip
             if parts:
                 return parts[0]

@@ -21,7 +21,6 @@ from datetime import date, timedelta
 from pulp import PULP_CBC_CMD
 from sqlmodel import Session, select
 
-from shiftai.domain import ObjectiveWeights
 from shiftai.local_rules import build_standard
 from shiftai.shift_patterns import default_patterns
 from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift  # noqa: F401
@@ -36,7 +35,6 @@ from ..bridge import (
 from ..contracts import PlanStatus, SolveJobStatus
 from ..db_models import (
     ChildPlannedArrivalDefaults,
-    ShiftFacilityConstraintWeights,
     ShiftPlanCells,
     ShiftPlans,
     ShiftSolveJobs,
@@ -341,7 +339,6 @@ def _run_solve_sync(
         )
 
         # 休園日の全職員スロットを OFF 固定として保護
-        slots_list = list(facility_settings_row.slots or []) if hasattr(facility_settings_row, "slots") else []
         for cd in closed_days:
             for s in day_staff:
                 for sl_label in [f"{h:02d}:{m:02d}-{(h + (m + 30)//60):02d}:{(m + 30)%60:02d}" for h in range(7, 20) for m in (0, 30)]:

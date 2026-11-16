@@ -209,6 +209,8 @@ def execute_sibling_qr_punch(
                 continue  # すでに登園打刻済みならスキップ
             record.check_in_at = now_naive
             record.updated_at = audit_now
+            from pims_service import record_punch_log_for_core_child
+            record_punch_log_for_core_child(session, cid, "登園", now_naive)
         elif action == "check_out":
             if record.check_out_at:
                 continue  # すでに降園打刻済みならスキップ
@@ -217,6 +219,8 @@ def execute_sibling_qr_punch(
                 record.actual_pickup_person = actual_pickup_person
             record.updated_at = audit_now
             recalculate_attendance_charge(session, record)
+            from pims_service import record_punch_log_for_core_child
+            record_punch_log_for_core_child(session, cid, "降園", now_naive)
 
         sync_attendance_alarm(session, child_id=cid, target_date=day, record=record, now=audit_now)
         updated_records.append(record)

@@ -50,6 +50,14 @@ def test_client_ip_trusted_proxy_multiple_hops(monkeypatch):
     assert client_ip(req) == "203.0.113.5"
 
 
+def test_client_ip_trusted_proxy_cidr_range(monkeypatch):
+    """FORWARDED_ALLOW_IPS が CIDR 表記の場合、右側走査でもプロキシが正しく認識され、クライアント実IPが採用されること。"""
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "10.0.0.0/8")
+    # クライアント(203.0.113.88) -> 内部プロキシ1(10.2.3.4) -> 内部プロキシ2(10.1.1.1) -> アプリ
+    req = _dummy_request("10.1.1.1", {"X-Forwarded-For": "203.0.113.88, 10.2.3.4"})
+    assert client_ip(req) == "203.0.113.88"
+
+
 def test_rate_limiter_empty_keys_cleanup():
     """有効期限が切れたキーが _timestamps 辞書から自動削除されること。"""
     limiter = RateLimiter(max_requests=2, window_seconds=10)

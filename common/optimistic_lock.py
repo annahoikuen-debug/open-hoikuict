@@ -28,12 +28,21 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from sqlalchemy import text
 from sqlmodel import Session
 
 from time_utils import utc_now
+
+_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_sql_identifier(name: str) -> None:
+    """SQL識別子（テーブル名・カラム名）が安全な英数字とアンダースコアのみで構成されているか検証する。"""
+    if not isinstance(name, str) or not _IDENTIFIER_PATTERN.match(name):
+        raise ValueError(f"不正なSQL識別子です: {name!r}")
 
 
 class ConcurrentUpdateError(RuntimeError):
@@ -73,6 +82,12 @@ def claim_lock(
     Raises:
         ConcurrentUpdateError: ``rowcount != 1`` のとき（ロールバック済み）。
     """
+    _validate_sql_identifier(table_name)
+    _validate_sql_identifier(id_col)
+    if extra_updates:
+        for k in extra_updates.keys():
+            _validate_sql_identifier(k)
+
     now = utc_now()
     set_pairs = "lock_version = lock_version + 1, updated_at = :updated_at"
     params: dict[str, Any] = {

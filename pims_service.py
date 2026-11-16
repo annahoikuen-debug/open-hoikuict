@@ -98,6 +98,149 @@ def sync_core_children_if_empty(session: Session) -> int:
         return 0
 
 
+def sync_core_child_to_pims(session: Session, child) -> Optional[PunchChild]:
+    """コアの Child レコードから PunchChild を作成または更新する。
+
+    ステータスが enrolled の場合は is_active=True、それ以外は is_active=False とする。
+    """
+    if child.id is None:
+        return None
+
+    from models.core import ChildStatus
+    c_id = str(child.id)
+    p_child = session.get(PunchChild, c_id)
+
+    c_name = child.classroom.name if child.classroom else "未設定"
+    p_email = (
+        child.guardians[0].email
+        if child.guardians and child.guardians[0].email
+        else None
+    )
+    is_active = (child.status == ChildStatus.enrolled)
+
+    if p_child is None:
+        p_child = PunchChild(
+            child_id=c_id,
+            name=f"{child.last_name} {child.first_name}".strip(),
+            kana=f"{child.last_name_kana} {child.first_name_kana}".strip(),
+            birth_date=child.birth_date,
+            class_name=c_name,
+            family_id=str(child.family_id) if child.family_id else None,
+            parent_email=p_email,
+            sort_order=child.id or 0,
+            is_active=is_active,
+        )
+        session.add(p_child)
+    else:
+        p_child.name = f"{child.last_name} {child.first_name}".strip()
+        p_child.kana = f"{child.last_name_kana} {child.first_name_kana}".strip()
+        p_child.birth_date = child.birth_date
+        p_child.class_name = c_name
+        p_child.family_id = str(child.family_id) if child.family_id else None
+        if p_email:
+            p_child.parent_email = p_email
+        p_child.sort_order = child.id or 0
+        p_child.is_active = is_active
+        session.add(p_child)
+
+    return p_child
+
+
+def sync_all_core_children_to_pims(session: Session) -> dict[str, int]:
+    """既存の全コア園児（Child）と PunchChild を突合・同期する。"""
+    from models.core import Child
+    from sqlalchemy.orm import selectinload
+
+    children = session.exec(
+        select(Child).options(selectinload(Child.classroom), selectinload(Child.guardians))
+    ).all()
+
+    created = 0
+    updated = 0
+    for child in children:
+        c_id = str(child.id)
+        existing = session.get(PunchChild, c_id)
+        sync_core_child_to_pims(session, child)
+        if existing is None:
+            created += 1
+        else:
+            updated += 1
+
+    session.commit()
+    return {"created": created, "updated": updated, "total": len(children)}
+
+
+def record_punch_log_for_core_child(
+    session: Session,
+    child_id: int,
+    punch_type: str,
+    punched_at: Optional[datetime] = None,
+    absence_reason: Optional[str] = None,
+    is_auto_filled: bool = False,
+) -> Optional[PunchLog]:
+    """Core の園児IDに対して PunchLog を記録する（PunchChild が未登録の場合は自動生成）。"""
+    from models.core import Child
+    c_id = str(child_id)
+    p_child = session.get(PunchChild, c_id)
+    if p_child is None:
+        child = session.get(Child, child_id)
+        if child is None:
+            return None
+        p_child = sync_core_child_to_pims(session, child)
+        if p_child is None:
+            return None
+
+    if not punched_at:
+        punched_at = local_naive_now()
+
+    log = PunchLog(
+        child_id=c_id,
+        punched_at=punched_at,
+        punch_type=punch_type,
+        absence_reason=absence_reason if punch_type == "欠席" else None,
+        is_auto_filled=is_auto_filled,
+    )
+    session.add(log)
+    return log
+
+
+def sync_punch_log_to_core_attendance(session: Session, punch_log: PunchLog) -> None:
+    """PunchLog の登降園・欠席打刻を Core の AttendanceRecord に安全に同期する。"""
+    try:
+        cid = int(punch_log.child_id)
+    except (ValueError, TypeError):
+        return  # 数値IDでない園児はスキップ
+
+    from models.core import AttendanceRecord
+    from extended_care_fee_service import recalculate_attendance_charge
+    from attendance_checks_service import sync_attendance_alarm
+    from pickup_plan_service import load_pickup_record
+    from time_utils import utc_now
+
+    day = punch_log.punched_at.date()
+    record = load_pickup_record(session, cid, day)
+    if record is None:
+        record = AttendanceRecord(child_id=cid, attendance_date=day)
+        session.add(record)
+        session.flush()
+
+    audit_now = utc_now()
+    if punch_log.punch_type == "登園":
+        if record.check_in_at is None:
+            record.check_in_at = punch_log.punched_at
+            record.updated_at = audit_now
+            session.add(record)
+    elif punch_log.punch_type == "降園":
+        if record.check_out_at is None:
+            record.check_out_at = punch_log.punched_at
+            record.updated_at = audit_now
+            recalculate_attendance_charge(session, record)
+            session.add(record)
+
+    sync_attendance_alarm(session, child_id=cid, target_date=day, record=record, now=audit_now)
+
+
+
 def get_all_active_children(session: Session) -> List[PunchChild]:
     """有効な園児一覧を表示順、クラス名、氏名でソートして返す。"""
     sync_core_children_if_empty(session)
@@ -266,6 +409,7 @@ def record_punch(
             is_auto_filled=is_auto_filled,
         )
         session.add(log)
+        sync_punch_log_to_core_attendance(session, log)
         created_logs.append(log)
         punched_children.append(child)
 

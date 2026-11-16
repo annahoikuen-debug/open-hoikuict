@@ -8,6 +8,7 @@ staff_contracts, etc.) into shiftai ``ChildPlan`` / ``StaffMember`` /
 from __future__ import annotations
 
 from datetime import date, time
+from typing import Any
 
 from sqlmodel import Session, select
 

@@ -827,6 +827,8 @@ def create_child(
         action="created",
         recorded_at=child.created_at,
     )
+    from pims_service import sync_core_child_to_pims
+    sync_core_child_to_pims(session, child)
     session.commit()
     return RedirectResponse(url="/children/", status_code=303)
 
@@ -1279,6 +1281,8 @@ def update_child(
         actor_name=current_user.name,
         previous_snapshot=previous_snapshot,
     )
+    from pims_service import sync_core_child_to_pims
+    sync_core_child_to_pims(session, child)
     session.commit()
     return RedirectResponse(url="/children/", status_code=303)
 

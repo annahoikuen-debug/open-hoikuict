@@ -14,7 +14,6 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from database import engine
 from models import (
     AttendanceRecord,
     AttendanceVerification,
@@ -26,13 +25,10 @@ from models import (
 from shift_schedule.contracts import SolveJobStatus
 from shift_schedule.db_models import (
     ChildPlannedArrivalDefaults,
-    ShiftFacilityConstraintWeights,
     ShiftPlanCells,
     ShiftPlanningAudits,
-    ShiftPlanProposals,
     ShiftPlans,
     ShiftSolveJobs,
-    StaffContracts,
 )
 from shift_schedule.store import ShiftRepository, ShiftRepositoryDep
 from time_utils import utc_now
@@ -51,18 +47,12 @@ from shift_schedule.services.duty_patterns import (
 from vendor.nushift.shiftai.local_rules import build_standard
 from vendor.nushift.shiftai.shift_patterns import default_patterns
 from vendor.nushift.shiftai.standards import build_requirements
-from shift_schedule.services.solver_manager import JobPriority, solver_manager
+from shift_schedule.services.solver_manager import JobPriority
 from vendor.nushift.shiftai.domain import (
     CellState,
-    Contract,
-    ObjectiveWeights,
-    RequirementTable,
-    SolveResult,
     SolveStatus,
-    to_minutes,
 )
 from vendor.nushift.shiftai.local_search import ruin_and_recreate
-from vendor.nushift.shiftai.monthly import MonthlySolveContext
 from vendor.nushift.shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 
 
@@ -158,15 +148,6 @@ def execute_realtime_replan(
         if sm is not None:
             placeable_staff.append(sm)
             day_preferences[str(u.id)] = build_staff_preferences(session, u)
-
-    # 職員契約
-    all_contracts = session.exec(
-        select(StaffContracts).where(
-            StaffContracts.effective_from <= max_target_date,
-            (StaffContracts.effective_to.is_(None)) | (StaffContracts.effective_to >= min_target_date),
-        )
-    ).all()
-    contracts_by_user = {str(c.staff_user_id): c for c in all_contracts}
 
     # パターン
     facility_setting_id = facility_settings_row.id if facility_settings_row else 1
