@@ -106,6 +106,9 @@ class ParentPushEndpointInput(BaseModel):
 class ParentPushPreferenceInput(BaseModel):
     push_enabled: bool
     attendance_confirmation_enabled: bool
+    notice_published_enabled: bool = True
+    survey_published_enabled: bool = True
+    fever_notification_enabled: bool = True
     email_enabled: bool | None = None
 
 
@@ -342,6 +345,15 @@ def get_preferences(
         "attendance_confirmation_enabled": (
             preference.attendance_confirmation_enabled if preference else True
         ),
+        "notice_published_enabled": (
+            preference.notice_published_enabled if preference else True
+        ),
+        "survey_published_enabled": (
+            preference.survey_published_enabled if preference else True
+        ),
+        "fever_notification_enabled": (
+            preference.fever_notification_enabled if preference else True
+        ),
         "email_enabled": email_enabled(session, parent.id),
     }
 
@@ -491,6 +503,9 @@ def save_preferences(
         parent_account_id=parent.id,
         push_enabled=payload.push_enabled,
         attendance_confirmation_enabled=payload.attendance_confirmation_enabled,
+        notice_published_enabled=payload.notice_published_enabled,
+        survey_published_enabled=payload.survey_published_enabled,
+        fever_notification_enabled=payload.fever_notification_enabled,
     )
     if payload.email_enabled is not None:
         email_preference = session.get(ParentEmailPreference, parent.id) or ParentEmailPreference(parent_account_id=parent.id)
@@ -502,6 +517,9 @@ def save_preferences(
     return {
         "push_enabled": preference.push_enabled,
         "attendance_confirmation_enabled": preference.attendance_confirmation_enabled,
+        "notice_published_enabled": preference.notice_published_enabled,
+        "survey_published_enabled": preference.survey_published_enabled,
+        "fever_notification_enabled": preference.fever_notification_enabled,
         "email_enabled": email_enabled(session, parent.id),
     }
 

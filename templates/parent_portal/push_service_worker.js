@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nusoft-portal-cache-v2';
+const CACHE_NAME = 'nusoft-portal-cache-v3';
 const PRECACHE_ASSETS = [
   '/static/js/tailwindcss.js',
   '/static/js/htmx.min.js',
@@ -27,7 +27,31 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  if (url.origin === self.location.origin && (url.pathname.startsWith('/static/') || PRECACHE_ASSETS.includes(url.pathname))) {
+  if (url.origin !== self.location.origin) return;
+
+  // 保護者ポータルのページ（HTML GETリクエスト）: ネットワーク優先、通信断（オフライン）時はキャッシュへフォールバック
+  if (event.request.method === 'GET' && url.pathname.startsWith('/parent-portal/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            return caches.match('/parent-portal/');
+          });
+        })
+    );
+    return;
+  }
+
+  // 静的アセット: キャッシュ優先
+  if (url.pathname.startsWith('/static/') || PRECACHE_ASSETS.includes(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
         if (response && response.status === 200) {

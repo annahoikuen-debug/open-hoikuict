@@ -73,6 +73,16 @@
         return;
       }
 
+      if ((e.key === "/" || e.key === "s") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        var searchInput = document.getElementById("global-staff-search-input") || document.getElementById("search-page-input");
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+          return;
+        }
+      }
+
       if (e.key === "g" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         keyBuffer = "g";
         clearTimeout(bufferTimer);

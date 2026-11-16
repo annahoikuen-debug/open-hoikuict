@@ -82,6 +82,27 @@
         <span><strong class="block text-sm text-slate-900">出欠確認をプッシュで受け取る</strong><span
             class="text-sm text-slate-500">当日の出欠確認が必要な場合に受け取ります。</span></span>
       </label>
+      <label class="flex items-start gap-3">
+        <input id="notice-published-enabled" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" {%
+          if not preference or preference.notice_published_enabled %}checked{% endif %}>
+        <span><strong class="block text-sm text-slate-900">園からのお知らせをプッシュで受け取る</strong><span
+            class="text-sm text-slate-500">行事予定、園だより、クラス連絡が公開された際に受け取ります。</span></span>
+      </label>
+      <label class="flex items-start gap-3">
+        <input id="survey-published-enabled" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" {%
+          if not preference or preference.survey_published_enabled %}checked{% endif %}>
+        <span><strong class="block text-sm text-slate-900">アンケート・回答依頼をプッシュで受け取る</strong><span
+            class="text-sm text-slate-500">行事参加アンケートや回答募集が開始された際に受け取ります。</span></span>
+      </label>
+      <label class="flex items-start gap-3">
+        <input id="fever-notification-enabled" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600" {%
+          if not preference or preference.fever_notification_enabled %}checked{% endif %}>
+        <span><strong class="block text-sm text-slate-900">発熱・保健アラートをプッシュで受け取る</strong><span
+            class="text-sm text-slate-500">検温で37.5℃以上が記録された場合や、保健室での体調変化アラートを受け取ります。</span></span>
+      </label>
+      <p class="text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+        ※ 災害・台風などによる「緊急一斉連絡」は、安全確保のため設定にかかわらず常に配信されます。
+      </p>
       <label class="flex items-start gap-3"><input id="email-enabled" type="checkbox" class="mt-1 h-4 w-4" {% if
           email_preference and email_preference.attendance_confirmation_enabled %}checked{% endif %}><span><strong
             class="block text-sm">出欠確認をメールでも受け取る</strong><span
@@ -236,7 +257,17 @@
 
   document.getElementById('preference-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const response = await jsonRequest('/parent-portal/push/preferences', { method: 'POST', body: JSON.stringify({ push_enabled: document.getElementById('push-enabled').checked, attendance_confirmation_enabled: document.getElementById('attendance-enabled').checked, email_enabled: document.getElementById('email-enabled').checked }) });
+    const response = await jsonRequest('/parent-portal/push/preferences', {
+      method: 'POST',
+      body: JSON.stringify({
+        push_enabled: document.getElementById('push-enabled').checked,
+        attendance_confirmation_enabled: document.getElementById('attendance-enabled').checked,
+        notice_published_enabled: document.getElementById('notice-published-enabled').checked,
+        survey_published_enabled: document.getElementById('survey-published-enabled').checked,
+        fever_notification_enabled: document.getElementById('fever-notification-enabled').checked,
+        email_enabled: document.getElementById('email-enabled').checked
+      })
+    });
     document.getElementById('preference-message').textContent = response.ok ? '保存しました。' : '保存できませんでした。';
   });
 

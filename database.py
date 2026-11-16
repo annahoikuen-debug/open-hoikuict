@@ -107,6 +107,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("039_unavailability_status", _migrate_shift_schedule_tables),
         ("040_pims_attendance_tables", _migrate_pims_attendance_tables),
         ("041_shift_timefold_enhancements", _migrate_shift_timefold_enhancements),
+        ("042_parent_push_preference_extra_mute_columns", _migrate_parent_push_preference_extra_mute_columns),
     ]
 
 
@@ -814,6 +815,30 @@ def _migrate_parent_push_delivery_columns() -> None:
             conn.commit()
     except Exception as exc:
         _log_migration_skip("parent push delivery columns", exc)
+
+
+def _migrate_parent_push_preference_extra_mute_columns() -> None:
+    try:
+        with engine.connect() as conn:
+            columns = _table_columns("parent_push_preferences")
+            if not columns:
+                return
+            additions = {
+                "notice_published_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+                "survey_published_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+                "fever_notification_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            }
+            for column_name, column_def in additions.items():
+                if column_name not in columns:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE parent_push_preferences "
+                            f"ADD COLUMN {column_name} {column_def}"
+                        )
+                    )
+            conn.commit()
+    except Exception as exc:
+        _log_migration_skip("parent push preference extra mute columns", exc)
 
 
 def _migrate_billing_fee_labels() -> None:

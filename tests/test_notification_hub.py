@@ -278,6 +278,54 @@ class NotifyFamiliesTests(unittest.TestCase):
             self.assertIn(NotificationDeliveryChannel.in_app, channels)
             self.assertIn(NotificationDeliveryChannel.push, channels)
 
+    def test_notice_published_muted_delivers_in_app_only(self):
+        """I4: notice_published_enabled=False の保護者には push キューが作られず in_app のみ作成されること。"""
+        from models import ParentNotificationDelivery, ParentNotificationKind, ParentPushPreference
+        from notification_hub import notify_notice_published
+
+        with Session(self.engine) as session:
+            session.add(ParentPushPreference(
+                parent_account_id=self.parent_id,
+                notice_published_enabled=False,
+            ))
+            session.commit()
+
+        with Session(self.engine) as session:
+            notify_notice_published(
+                session, notice_id=1, title="遠足のお知らせ",
+                target_classroom_ids=[],
+                target_child_ids=[],
+            )
+            session.commit()
+
+        with Session(self.engine) as session:
+            deliveries = session.exec(select(ParentNotificationDelivery)).all()
+            self.assertEqual(len(deliveries), 1)
+            self.assertEqual(deliveries[0].channel, NotificationDeliveryChannel.in_app)
+
+    def test_survey_published_muted_delivers_in_app_only(self):
+        """I4: survey_published_enabled=False の保護者には push キューが作られず in_app のみ作成されること。"""
+        from models import ParentNotificationDelivery, ParentNotificationKind, ParentPushPreference
+        from notification_hub import notify_survey_published
+
+        with Session(self.engine) as session:
+            session.add(ParentPushPreference(
+                parent_account_id=self.parent_id,
+                survey_published_enabled=False,
+            ))
+            session.commit()
+
+        with Session(self.engine) as session:
+            notify_survey_published(
+                session, survey_id=1, title="アンケートのお願い",
+            )
+            session.commit()
+
+        with Session(self.engine) as session:
+            deliveries = session.exec(select(ParentNotificationDelivery)).all()
+            self.assertEqual(len(deliveries), 1)
+            self.assertEqual(deliveries[0].channel, NotificationDeliveryChannel.in_app)
+
     def test_unsupported_kind_rejected(self):
         from models import ParentNotificationKind
         from notification_hub import NotificationHubError, notify_families

@@ -93,9 +93,9 @@ _PREFERENCE_MUTE_COLUMNS: dict[ParentNotificationKind, str | None] = {
     ParentNotificationKind.emergency_notice: "emergency_notice_enabled",
     ParentNotificationKind.punch_correction_notice: "punch_correction_notice_enabled",
     ParentNotificationKind.attendance_confirmation_request: "attendance_confirmation_enabled",
-    ParentNotificationKind.notice_published: None,
-    ParentNotificationKind.survey_published: None,
-    ParentNotificationKind.fever_notification: None,
+    ParentNotificationKind.notice_published: "notice_published_enabled",
+    ParentNotificationKind.survey_published: "survey_published_enabled",
+    ParentNotificationKind.fever_notification: "fever_notification_enabled",
     ParentNotificationKind.push_test: None,
 }
 
@@ -129,6 +129,7 @@ def _create_notification(
     created_by_name: str | None,
     created_at: datetime,
     target_date: date | None = None,
+    force_push: bool = False,
 ) -> ParentNotification:
     notification = ParentNotification(
         parent_account_id=parent_account_id,
@@ -154,12 +155,13 @@ def _create_notification(
         created_at=created_at,
         updated_at=created_at,
     ))
-    # push は既存のワーカー経由。キューイング失敗でも in_app 配信は生きる。
-    try:
-        from parent_notification_service import queue_push_delivery
-        queue_push_delivery(session, notification, now=created_at)
-    except Exception:  # noqa: BLE001 - push キュー失敗は通知本体を阻害しない
-        pass
+    # push は既存のワーカー経由。ミュートされている場合は push キューを作成しない。
+    if not _is_muted(session, parent_account_id=parent_account_id, kind=kind) or force_push:
+        try:
+            from parent_notification_service import queue_push_delivery
+            queue_push_delivery(session, notification, now=created_at)
+        except Exception:  # noqa: BLE001 - push キュー失敗は通知本体を阻害しない
+            pass
     return notification
 
 
@@ -306,30 +308,12 @@ def notify_families(
             source_type=source_type, source_id=source_id,
         ):
             continue
-        if _is_muted(session, parent_account_id=parent.id, kind=kind) and not force_push:
-            # push は作らず in_app のみ（_create_notification を使わず手配信）
-            notification = ParentNotification(
-                parent_account_id=parent.id, child_id=None, kind=kind,
-                title=title, body=body, action_url=action_url,
-                source_type=source_type, source_id=source_id,
-                created_by_name=created_by_name, created_at=created_at,
-            )
-            session.add(notification)
-            session.flush()
-            session.add(ParentNotificationDelivery(
-                notification_id=notification.id,
-                channel=NotificationDeliveryChannel.in_app,
-                status=NotificationDeliveryStatus.delivered,
-                attempted_at=created_at, delivered_at=created_at,
-                created_at=created_at, updated_at=created_at,
-            ))
-            created.append(notification)
-            continue
         created.append(_create_notification(
             session,
             parent_account_id=parent.id, child_id=None, kind=kind,
             title=title, body=body, action_url=action_url,
             source_type=source_type, source_id=source_id,
             created_by_name=created_by_name, created_at=created_at,
+            force_push=force_push,
         ))
     return created

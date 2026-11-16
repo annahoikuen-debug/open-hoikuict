@@ -150,6 +150,9 @@ def update_parent_push_preference(
     parent_account_id: int,
     push_enabled: bool,
     attendance_confirmation_enabled: bool,
+    notice_published_enabled: bool = True,
+    survey_published_enabled: bool = True,
+    fever_notification_enabled: bool = True,
     now: datetime | None = None,
 ) -> ParentPushPreference:
     updated_at = now or utc_now()
@@ -162,12 +165,18 @@ def update_parent_push_preference(
             parent_account_id=parent_account_id,
             push_enabled=push_enabled,
             attendance_confirmation_enabled=attendance_confirmation_enabled,
+            notice_published_enabled=notice_published_enabled,
+            survey_published_enabled=survey_published_enabled,
+            fever_notification_enabled=fever_notification_enabled,
             created_at=updated_at,
             updated_at=updated_at,
         )
     else:
         preference.push_enabled = push_enabled
         preference.attendance_confirmation_enabled = attendance_confirmation_enabled
+        preference.notice_published_enabled = notice_published_enabled
+        preference.survey_published_enabled = survey_published_enabled
+        preference.fever_notification_enabled = fever_notification_enabled
         preference.updated_at = updated_at
     session.add(preference)
     return preference

@@ -59,6 +59,7 @@ from routers.staff_auth import mock_login_router as staff_mock_login_router
 from routers.staff_auth import local_login_router as staff_local_login_router
 from routers.staff_auth import router as staff_auth_router
 from routers.staff_portal import router as staff_portal_router
+from routers.search import router as search_router
 from routers.staff_rooms import router as staff_rooms_router
 from routers.document_reviews import router as document_reviews_router
 from routers.terminal_monitor import router as terminal_monitor_router
@@ -171,6 +172,7 @@ app.add_middleware(CsrfTokenMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(staff_portal_router)
+app.include_router(search_router)
 app.include_router(classrooms_router)
 app.include_router(data_transfers_router)
 app.include_router(initial_ledger_router)
