@@ -79,6 +79,9 @@
           <button class="button button--secondary" type="submit">週から日案を一括作成</button>
         </form>
       {% endif %}
+      {% if document.document_type.value == "daily_plan" %}
+        <a class="button button--secondary" href="/document-exports/download-daily-plan?document_id={{ document.id }}" target="_blank">A4帳票PDF出力</a>
+      {% endif %}
       <button class="button button--secondary" type="button" {% if monthly_boot %}data-monthly-print{% else %}onclick="window.print()"{% endif %}>印刷</button>
     </div>
   </section>
@@ -361,6 +364,74 @@
       {% endif %}
     </section>
   {% endif %}
+
+  <!-- P2-2: 参考図表・画像添付パネル -->
+  <section class="form-panel attachments-panel no-print" aria-labelledby="attachments-heading" style="margin-top:20px;padding:20px;background:#fff;border-radius:12px;border:1px solid #e2e8f0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding-bottom:12px;margin-bottom:16px;">
+      <div>
+        <p style="font-size:10px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.05em;margin:0;">Attachments (P2-2)</p>
+        <h2 id="attachments-heading" style="font-size:16px;font-weight:700;color:#1e293b;margin:2px 0 0;">📎 参考図表・環境構成・写真</h2>
+        <p style="font-size:12px;color:#64748b;margin:4px 0 0;">活動エリア図、行事配置図、工作見本などの画像を添付できます（A4 PDF帳票出力時にも自動レイアウト）。</p>
+      </div>
+      {% if can_edit_document %}
+      <button type="button" onclick="document.getElementById('upload-attachment-modal').showModal()" class="button button--secondary" style="font-size:12px;">
+        ＋ 画像を添付
+      </button>
+      {% endif %}
+    </div>
+
+    {% if attachments %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:16px;">
+        {% for att in attachments %}
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;background:#f8fafc;">
+          <div style="height:130px;background:#fff;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;margin-bottom:8px;">
+            <img src="/plans/documents/{{ document.id }}/attachments/{{ att.id }}" alt="{{ att.caption or att.file_name }}" style="max-height:100%;max-width:100%;object-fit:contain;">
+          </div>
+          <p style="font-size:12px;font-weight:700;color:#1e293b;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ att.caption or att.file_name }}</p>
+          <p style="font-size:10px;color:#94a3b8;margin:2px 0 8px;">配置: {{ '帳票末尾（別枠）' if att.layout_position == 'appendix' else '環境構成欄' }} / {{ (att.file_size / 1024)|round(1) }} KB</p>
+          {% if can_edit_document %}
+          <div style="text-align:right;border-top:1px solid #e2e8f0;padding-top:6px;">
+            <form method="post" action="/plans/documents/{{ document.id }}/attachments/{{ att.id }}/delete" onsubmit="return confirm('添付画像を削除しますか？');" style="display:inline;">
+              <button type="submit" style="background:none;border:none;color:#e11d48;font-size:11px;font-weight:600;cursor:pointer;">削除</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p style="font-size:12px;color:#94a3b8;padding:8px 0;">添付されている図表・画像はありません。</p>
+    {% endif %}
+  </section>
+
+  <!-- 添付画像アップロードモーダル -->
+  <dialog id="upload-attachment-modal" style="border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);max-width:440px;width:100%;">
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding-bottom:12px;margin-bottom:16px;">
+      <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin:0;">📎 参考図表・画像の添付</h3>
+      <button type="button" onclick="document.getElementById('upload-attachment-modal').close()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#94a3b8;">✕</button>
+    </div>
+    <form method="post" action="/plans/documents/{{ document.id }}/attachments" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:14px;font-size:12px;">
+      <div>
+        <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;">画像ファイル (PNG, JPEG, WebP / 5MB以内)</label>
+        <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
+      </div>
+      <div>
+        <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;">キャプション / 説明（帳票に印字）</label>
+        <input type="text" name="caption" placeholder="例: 園庭散歩エリア配置図、製作見本" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
+      </div>
+      <div>
+        <label style="display:block;font-weight:600;color:#334155;margin-bottom:4px;">帳票PDFでのレイアウト配置</label>
+        <select name="layout_position" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
+          <option value="appendix" selected>帳票末尾に「参考図表」として別枠出力（推奨）</option>
+          <option value="inline">環境構成・配慮欄に小型サムネイルで埋め込み</option>
+        </select>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;border-top:1px solid #f1f5f9;padding-top:12px;">
+        <button type="button" onclick="document.getElementById('upload-attachment-modal').close()" class="button button--secondary" style="font-size:12px;">キャンセル</button>
+        <button type="submit" class="button button--primary" style="font-size:12px;">アップロードして添付</button>
+      </div>
+    </form>
+  </dialog>
 
   <section class="report-section no-print">
     <div class="report-section__heading"><h2>版履歴</h2></div>

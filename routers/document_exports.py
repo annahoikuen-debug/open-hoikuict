@@ -411,12 +411,14 @@ def download_monthly_class_batch(
 def download_daily_plan_pdf_route(
     date_str: Optional[str] = Query(default=None, alias="date"),
     classroom_id: Optional[int] = Query(default=None),
+    document_id: Optional[int] = Query(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
-    """日案のA4縦PDF帳票を出力・ダウンロードする (P2-1)。"""
+    """日案のA4縦PDF帳票を出力・ダウンロードする (P2-1, P2-2)。"""
     require_document_exporter(session, current_user)
     from plan_docs.services.daily_export_layout import render_daily_plan_pdf
+    from plan_docs.db_models import PlanDocumentAttachmentRow, PlanDocumentRow
 
     target_date_val = date_str or utc_now().strftime("%Y-%m-%d")
     cls_name = "さくら組"
@@ -463,6 +465,25 @@ def download_daily_plan_pdf_route(
         ],
         "reflection": "公園での落ち葉集めはどの子も意欲的に参加し、見立て遊びへ発展させることができた。道路歩行の際に列が崩れそうになったため、明日はペアの友達と手をつなぎ続ける意識付けを徹底したい。",
     }
+
+    if document_id:
+        doc = session.get(PlanDocumentRow, document_id)
+        if doc:
+            sample_plan["title"] = doc.title
+            sample_plan["target_date"] = doc.target_date or target_date_val
+            sample_plan["owner_name"] = doc.owner_name or sample_plan["owner_name"]
+            attachments = session.exec(
+                select(PlanDocumentAttachmentRow).where(PlanDocumentAttachmentRow.plan_document_id == doc.id)
+            ).all()
+            sample_plan["attachments"] = [
+                {
+                    "file_name": att.file_name,
+                    "caption": att.caption,
+                    "content": att.content,
+                    "layout_position": att.layout_position,
+                }
+                for att in attachments
+            ]
 
     pdf_bytes_data = render_daily_plan_pdf(sample_plan)
 

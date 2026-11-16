@@ -9,6 +9,22 @@
 {% block content %}
 <div class="max-w-4xl space-y-6">
   <div><h1 class="text-2xl font-bold text-slate-800">設定</h1><p class="mt-2 text-sm text-slate-500">園の運用や職員の管理に使う設定をまとめています。利用できる項目を表示しています。</p></div>
+
+  {% if current_user.is_admin %}
+  <!-- 設定ヘルスチェック診断バナー (P1-1) -->
+  <div class="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-white to-indigo-50/50 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="space-y-1">
+      <div class="flex items-center gap-2">
+        <span class="bg-indigo-600 text-white text-2xs font-bold px-2 py-0.5 rounded uppercase tracking-wider">Health Check</span>
+        <h2 class="text-sm font-bold text-slate-800">🩺 設定ヘルスチェック診断 (P1-1)</h2>
+      </div>
+      <p class="text-xs text-slate-600">クラス未割当、全銀設定、料金マスタ等の設定漏れを一括自動診断し、健全度を可視化します。</p>
+    </div>
+    <a href="/settings/health-check" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-xs transition whitespace-nowrap self-start sm:self-center">
+      診断を実行する →
+    </a>
+  </div>
+  {% endif %}
   {% if current_user.is_admin %}
   <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="staff-settings">
     <h2 id="staff-settings" class="px-5 py-3 font-semibold text-slate-600">職員とログイン</h2>

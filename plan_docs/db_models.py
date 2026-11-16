@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, UniqueConstraint
+from sqlalchemy import Column, LargeBinary, UniqueConstraint
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -188,4 +188,18 @@ class PlanExecutionChangeRow(SQLModel, table=True):
         foreign_key="plan_execution_changes.id",
         index=True,
     )
+
+
+class PlanDocumentAttachmentRow(SQLModel, table=True):
+    __tablename__ = "plan_document_attachments"
+
+    id: str = Field(default_factory=lambda: uuid4().hex, primary_key=True)
+    plan_document_id: Optional[int] = Field(default=None, foreign_key="plan_documents.id", index=True)
+    file_name: str
+    content_type: str = Field(default="image/png")
+    caption: Optional[str] = None
+    layout_position: str = Field(default="appendix")
+    file_size: int = Field(default=0)
+    content: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now)
 

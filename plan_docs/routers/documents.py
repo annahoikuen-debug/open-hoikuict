@@ -4,9 +4,12 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlmodel import select
+
+from ..db_models import PlanDocumentAttachmentRow
 
 from child_records.access import can_create_progress_record, can_view_progress_records
 from child_records.settings import effective_config
@@ -269,6 +272,11 @@ def document_detail(
         if document.document_type == DocumentType.DAILY_PLAN
         else None
     )
+    attachments = repository.session.exec(
+        select(PlanDocumentAttachmentRow)
+        .where(PlanDocumentAttachmentRow.plan_document_id == document_id)
+        .order_by(PlanDocumentAttachmentRow.created_at)
+    ).all()
     return render_template(
         request,
         "documents/detail.html",
@@ -292,6 +300,7 @@ def document_detail(
         reflection_state_label=reflection_state_label(reflection),
         reflection_reminder_time=reminder_time().strftime("%H:%M"),
         can_edit_document=_can_edit_document(document, user, repository),
+        attachments=attachments,
     )
 
 
@@ -699,3 +708,127 @@ def correct_execution_change_json(
     except ExecutionChangeError as exc:
         _raise_repository_error(exc)
     return _change_to_dict(change)
+
+
+# ==========================================
+# P2-2: 指導案（日案・月案）図表・画像添付機能
+# ==========================================
+
+@router.get("/documents/{document_id}/attachments")
+def list_document_attachments(
+    document_id: int,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+):
+    """指導案の添付図表一覧を返す (P2-2)。"""
+    _visible_document(document_id, user, repository)
+    rows = repository.session.exec(
+        select(PlanDocumentAttachmentRow)
+        .where(PlanDocumentAttachmentRow.plan_document_id == document_id)
+        .order_by(PlanDocumentAttachmentRow.created_at)
+    ).all()
+    return [
+        {
+            "id": r.id,
+            "file_name": r.file_name,
+            "content_type": r.content_type,
+            "caption": r.caption or "",
+            "layout_position": r.layout_position,
+            "file_size": r.file_size,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+@router.post("/documents/{document_id}/attachments")
+async def upload_document_attachment(
+    document_id: int,
+    request: Request,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+    file: UploadFile = File(...),
+    caption: str = Form(default=""),
+    layout_position: str = Form(default="appendix"),
+):
+    """指導案に参考図表・環境構成画像を添付する (P2-2)。"""
+    document = _visible_document(document_id, user, repository)
+    if not _can_edit_document(document, user, repository):
+        raise HTTPException(status_code=403, detail="この文書を編集する権限がありません")
+
+    content_type = file.content_type or "image/png"
+    if content_type not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
+        raise HTTPException(status_code=400, detail="JPEG, PNG, WebP 形式の画像を選択してください")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="ファイルサイズは 5MB 以内にしてください")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="空のファイルはアップロードできません")
+
+    attachment = PlanDocumentAttachmentRow(
+        plan_document_id=document_id,
+        file_name=file.filename or "attachment.png",
+        content_type=content_type,
+        caption=caption.strip() if caption else None,
+        layout_position=layout_position if layout_position in {"appendix", "inline"} else "appendix",
+        file_size=len(content),
+        content=content,
+    )
+    repository.session.add(attachment)
+    repository.session.commit()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return {
+            "status": "ok",
+            "attachment_id": attachment.id,
+            "file_name": attachment.file_name,
+            "caption": attachment.caption or "",
+        }
+    return RedirectResponse(
+        url=f"/plans/documents/{document_id}?message=図表画像を添付しました",
+        status_code=303,
+    )
+
+
+@router.get("/documents/{document_id}/attachments/{attachment_id}")
+def get_document_attachment_image(
+    document_id: int,
+    attachment_id: str,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+):
+    """指導案の添付画像バイナリを返す (P2-2)。"""
+    _visible_document(document_id, user, repository)
+    att = repository.session.get(PlanDocumentAttachmentRow, attachment_id)
+    if not att or att.plan_document_id != document_id:
+        raise HTTPException(status_code=404, detail="添付ファイルが見つかりません")
+    return Response(
+        content=att.content,
+        media_type=att.content_type,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.post("/documents/{document_id}/attachments/{attachment_id}/delete")
+def delete_document_attachment(
+    document_id: int,
+    attachment_id: str,
+    user: CurrentUser,
+    repository: DocumentRepositoryDep,
+):
+    """指導案の添付画像を削除する (P2-2)。"""
+    document = _visible_document(document_id, user, repository)
+    if not _can_edit_document(document, user, repository):
+        raise HTTPException(status_code=403, detail="この文書を編集する権限がありません")
+
+    att = repository.session.get(PlanDocumentAttachmentRow, attachment_id)
+    if not att or att.plan_document_id != document_id:
+        raise HTTPException(status_code=404, detail="添付ファイルが見つかりません")
+
+    repository.session.delete(att)
+    repository.session.commit()
+    return RedirectResponse(
+        url=f"/plans/documents/{document_id}?message=添付画像を削除しました",
+        status_code=303,
+    )

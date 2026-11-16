@@ -7,6 +7,7 @@ from database import get_session
 from models import GuardianHoursAudit, GuardianHoursSetting, StaffSessionPolicyAudit
 from guardian_hours import closing_time, parse_closing_time
 from time_utils import utc_now
+from health_check_service import run_facility_health_check
 from staff_permissions import require_live_admin
 from staff_session_settings import get_staff_session_policy, parse_session_policy, save_staff_session_policy
 from template_utils import create_templates
@@ -95,3 +96,32 @@ def save_staff_sessions(request: Request, idle_value: str = Form(""), idle_unit:
     save_staff_session_policy(session, policy, actor)
     return RedirectResponse("/settings/staff-sessions?saved=true", status_code=303,
                             headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/health-check", response_class=HTMLResponse)
+def facility_health_check_page(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """施設・園の初期設定ヘルスチェック診断画面 (P1-1)。"""
+    result = run_facility_health_check(session)
+    return templates.TemplateResponse(
+        request,
+        "settings/health_check.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "health": result,
+        },
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.get("/health-check/api")
+def facility_health_check_api(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """施設・園の初期設定ヘルスチェック結果をJSONで返す (P1-1)。"""
+    return run_facility_health_check(session)

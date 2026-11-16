@@ -221,5 +221,57 @@ def render_daily_plan_pdf(plan_data: dict[str, Any]) -> bytes:
             canvas.drawCentredString(sx + stamp_w / 2, cur_y - 28, owner_name)
 
     canvas.showPage()
+
+    # ==========================================
+    # P2-2: 添付図表・環境構成（2ページ目以降）
+    # ==========================================
+    attachments = plan_data.get("attachments") or []
+    if attachments:
+        from reportlab.lib.utils import ImageReader
+
+        canvas.setFont(FONT, 13.0)
+        canvas.setFillColorRGB(0.1, 0.1, 0.1)
+        canvas.drawString(margin, page_h - margin - 15, "【参考図表・環境構成】")
+        canvas.setFont(FONT, 8.5)
+        canvas.setFillColorRGB(0.4, 0.4, 0.4)
+        canvas.drawRightString(page_w - margin, page_h - margin - 15, f"{facility_name} / {title}")
+
+        canvas.setStrokeColorRGB(0.8, 0.8, 0.8)
+        canvas.line(margin, page_h - margin - 22, page_w - margin, page_h - margin - 22)
+
+        cur_att_y = page_h - margin - 35
+        for att in attachments:
+            content_bytes = att.get("content")
+            if not content_bytes:
+                continue
+            caption = att.get("caption") or att.get("file_name") or "参考図表"
+
+            try:
+                img_reader = ImageReader(BytesIO(content_bytes))
+                iw, ih = img_reader.getSize()
+                max_w = content_w
+                max_h = 240.0
+                scale = min(max_w / iw, max_h / ih, 1.0)
+                draw_w = iw * scale
+                draw_h = ih * scale
+
+                if cur_att_y - draw_h - 25 < margin:
+                    canvas.showPage()
+                    cur_att_y = page_h - margin - 25
+
+                canvas.setStrokeColorRGB(0.85, 0.88, 0.90)
+                canvas.rect(margin, cur_att_y - draw_h, draw_w, draw_h, fill=0, stroke=1)
+                canvas.drawImage(img_reader, margin, cur_att_y - draw_h, width=draw_w, height=draw_h, preserveAspectRatio=True)
+
+                canvas.setFont(FONT, 8.5)
+                canvas.setFillColorRGB(0.2, 0.2, 0.2)
+                canvas.drawString(margin, cur_att_y - draw_h - 12, f"▲ {caption}")
+
+                cur_att_y -= (draw_h + 30)
+            except Exception:
+                continue
+
+        canvas.showPage()
+
     canvas.save()
     return buffer.getvalue()
