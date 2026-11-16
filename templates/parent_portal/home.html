@@ -34,6 +34,32 @@
 <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ flash_notice }}</div>
 {% endif %}
 
+{% if urgent_surveys %}
+<div class="mb-5 space-y-3" id="home-urgent-surveys">
+  {% for survey in urgent_surveys %}
+  <div class="bg-gradient-to-r from-rose-50 to-amber-50 border-2 border-rose-300 rounded-xl p-4 shadow-xs">
+    <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center gap-2">
+        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white text-xs font-bold animate-pulse">!</span>
+        <span class="text-xs font-bold text-rose-800">⚠️ ご回答をお願いします（回答期限が迫っています）</span>
+      </div>
+      <span class="text-xs font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full">
+        残り {{ survey.remaining_days }}日 {{ survey.remaining_hours }}時間 ({{ survey.closes_at_label }} 締切)
+      </span>
+    </div>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+      <div>
+        <h3 class="text-sm font-bold text-slate-900">{{ survey.title }}</h3>
+      </div>
+      <a href="{{ survey.url }}" class="inline-flex items-center justify-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap transition">
+        今すぐ回答する →
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if recent_replies %}
 <section class="mb-6 rounded-xl border border-sky-200 bg-sky-50 p-5" aria-label="園からの最近の返信">
   <div class="flex items-center justify-between gap-3"><h2 class="font-semibold text-sky-900">園からの返信があります</h2><a href="/parent-portal/history" class="text-sm text-sky-800 underline">連絡履歴を見る</a></div>

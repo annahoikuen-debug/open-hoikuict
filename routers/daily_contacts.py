@@ -225,12 +225,74 @@ def _detail_response(request, session, current_user, child_id, day, classroom_id
     reply = _load_daily_contact_reply(session, child_id, day)
     draft = reply.pending_draft if reply and reply.pending_draft is not None else None
     message = draft.get("message", "") if draft is not None else (reply.message or "" if reply else "")
+
+    # 園児間クイック移動（P4-1）のための同クラス（または絞り込み内）の在園児リスト
+    target_cls_id = classroom_id if classroom_id is not None else child.classroom_id
+    peer_query = select(Child).options(selectinload(Child.classroom)).where(Child.status == ChildStatus.enrolled)
+    if target_cls_id:
+        peer_query = peer_query.where(Child.classroom_id == target_cls_id)
+    peers = session.exec(peer_query).all()
+    peer_ids = [c.id for c in peers if c.id is not None]
+
+    peer_entries = session.exec(
+        select(DailyContactEntry).where(
+            DailyContactEntry.target_date == day,
+            DailyContactEntry.child_id.in_(peer_ids) if peer_ids else False,
+        )
+    ).all() if peer_ids else []
+    entry_by_pid = {e.child_id: e for e in peer_entries}
+
+    peer_replies = session.exec(
+        select(DailyContactReply).where(
+            DailyContactReply.target_date == day,
+            DailyContactReply.child_id.in_(peer_ids) if peer_ids else False,
+        )
+    ).all() if peer_ids else []
+    replied_pids = {
+        r.child_id for r in peer_replies
+        if r.published_at is not None or (r.message and r.message.strip())
+    }
+
+    sorted_peers = _sort_children_by_contact_status(peers, entry_by_pid, sort)
+    current_idx = next((i for i, c in enumerate(sorted_peers) if c.id == child_id), -1)
+
+    prev_child = sorted_peers[current_idx - 1] if current_idx > 0 else None
+    next_child = sorted_peers[current_idx + 1] if 0 <= current_idx < len(sorted_peers) - 1 else None
+
+    # 未返信の次の園児（現在の園児より後ろ、なければ前から）
+    next_unreplied_child = None
+    if current_idx >= 0:
+        for c in sorted_peers[current_idx + 1:]:
+            if c.id not in replied_pids:
+                next_unreplied_child = c
+                break
+        if next_unreplied_child is None:
+            for c in sorted_peers[:current_idx]:
+                if c.id not in replied_pids:
+                    next_unreplied_child = c
+                    break
+
+    unreplied_count = sum(1 for c in sorted_peers if c.id not in replied_pids)
+
+    prev_child_url = f"/daily-contacts/{prev_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if prev_child else None
+    next_child_url = f"/daily-contacts/{next_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if next_child else None
+    next_unreplied_url = f"/daily-contacts/{next_unreplied_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if next_unreplied_child else None
+
     return templates.TemplateResponse(request, "daily_contacts/detail.html", {
         "current_user": current_user, "target_date": day, "target_date_value": day.isoformat(),
         "selected_classroom_id": classroom_id, "selected_sort": sort, "selected_view": _normalize_view(view),
         "list_url": f"/daily-contacts/?{_daily_contact_query(day, classroom_id, sort, view=view)}",
         "previous_url": f"/daily-contacts/{child_id}?{_daily_contact_query(day - timedelta(days=1), classroom_id, sort, view=view)}" if day > date.min else None,
         "next_url": f"/daily-contacts/{child_id}?{_daily_contact_query(day + timedelta(days=1), classroom_id, sort, view=view)}" if day < date.max else None,
+        "prev_child": prev_child,
+        "next_child": next_child,
+        "prev_child_url": prev_child_url,
+        "next_child_url": next_child_url,
+        "next_unreplied_child": next_unreplied_child,
+        "next_unreplied_url": next_unreplied_url,
+        "current_child_index": current_idx + 1 if current_idx >= 0 else 1,
+        "total_peers_count": len(sorted_peers),
+        "unreplied_peers_count": unreplied_count,
         "history_url": f"/daily-contacts/{child_id}/history?{_daily_contact_query(day, classroom_id, sort, view=view)}",
         "child": child, "entry": entry, "reply": reply, "reply_fields": reply_field_definitions(),
         "reply_form_values": attempted if attempted is not None else reply_values_for_form(reply),

@@ -10,7 +10,59 @@
   <a href="/parent-portal/" class="text-sm text-indigo-600 hover:underline">ホームへ戻る</a>
 </div>
 
-<div class="space-y-4">
+<!-- 締切間近アンケート強調バナー (P6-4) -->
+{% if urgent_surveys %}
+<div class="mb-5 space-y-3" id="urgent-surveys-container">
+  {% for survey in urgent_surveys %}
+  <div class="bg-gradient-to-r from-rose-50 to-amber-50 border-2 border-rose-300 rounded-xl p-4 shadow-xs">
+    <div class="flex items-center justify-between mb-1">
+      <div class="flex items-center gap-2">
+        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white text-xs font-bold animate-pulse">!</span>
+        <span class="text-xs font-bold text-rose-800">⚠️ ご回答をお願いします（回答期限が迫っています）</span>
+      </div>
+      <span class="text-xs font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full">
+        残り {{ survey.remaining_days }}日 {{ survey.remaining_hours }}時間 ({{ survey.closes_at_label }} 締切)
+      </span>
+    </div>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+      <div>
+        <h3 class="text-sm font-bold text-slate-900">{{ survey.title }}</h3>
+      </div>
+      <a href="{{ survey.url }}" class="inline-flex items-center justify-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm whitespace-nowrap transition">
+        今すぐ回答する →
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- 種別タブ & クイックトグル (P6-3) -->
+<div class="mb-5 space-y-3 bg-white p-4 rounded-xl border border-gray-200 shadow-xs">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <!-- タブ -->
+    <div class="flex gap-1 overflow-x-auto text-xs font-medium">
+      <button type="button" onclick="filterNoticeTab('all')" id="tab-all" class="notice-filter-tab px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold transition">すべて</button>
+      <button type="button" onclick="filterNoticeTab('notice')" id="tab-notice" class="notice-filter-tab px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">お知らせ</button>
+      <button type="button" onclick="filterNoticeTab('survey')" id="tab-survey" class="notice-filter-tab px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">アンケート</button>
+      <button type="button" onclick="filterNoticeTab('notification')" id="tab-notification" class="notice-filter-tab px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">個別通知</button>
+    </div>
+    <!-- トグル -->
+    <div class="flex items-center gap-3 text-xs">
+      <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+        <input type="checkbox" id="toggle-unread" onchange="applyNoticeFilters()" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+        <span>未読のみ</span>
+      </label>
+      <span class="text-slate-300">|</span>
+      <label class="flex items-center gap-1.5 cursor-pointer text-rose-700 font-bold">
+        <input type="checkbox" id="toggle-actionable" onchange="applyNoticeFilters()" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+        <span>要回答・重要のみ</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="space-y-4" id="notices-list">
   {% for update in updates %}
   {% if update.kind == "parent_notification" %}
   {% set notification = update.notification %}
@@ -24,7 +76,7 @@
     "emergency_notice": "緊急連絡",
     "punch_correction_notice": "打刻訂正",
   } %}
-  <a href="/parent-portal/notifications/{{ notification.id }}" class="block rounded-xl border border-rose-200 bg-white p-5 shadow-sm hover:border-rose-400">
+  <a href="/parent-portal/notifications/{{ notification.id }}" class="notice-item block rounded-xl border border-rose-200 bg-white p-5 shadow-sm hover:border-rose-400 transition" data-kind="notification" data-unread="{{ 'true' if not notification.is_read else 'false' }}" data-actionable="{{ 'true' if update.is_important else 'false' }}">
     <div class="mb-2 flex items-center gap-2">
       <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">{{ notification_kind_labels.get(notification.kind.value, "お知らせ") }}</span>
       {% if not notification.is_read %}
@@ -37,10 +89,28 @@
     <p class="mt-2 text-sm text-gray-700">{{ notification.body }}</p>
     <p class="mt-2 text-sm text-gray-500">{{ notification.created_at|jst_datetime("%Y-%m-%d %H:%M") }} JST</p>
   </a>
+  {% elif update.kind == "survey" %}
+  <a href="{{ update.url }}" class="notice-item block rounded-xl border border-purple-200 bg-white p-5 shadow-sm hover:border-purple-400 transition" data-kind="survey" data-unread="{{ 'true' if update.is_unread else 'false' }}" data-actionable="true">
+    <div class="mb-2 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="rounded-full bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700">アンケート</span>
+        <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">要回答</span>
+        {% if update.is_unread %}
+        <span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">未回答</span>
+        {% endif %}
+      </div>
+      {% if update.closes_at_label %}
+      <span class="text-xs text-rose-600 font-semibold">締切: {{ update.closes_at_label }}</span>
+      {% endif %}
+    </div>
+    <h2 class="text-lg font-semibold text-gray-800">{{ update.title }}</h2>
+    <p class="mt-2 text-sm text-gray-500">{{ update.published_at_label }} JST</p>
+  </a>
   {% else %}
   {% set notice = update.notice %}
-  <a href="/parent-portal/notices/{{ notice.id }}" class="block rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:border-indigo-300">
+  <a href="/parent-portal/notices/{{ notice.id }}" class="notice-item block rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:border-indigo-300 transition" data-kind="notice" data-unread="{{ 'true' if update.is_unread else 'false' }}" data-actionable="{{ 'true' if notice.priority.value == 'high' else 'false' }}">
     <div class="mb-2 flex items-center gap-2">
+      <span class="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">お知らせ</span>
       {% if notice.priority.value == 'high' %}
       <span class="rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">重要</span>
       {% endif %}
@@ -58,4 +128,40 @@
   <div class="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-gray-400">表示できるお知らせはありません。</div>
   {% endfor %}
 </div>
+
+<script>
+  let currentNoticeTab = 'all';
+
+  function filterNoticeTab(tab) {
+    currentNoticeTab = tab;
+    document.querySelectorAll('.notice-filter-tab').forEach(b => {
+      b.classList.remove('bg-indigo-600', 'text-white', 'font-bold');
+      b.classList.add('bg-slate-100', 'text-slate-600');
+    });
+    const activeBtn = document.getElementById(`tab-${tab}`);
+    if (activeBtn) {
+      activeBtn.classList.add('bg-indigo-600', 'text-white', 'font-bold');
+      activeBtn.classList.remove('bg-slate-100', 'text-slate-600');
+    }
+    applyNoticeFilters();
+  }
+
+  function applyNoticeFilters() {
+    const unreadOnly = document.getElementById('toggle-unread').checked;
+    const actionableOnly = document.getElementById('toggle-actionable').checked;
+
+    document.querySelectorAll('.notice-item').forEach(item => {
+      const kind = item.dataset.kind;
+      const isUnread = item.dataset.unread === 'true';
+      const isActionable = item.dataset.actionable === 'true';
+
+      let show = true;
+      if (currentNoticeTab !== 'all' && kind !== currentNoticeTab) show = false;
+      if (unreadOnly && !isUnread) show = false;
+      if (actionableOnly && !isActionable) show = false;
+
+      item.style.display = show ? '' : 'none';
+    });
+  }
+</script>
 {% endblock %}

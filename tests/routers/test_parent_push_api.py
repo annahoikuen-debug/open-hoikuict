@@ -370,6 +370,41 @@ class ParentPushApiTests(unittest.TestCase):
         self.assertIn("clients.openWindow(absoluteUrl)", worker.text)
         self.assertIn("self.skipWaiting()", worker.text)
 
+    def test_push_allowed_respects_fever_and_other_preferences(self):
+        """発熱通知等の個別ミュート設定が _push_allowed で正しく判定されること。"""
+        from models import ParentAccount, ParentNotificationKind, ParentPushPreference
+        from parent_push_service import _push_allowed
+
+        with Session(self.engine) as session:
+            parent_account = session.get(ParentAccount, self.first_parent_id)
+
+        pref = ParentPushPreference(
+            parent_account_id=self.first_parent_id,
+            push_enabled=True,
+            fever_notification_enabled=False,
+            notice_published_enabled=False,
+            survey_published_enabled=False,
+            attendance_confirmation_enabled=True,
+        )
+
+        self.assertFalse(_push_allowed(parent_account, pref, ParentNotificationKind.fever_notification))
+        self.assertFalse(_push_allowed(parent_account, pref, ParentNotificationKind.notice_published))
+        self.assertFalse(_push_allowed(parent_account, pref, ParentNotificationKind.survey_published))
+        self.assertTrue(_push_allowed(parent_account, pref, ParentNotificationKind.attendance_confirmation_request))
+
+        # 設定がTrueの場合は許可されること
+        pref_allowed = ParentPushPreference(
+            parent_account_id=self.first_parent_id,
+            push_enabled=True,
+            fever_notification_enabled=True,
+            notice_published_enabled=True,
+            survey_published_enabled=True,
+            attendance_confirmation_enabled=True,
+        )
+        self.assertTrue(_push_allowed(parent_account, pref_allowed, ParentNotificationKind.fever_notification))
+        self.assertTrue(_push_allowed(parent_account, pref_allowed, ParentNotificationKind.notice_published))
+        self.assertTrue(_push_allowed(parent_account, pref_allowed, ParentNotificationKind.survey_published))
+
 
 if __name__ == "__main__":
     unittest.main()

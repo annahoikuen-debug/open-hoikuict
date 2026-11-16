@@ -859,12 +859,27 @@ def _push_allowed(
         return False
     if preference is not None and not preference.push_enabled:
         return False
-    if (
-        notification_kind == ParentNotificationKind.attendance_confirmation_request
-        and preference is not None
-        and not preference.attendance_confirmation_enabled
-    ):
-        return False
+    if preference is not None:
+        if (
+            notification_kind == ParentNotificationKind.attendance_confirmation_request
+            and not preference.attendance_confirmation_enabled
+        ):
+            return False
+        if (
+            notification_kind == ParentNotificationKind.fever_notification
+            and not preference.fever_notification_enabled
+        ):
+            return False
+        if (
+            notification_kind == ParentNotificationKind.notice_published
+            and not preference.notice_published_enabled
+        ):
+            return False
+        if (
+            notification_kind == ParentNotificationKind.survey_published
+            and not preference.survey_published_enabled
+        ):
+            return False
     return True
 
 

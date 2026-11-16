@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import re
 from typing import Optional
@@ -620,6 +620,34 @@ def _load_parent_updates(
     return latest_updates
 
 
+def _load_urgent_surveys(
+    session: Session, parent_account: ParentAccount, now: Optional[datetime] = None
+) -> list[dict]:
+    """締切3日以内の未回答アンケートを抽出する (P6-4)。"""
+    current_time = now or utc_now()
+    unanswered = _load_unanswered_parent_surveys(session, parent_account)
+    urgent = []
+    threshold = current_time + timedelta(days=3)
+    for survey in unanswered:
+        if survey.closes_at:
+            close_dt = ensure_utc_from_local(survey.closes_at)
+            curr_utc = ensure_utc(current_time)
+            if curr_utc <= close_dt <= threshold:
+                remaining_seconds = max(0, (close_dt - curr_utc).total_seconds())
+                remaining_days = int(remaining_seconds // 86400)
+                remaining_hours = int((remaining_seconds % 86400) // 3600)
+                urgent.append({
+                    "id": survey.id,
+                    "title": survey.title,
+                    "closes_at": survey.closes_at,
+                    "closes_at_label": format_local_datetime(survey.closes_at) if survey.closes_at else "",
+                    "remaining_days": remaining_days,
+                    "remaining_hours": remaining_hours,
+                    "url": f"/parent-portal/surveys/{survey.id}",
+                })
+    return urgent
+
+
 @router.get("/", response_class=HTMLResponse)
 def parent_home(
     request: Request,
@@ -659,6 +687,7 @@ def parent_home(
     )
 
     latest_updates = _load_parent_updates(session, current_parent_user)
+    urgent_surveys = _load_urgent_surveys(session, current_parent_user)
     recent_replies = session.exec(
         select(DailyContactReply).options(selectinload(DailyContactReply.child)).where(
             DailyContactReply.child_id.in_(child_ids) if child_ids else False,
@@ -681,6 +710,7 @@ def parent_home(
             "reply_display_by_child_id": reply_display_by_child_id,
             "pending_request_by_child_id": pending_request_by_child_id,
             "latest_updates": latest_updates[:5],
+            "urgent_surveys": urgent_surveys,
             "recent_replies": recent_replies,
             "unread_notice_count": sum(1 for item in latest_updates if item["is_unread"]),
             "parent_billing_portal_enabled": is_parent_billing_enabled(session),
@@ -2003,13 +2033,29 @@ async def save_parent_survey_answer(
 @router.get("/notices", response_class=HTMLResponse)
 def parent_notice_list(
     request: Request,
+    category: Optional[str] = Query(default=None),
+    unread: Optional[bool] = Query(default=None),
+    actionable: Optional[bool] = Query(default=None),
     session: Session = Depends(get_session),
 ):
     current_parent_user = _get_parent_account(request, session)
     if not current_parent_user:
         return RedirectResponse(url="/parent-portal/login", status_code=303)
 
-    updates = _load_parent_updates(session, current_parent_user, include_surveys=False)
+    updates = _load_parent_updates(session, current_parent_user, include_surveys=True)
+    urgent_surveys = _load_urgent_surveys(session, current_parent_user)
+
+    if category:
+        if category == "notice":
+            updates = [u for u in updates if u["kind"] == "notice"]
+        elif category == "survey":
+            updates = [u for u in updates if u["kind"] == "survey"]
+        elif category == "notification":
+            updates = [u for u in updates if u["kind"] == "parent_notification"]
+    if unread:
+        updates = [u for u in updates if u["is_unread"]]
+    if actionable:
+        updates = [u for u in updates if u.get("is_important") or u["kind"] == "survey"]
 
     return templates.TemplateResponse(
         request,
@@ -2019,6 +2065,10 @@ def parent_notice_list(
             "current_parent_user": current_parent_user,
             "parent_portal_mode": True,
             "updates": updates,
+            "urgent_surveys": urgent_surveys,
+            "selected_category": category or "all",
+            "selected_unread": bool(unread),
+            "selected_actionable": bool(actionable),
         },
     )
 
