@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}連絡帳 確認待ちリスト - open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+  <!-- ヘッダー -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+    <div>
+      <div class="flex items-center space-x-2">
+        <span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-300">
+          確認承認フロー (P4-3)
+        </span>
+        <h1 class="text-xl font-bold text-slate-900">連絡帳 確認待ちリスト</h1>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-500 mt-1">
+        担任保育士から提出された返信の確認・承認待ち一覧です。内容を確認し「承認」すると保護者に公開されます。
+      </p>
+    </div>
+    <div class="flex items-center space-x-2">
+      <a href="/daily-contacts/" class="text-xs sm:text-sm text-slate-600 hover:text-slate-900 font-medium px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm hover:bg-slate-50">
+        ← 連絡帳一覧に戻る
+      </a>
+    </div>
+  </div>
+
+  {% if items %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 divide-y divide-slate-200">
+    {% for item in items %}
+    <div class="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/80 transition">
+      <div class="space-y-1.5 flex-1">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+            対象日: {{ item.target_date }}
+          </span>
+          <span class="font-bold text-slate-900 text-base">
+            {{ item.child_name }}
+          </span>
+          <span class="text-xs text-slate-500">
+            (担当: {{ item.staff_name }})
+          </span>
+        </div>
+        <p class="text-xs sm:text-sm text-slate-700 line-clamp-2 bg-slate-50 p-2.5 rounded border border-slate-200">
+          {{ item.message or "（メッセージ入力なし・生活記録のみ）" }}
+        </p>
+        <div class="text-[11px] text-slate-400">
+          申請日時: {{ item.updated_at }}
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 shrink-0">
+        <a href="/daily-contacts/{{ item.child_id }}?date={{ item.target_date }}" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-lg transition">
+          詳細・編集
+        </a>
+        <form method="post" action="/daily-contacts/replies/{{ item.reply_id }}/approve" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token if request.state.csrf_token else '' }}">
+          <button type="submit" class="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 rounded-lg shadow-sm transition">
+            承認して公開
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+      ✓
+    </div>
+    <h3 class="text-base font-bold text-slate-900">現在、確認待ちの連絡帳はありません</h3>
+    <p class="text-xs text-slate-500 mt-1">すべての返信が承認・公開済み、または下書き状態です。</p>
+    <div class="mt-4">
+      <a href="/daily-contacts/" class="inline-block text-xs font-bold text-indigo-600 hover:underline">
+        連絡帳一覧を開く →
+      </a>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

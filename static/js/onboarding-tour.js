@@ -24,7 +24,7 @@
       step: 3,
       selector: '[data-tour-step="3"]',
       title: "日次連絡帳",
-      desc: "保護者から届いた生活記録やお迎え予定を確認し、返信を作成・送信できます。"
+      desc: "保護者から届いた生活記録やお迎え予定を確認し、返信を作成・承認・送信できます。"
     },
     {
       step: 4,
@@ -35,8 +35,26 @@
     {
       step: 5,
       selector: '[data-tour-step="5"]',
-      title: "設定",
-      desc: "開園時間や延長保育ルール、ツアーの再表示などは設定画面からいつでも行えます。"
+      title: "指導計画 (日案・月案)",
+      desc: "文例AIサジェストや前日振り返り連携を活用し、環境図付きの日案・月案を作成・A4印刷できます。"
+    },
+    {
+      step: 6,
+      selector: '[data-tour-step="6"]',
+      title: "シフト作成・勤怠",
+      desc: "法令配置基準を自動充足するAIソルバーを活用し、有休・希望休を考慮したシフトを最適化します。"
+    },
+    {
+      step: 7,
+      selector: '[data-tour-step="7"]',
+      title: "請求・口座振替",
+      desc: "延長保育料や給食日割りを自動計算。確定前検算や全銀電文生成をワンストップで実行できます。"
+    },
+    {
+      step: 8,
+      selector: '[data-tour-step="8"]',
+      title: "施設設定＆診断",
+      desc: "基本開園時間や料金マスタ、設定ヘルスチェック診断をいつでも確認・修正できます。"
     }
   ];
 
@@ -164,12 +182,35 @@
     try {
       localStorage.setItem(STORAGE_KEY, "true");
     } catch (e) {}
+
+    // P1-2: サーバ側への完了状態永続化
+    try {
+      var formData = new FormData();
+      formData.append("tour_key", "staff_console_tour");
+      fetch("/settings/tour/complete", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin"
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   window.restartOnboardingTour = function () {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
+
+    // P1-2: サーバ側の完了状態リセット
+    try {
+      var formData = new FormData();
+      formData.append("tour_key", "staff_console_tour");
+      fetch("/settings/tour/reset", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin"
+      }).catch(function () {});
+    } catch (e) {}
+
     createTourElements();
     showStep(0);
   };
@@ -181,15 +222,33 @@
     var isHome = window.location.pathname === "/" || window.location.pathname === "/staff/portal";
     if (!isHome) return;
 
-    try {
-      var completed = localStorage.getItem(STORAGE_KEY);
-      if (!completed) {
-        // 少し遅延させて自然に開始
-        setTimeout(function () {
-          createTourElements();
-          showStep(0);
-        }, 600);
-      }
-    } catch (e) {}
+    // サーバ側の完了ステータスを確認
+    fetch("/settings/tour/status?tour_key=staff_console_tour", { credentials: "same-origin" })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.is_completed) {
+          try { localStorage.setItem(STORAGE_KEY, "true"); } catch (e) {}
+          return;
+        }
+        var completed = false;
+        try { completed = localStorage.getItem(STORAGE_KEY) === "true"; } catch (e) {}
+        if (!completed) {
+          setTimeout(function () {
+            createTourElements();
+            showStep(0);
+          }, 600);
+        }
+      })
+      .catch(function () {
+        // オフラインまたはエラー時は localStorage をフォールバック
+        var completed = false;
+        try { completed = localStorage.getItem(STORAGE_KEY) === "true"; } catch (e) {}
+        if (!completed) {
+          setTimeout(function () {
+            createTourElements();
+            showStep(0);
+          }, 600);
+        }
+      });
   });
 })();

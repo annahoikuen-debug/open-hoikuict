@@ -439,6 +439,10 @@
     "pending_draft",
     "staff_user_id",
     "staff_name",
+    "reviewed_by_staff_id",
+    "reviewed_by_name",
+    "rejection_reason",
+    "reviewed_at",
     "published_at",
     "created_at",
     "updated_at"
@@ -662,6 +666,7 @@
     "fever_caution_c",
     "fever_review_c",
     "parent_billing_portal_enabled",
+    "contact_reply_review_required",
     "updated_at",
     "updated_by_user_id",
     "updated_by_name"
@@ -1600,5 +1605,13 @@
     "settings_snapshot",
     "created_by",
     "created_at"
+  ],
+  "user_onboarding_states": [
+    "id",
+    "user_id",
+    "staff_name",
+    "tour_key",
+    "is_completed",
+    "completed_at"
   ]
 }

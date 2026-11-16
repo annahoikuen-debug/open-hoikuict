@@ -137,9 +137,18 @@
 
         {% if reply %}
         <div class="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+          {% if reply.status.value == "pending_review" %}
+          <span id="reply-state" class="rounded-full bg-amber-100 border border-amber-300 px-3 py-1 text-xs font-bold text-amber-800">確認待ち (主任承認前)</span>
+          {% elif reply.status.value == "rejected" %}
+          <span id="reply-state" class="rounded-full bg-rose-100 border border-rose-300 px-3 py-1 text-xs font-bold text-rose-800">差し戻し (要修正)</span>
+          {% else %}
           <span id="reply-state" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{{ "未送信の変更あり" if reply.pending_draft is not none else "公開済み" if reply.status.value == "published" else "未送信" }}</span>
+          {% endif %}
           {% if reply.staff_name %}
-          <span>更新者: {{ reply.pending_draft.get("staff_name") if reply.pending_draft is not none else reply.staff_name }}</span>
+          <span>担当: {{ reply.pending_draft.get("staff_name") if reply.pending_draft is not none else reply.staff_name }}</span>
+          {% endif %}
+          {% if reply.reviewed_by_name %}
+          <span>確認者: {{ reply.reviewed_by_name }}</span>
           {% endif %}
           {% if reply.published_at %}
           <span>公開: {{ reply.published_at|jst_datetime("%Y-%m-%d %H:%M") }} JST</span>
@@ -148,6 +157,16 @@
         {% else %}<span id="reply-state" class="text-sm text-amber-800">未送信（未入力）</span>{% endif %}
       </div>
     </div>
+
+    <!-- P4-3: 差戻しアラート (差戻し時に表示) -->
+    {% if reply and reply.status.value == 'rejected' and reply.rejection_reason %}
+    <div class="rounded-lg border-l-4 border-rose-500 bg-rose-50 p-4 text-xs text-rose-800 space-y-1 shadow-sm">
+      <div class="font-bold flex items-center gap-1.5 text-rose-900">
+        <span>⚠️</span> 差戻し理由 (確認者: {{ reply.reviewed_by_name or '主任・園長' }}):
+      </div>
+      <p class="text-rose-700 whitespace-pre-wrap">{{ reply.rejection_reason }}</p>
+    </div>
+    {% endif %}
 
     <!-- P4-2: 楽観ロック競合時警告バナー（初期非表示） -->
     <div id="reply-conflict-banner" class="hidden rounded-lg border-l-4 border-rose-500 bg-rose-50 p-4 text-xs shadow-sm space-y-2">
@@ -210,10 +229,35 @@
       <textarea id="reply-message" name="reply_message" rows="4" class="w-full rounded border border-gray-300 px-3 py-2">{{ reply_message_value }}</textarea>
     </div>
 
-    <div class="flex flex-wrap gap-3">
-      <button type="submit" name="action" value="draft" class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">下書き保存</button>
-      <button type="submit" name="action" value="publish" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">保護者に公開</button>
-      <button type="button" id="reply-reset" class="rounded border px-4 py-2 text-sm" hidden>変更を取り消す</button>
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="submit" name="action" value="draft" class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">下書き保存</button>
+        <button type="submit" name="action" value="request_review" class="rounded border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+          主任に確認を依頼 (承認申請)
+        </button>
+        <button type="submit" name="action" value="publish" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">保護者に公開</button>
+        <button type="button" id="reply-reset" class="rounded border px-4 py-2 text-sm" hidden>変更を取り消す</button>
+      </div>
+
+      <!-- 主任・園長専用 承認・差戻しクイックアクション -->
+      {% if reply and (current_user.is_admin or current_user.role in ('admin', 'chief')) %}
+      <div class="flex items-center gap-2 border-t md:border-t-0 pt-2 md:pt-0 w-full md:w-auto">
+        <button
+          type="button"
+          onclick="var r = prompt('差し戻しの理由を入力してください:'); if (r) { var f = document.createElement('form'); f.method='post'; f.action='/daily-contacts/replies/{{ reply.id }}/reject'; var i1 = document.createElement('input'); i1.type='hidden'; i1.name='reason'; i1.value=r; var i2 = document.createElement('input'); i2.type='hidden'; i2.name='csrf_token'; i2.value='{{ request.state.csrf_token if request.state.csrf_token else '' }}'; f.appendChild(i1); f.appendChild(i2); document.body.appendChild(f); f.submit(); }"
+          class="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+        >
+          差し戻し
+        </button>
+        <button
+          type="button"
+          onclick="var f = document.createElement('form'); f.method='post'; f.action='/daily-contacts/replies/{{ reply.id }}/approve'; var i = document.createElement('input'); i.type='hidden'; i.name='csrf_token'; i.value='{{ request.state.csrf_token if request.state.csrf_token else '' }}'; f.appendChild(i); document.body.appendChild(f); f.submit();"
+          class="rounded bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-2xs"
+        >
+          ✓ 承認して公開
+        </button>
+      </div>
+      {% endif %}
     </div>
   </form>
   {% elif reply %}

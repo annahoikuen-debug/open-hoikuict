@@ -225,9 +225,18 @@ def _migrate_observation_sharing_columns() -> None:
 
 def _migrate_spec_20260924_columns() -> None:
     additions = {
-        "daily_contact_replies": {"pending_draft": "JSON"},
+        "daily_contact_replies": {
+            "pending_draft": "JSON",
+            "reviewed_by_staff_id": "CHAR(32)",
+            "reviewed_by_name": "VARCHAR",
+            "rejection_reason": "VARCHAR",
+            "reviewed_at": "DATETIME",
+        },
         "attendance_verification_histories": {
             "reason": "VARCHAR", "previous_status": "VARCHAR", "actor_user_id": "CHAR(32)",
+        },
+        "facility_settings": {
+            "contact_reply_review_required": "BOOLEAN DEFAULT 0",
         },
     }
     with engine.begin() as conn:

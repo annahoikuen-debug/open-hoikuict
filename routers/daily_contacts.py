@@ -18,7 +18,16 @@ from daily_contact_reply_fields import (
     reply_values_from_mapping,
 )
 from database import get_session
-from models import AttendanceRecord, Child, ChildStatus, Classroom, DailyContactEntry, DailyContactReply, DailyContactReplyStatus
+from models import (
+    AttendanceRecord,
+    Child,
+    ChildStatus,
+    Classroom,
+    DailyContactEntry,
+    DailyContactReply,
+    DailyContactReplyStatus,
+    FacilitySettings,
+)
 from home_care_details import STOOL_LABELS
 from time_utils import local_today, utc_now
 
@@ -37,6 +46,9 @@ DAILY_CONTACT_SORT_OPTIONS = {
 DAILY_CONTACT_REPLY_NOTICE_MESSAGES = {
     "reply_saved": "園からの返信を下書き保存しました。",
     "reply_published": "園からの返信を保護者に公開しました。",
+    "review_requested": "園からの返信の確認を主任・園長へ依頼しました。",
+    "reply_approved": "連絡帳の返信を承認し、保護者に公開しました。",
+    "reply_rejected": "連絡帳の返信を差し戻しました。",
 }
 
 
@@ -184,6 +196,14 @@ def daily_contact_list(
             and reply.pending_draft is None
         ))
 
+    pending_review_count = len(
+        session.exec(
+            select(DailyContactReply.id).where(
+                DailyContactReply.status == DailyContactReplyStatus.pending_review
+            )
+        ).all()
+    )
+
     return templates.TemplateResponse(
         request,
         "daily_contacts/list.html",
@@ -196,6 +216,7 @@ def daily_contact_list(
             "selected_classroom_id": selected_classroom_id,
             "selected_sort": selected_sort,
             "selected_view": selected_view,
+            "pending_review_count": pending_review_count,
             "sort_options": DAILY_CONTACT_SORT_OPTIONS,
             "detail_query_string": _daily_contact_query(day, selected_classroom_id, selected_sort, view=selected_view),
             "view_urls": {mode: "/daily-contacts/?" + _daily_contact_query(day, selected_classroom_id, selected_sort, view=mode)
@@ -322,6 +343,48 @@ def _detail_response(request, session, current_user, child_id, day, classroom_id
     }, status_code=status_code, headers={"Cache-Control": "private, no-store"})
 
 
+@router.get("/pending-reviews")
+def list_pending_reviews(
+    request: Request,
+    target_date: Optional[str] = Query(default=None, alias="date"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """確認待ち（pending_review）の連絡帳一覧を取得する (P4-3)。"""
+    day = _parse_target_date(target_date) if target_date else local_today()
+    query = (
+        select(DailyContactReply, Child)
+        .join(Child, DailyContactReply.child_id == Child.id)
+        .where(DailyContactReply.status == DailyContactReplyStatus.pending_review)
+        .order_by(DailyContactReply.target_date.desc(), Child.classroom_id, Child.id)
+    )
+    results = session.exec(query).all()
+    items = []
+    for reply, child in results:
+        items.append({
+            "reply_id": reply.id,
+            "child_id": child.id,
+            "child_name": child.full_name,
+            "classroom_id": child.classroom_id,
+            "target_date": reply.target_date.isoformat(),
+            "staff_name": reply.staff_name or "未設定",
+            "message": reply.message or "",
+            "updated_at": reply.updated_at.isoformat(),
+        })
+    if "application/json" in request.headers.get("accept", ""):
+        return items
+    return templates.TemplateResponse(
+        request,
+        "daily_contacts/pending_reviews.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "items": items,
+            "target_date": day.isoformat(),
+        },
+    )
+
+
 @router.get("/{child_id}", response_class=HTMLResponse)
 def daily_contact_detail(request: Request, child_id: int,
                          target_date: Optional[str] = Query(None, alias="date"),
@@ -378,12 +441,12 @@ def save_daily_contact_reply(request: Request, child_id: int,
     attempted = {"nap_time": reply_nap_time, "temperature": reply_temperature,
                  "bowel_movement": reply_bowel_movement, "appetite": reply_appetite, "message": reply_message}
     error = ""
-    if action not in {"draft", "publish"}:
+    if action not in {"draft", "publish", "request_review"}:
         error = "保存方法が不正です。"
     elif reply_temperature.strip().startswith(".") or reply_temperature.strip().endswith("."):
         error = "体温の整数と小数を両方選ぶか、体温をクリアしてください。"
-    elif action == "publish" and not any(value.strip() for value in attempted.values()):
-        error = "公開する内容を1つ以上入力してください。"
+    elif action in {"publish", "request_review"} and not any(value.strip() for value in attempted.values()):
+        error = "公開または確認依頼する内容を1つ以上入力してください。"
     elif any(len(value) > 10000 for value in attempted.values()):
         error = "各項目は10,000文字以内で入力してください。"
     elif any(attempted[field.key] and attempted[field.key] not in field.options for field in reply_field_definitions() if field.options):
@@ -402,15 +465,31 @@ def save_daily_contact_reply(request: Request, child_id: int,
     entry = session.exec(select(DailyContactEntry).where(DailyContactEntry.child_id == child_id,
                                                        DailyContactEntry.target_date == day)).first()
     now = utc_now()
+
+    # 施設設定で確認フロー（ダブルチェック）が有効な場合、一般保育士の公開操作は確認依頼へ昇格
+    facility = session.exec(select(FacilitySettings)).first()
+    review_required = facility.contact_reply_review_required if facility else False
+    is_admin_or_chief = getattr(current_user, "is_admin", False) or getattr(current_user, "role", "") in ("admin", "chief")
+    effective_action = action
+    if action == "publish" and review_required and not is_admin_or_chief:
+        effective_action = "request_review"
+
     changes = {"daily_contact_entry_id": entry.id if entry else None, "updated_at": now}
-    if action == "draft" and reply and reply.status == DailyContactReplyStatus.published:
+    if effective_action == "draft" and reply and reply.status == DailyContactReplyStatus.published:
         changes["pending_draft"] = {"field_values": values, "message": reply_message.strip(),
                                     "staff_name": current_user.name, "saved_at": now.isoformat()}
     else:
-        changes.update(status=DailyContactReplyStatus.published if action == "publish" else DailyContactReplyStatus.draft,
+        if effective_action == "publish":
+            reply_status = DailyContactReplyStatus.published
+        elif effective_action == "request_review":
+            reply_status = DailyContactReplyStatus.pending_review
+        else:
+            reply_status = DailyContactReplyStatus.draft
+
+        changes.update(status=reply_status,
                        field_values=values, message=reply_message.strip() or None,
                        staff_user_id=getattr(current_user, "user_id", None), staff_name=current_user.name,
-                       published_at=now if action == "publish" else None, pending_draft=None)
+                       published_at=now if effective_action == "publish" else None, pending_draft=None)
     try:
         if reply is None:
             reply = DailyContactReply(child_id=child_id, target_date=day, created_at=now, **changes)
@@ -432,8 +511,73 @@ def save_daily_contact_reply(request: Request, child_id: int,
         return _detail_response(request, session, current_user, child_id, day, scope, ordering,
                                 attempted=attempted, error=message, status_code=409, view=view)
     session.refresh(reply)
-    notice = "reply_published" if action == "publish" else "reply_saved"
+    if effective_action == "publish":
+        notice = "reply_published"
+    elif effective_action == "request_review":
+        notice = "review_requested"
+    else:
+        notice = "reply_saved"
+
     if request.headers.get("X-Reply-Request") == "1":
         return {"revision": reply.updated_at.isoformat(), "notice": DAILY_CONTACT_REPLY_NOTICE_MESSAGES[notice],
-                "status": "未送信の変更あり" if reply.pending_draft is not None else "公開済み" if action == "publish" else "未送信"}
+                "status": "確認待ち" if reply.status == DailyContactReplyStatus.pending_review else "未送信の変更あり" if reply.pending_draft is not None else "公開済み" if effective_action == "publish" else "未送信"}
     return RedirectResponse(f"/daily-contacts/{child_id}?{_daily_contact_query(day, scope, ordering, view=view, notice=notice)}", status_code=303)
+
+
+@router.post("/replies/{reply_id}/approve")
+def approve_daily_contact_reply(
+    reply_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """主任・園長が連絡帳返信を承認して保護者に公開する (P4-3)。"""
+    is_admin_or_chief = getattr(current_user, "is_admin", False) or getattr(current_user, "role", "") in ("admin", "chief")
+    if not is_admin_or_chief:
+        raise HTTPException(403, "承認権限がありません（主任または管理者のみ承認可能です）")
+    reply = session.get(DailyContactReply, reply_id)
+    if not reply:
+        raise HTTPException(404, "返信データが見つかりません")
+    now = utc_now()
+    reply.status = DailyContactReplyStatus.published
+    reply.published_at = now
+    reply.reviewed_by_staff_id = getattr(current_user, "user_id", None)
+    reply.reviewed_by_name = current_user.name
+    reply.reviewed_at = now
+    reply.rejection_reason = None
+    reply.updated_at = now
+    session.add(reply)
+    session.commit()
+    session.refresh(reply)
+    if request.headers.get("X-Reply-Request") == "1" or "application/json" in request.headers.get("accept", ""):
+        return {"status": "ok", "message": "承認して公開しました"}
+    return RedirectResponse(f"/daily-contacts/{reply.child_id}?date={reply.target_date.isoformat()}&notice=reply_approved", status_code=303)
+
+
+@router.post("/replies/{reply_id}/reject")
+def reject_daily_contact_reply(
+    reply_id: int,
+    request: Request,
+    reason: str = Form(""),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """主任・園長が連絡帳返信を理由付きで差し戻す (P4-3)。"""
+    is_admin_or_chief = getattr(current_user, "is_admin", False) or getattr(current_user, "role", "") in ("admin", "chief")
+    if not is_admin_or_chief:
+        raise HTTPException(403, "差戻し権限がありません（主任または管理者のみ差し戻し可能です）")
+    reply = session.get(DailyContactReply, reply_id)
+    if not reply:
+        raise HTTPException(404, "返信データが見つかりません")
+    now = utc_now()
+    reply.status = DailyContactReplyStatus.rejected
+    reply.rejection_reason = reason.strip() or "内容を確認・修正してください。"
+    reply.reviewed_by_name = current_user.name
+    reply.reviewed_at = now
+    reply.updated_at = now
+    session.add(reply)
+    session.commit()
+    session.refresh(reply)
+    if request.headers.get("X-Reply-Request") == "1" or "application/json" in request.headers.get("accept", ""):
+        return {"status": "ok", "message": "差し戻しました"}
+    return RedirectResponse(f"/daily-contacts/{reply.child_id}?date={reply.target_date.isoformat()}&notice=reply_rejected", status_code=303)

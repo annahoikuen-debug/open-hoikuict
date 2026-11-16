@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, select
 
@@ -118,6 +118,9 @@ def facility_health_check_page(
     )
 
 
+from models import UserOnboardingState
+
+
 @router.get("/health-check/api")
 def facility_health_check_api(
     session: Session = Depends(get_session),
@@ -125,3 +128,115 @@ def facility_health_check_api(
 ):
     """施設・園の初期設定ヘルスチェック結果をJSONで返す (P1-1)。"""
     return run_facility_health_check(session)
+
+
+@router.post("/tour/complete")
+def complete_onboarding_tour(
+    tour_key: str = Form(default="staff_console_tour"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """職員オンボーディングツアーの完了状態をDBに永続化する (P1-2)。"""
+    user_id = getattr(current_user, "user_id", None)
+    staff_name = getattr(current_user, "name", "職員")
+
+    state = None
+    if user_id:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.user_id == user_id,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+    elif staff_name:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.staff_name == staff_name,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+
+    now = utc_now()
+    if state:
+        state.is_completed = True
+        state.completed_at = now
+        session.add(state)
+    else:
+        new_state = UserOnboardingState(
+            user_id=user_id,
+            staff_name=staff_name,
+            tour_key=tour_key,
+            is_completed=True,
+            completed_at=now,
+        )
+        session.add(new_state)
+
+    session.commit()
+    return {"status": "ok", "tour_key": tour_key, "is_completed": True}
+
+
+@router.get("/tour/status")
+def get_onboarding_tour_status(
+    tour_key: str = Query(default="staff_console_tour"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """職員オンボーディングツアーの完了状態を取得する (P1-2)。"""
+    user_id = getattr(current_user, "user_id", None)
+    staff_name = getattr(current_user, "name", "職員")
+
+    state = None
+    if user_id:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.user_id == user_id,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+    elif staff_name:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.staff_name == staff_name,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+
+    return {
+        "tour_key": tour_key,
+        "is_completed": bool(state and state.is_completed),
+        "completed_at": state.completed_at.isoformat() if state and state.completed_at else None,
+    }
+
+
+@router.post("/tour/reset")
+def reset_onboarding_tour(
+    tour_key: str = Form(default="staff_console_tour"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """オンボーディングツアーを再表示するために完了状態をリセットする (P1-2)。"""
+    user_id = getattr(current_user, "user_id", None)
+    staff_name = getattr(current_user, "name", "職員")
+
+    state = None
+    if user_id:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.user_id == user_id,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+    elif staff_name:
+        state = session.exec(
+            select(UserOnboardingState).where(
+                UserOnboardingState.staff_name == staff_name,
+                UserOnboardingState.tour_key == tour_key,
+            )
+        ).first()
+
+    if state:
+        state.is_completed = False
+        session.add(state)
+        session.commit()
+
+    return {"status": "ok", "tour_key": tour_key, "is_completed": False}

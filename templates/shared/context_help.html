@@ -1,0 +1,44 @@
+{# 再利用可能な折りたたみ文脈ヘルプコンポーネント (P1-3) #}
+<div class="context-help-card mb-4 border border-emerald-200 bg-emerald-50/40 rounded-xl overflow-hidden shadow-2xs" id="{{ help_id or 'context-help' }}">
+  <button
+    type="button"
+    class="w-full px-4 py-3 flex items-center justify-between bg-emerald-50/80 hover:bg-emerald-100/60 transition text-left"
+    onclick="var c = document.getElementById('{{ help_id or 'context-help' }}-content'); var icon = document.getElementById('{{ help_id or 'context-help' }}-icon'); if (c.classList.contains('hidden')) { c.classList.remove('hidden'); icon.style.transform = 'rotate(0deg)'; } else { c.classList.add('hidden'); icon.style.transform = 'rotate(180deg)'; }"
+  >
+    <div class="flex items-center space-x-2">
+      <span class="text-base text-emerald-700">❔</span>
+      <span class="text-xs sm:text-sm font-bold text-emerald-950">{{ help_title or "この画面の使い方と業務の流れ" }}</span>
+      <span class="hidden sm:inline-block text-[10px] bg-emerald-200/70 text-emerald-800 px-2 py-0.5 rounded font-medium">ショートカット: [?] キー</span>
+    </div>
+    <span id="{{ help_id or 'context-help' }}-icon" class="text-xs text-emerald-600 transition-transform duration-200" style="transform: rotate(0deg);">▲</span>
+  </button>
+
+  <div id="{{ help_id or 'context-help' }}-content" class="px-4 py-3.5 text-xs text-slate-700 space-y-3 bg-white border-t border-emerald-100">
+    {% if help_steps %}
+    <div class="grid grid-cols-1 md:grid-cols-{{ help_steps|length if help_steps|length <= 4 else 3 }} gap-2.5">
+      {% for s in help_steps %}
+      <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+        <div class="font-bold text-slate-900 flex items-center mb-1 text-xs">
+          <span class="w-4 h-4 bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px] mr-1.5 font-mono">{{ loop.index }}</span>
+          {{ s.title }}
+        </div>
+        <p class="text-[11px] text-slate-600 leading-relaxed">{{ s.desc }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if help_cautions %}
+    <div class="text-[11px] text-amber-900 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200/80 space-y-1">
+      <div class="font-bold flex items-center gap-1 text-amber-800">
+        <span>⚠️</span> 留意点・注意事項:
+      </div>
+      <ul class="list-disc list-inside space-y-0.5 text-amber-800">
+        {% for caution in help_cautions %}
+        <li>{{ caution }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>

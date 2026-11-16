@@ -11,6 +11,33 @@
   </div>
   <button type="button" id="contact-wide" class="rounded border border-gray-300 bg-white px-3 py-2 text-sm" aria-pressed="false" hidden>一覧を広く表示</button>
 </div>
+
+<!-- P1-3: 文脈ヘルプ -->
+{% with help_id="help-daily-contacts", help_title="連絡帳の確認・返信・承認フローについて", help_steps=[
+  {"title": "提出状況の確認", "desc": "未提出・提出済み・欠席をタブで素早く把握できます。"},
+  {"title": "返信の作成・定型文", "desc": "前日コピーや定型文挿入を活用して日々の返信を効率良く作成します。"},
+  {"title": "ダブルチェック承認", "desc": "確認依頼された返信は主任・園長が承認することで保護者に公開されます。"}
+], help_cautions=[
+  "午睡中など複数端末で同時入力する場合でも、30秒自動保存と楽観ロックにより上書きが防止されます。",
+  "公開済みの返信を変更した場合、再度「公開」するまで保護者には旧バージョンが表示されます。"
+] %}
+{% include "shared/context_help.html" %}
+{% endwith %}
+
+{% if pending_review_count and pending_review_count > 0 and (current_user.is_admin or current_user.role in ('admin', 'chief')) %}
+<div class="mb-4 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-xs flex items-center justify-between">
+  <div class="flex items-center space-x-3">
+    <span class="text-xl">⏳</span>
+    <div>
+      <h3 class="text-sm font-bold text-amber-900">連絡帳の確認待ちが {{ pending_review_count }} 件あります</h3>
+      <p class="text-xs text-amber-700">担任保育士から提出された返信の確認・承認を行ってください。</p>
+    </div>
+  </div>
+  <a href="/daily-contacts/pending-reviews" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm transition">
+    確認待ち一覧を開く →
+  </a>
+</div>
+{% endif %}
   <form method="get" action="/daily-contacts/" class="flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
     <input type="hidden" name="view" value="{{ selected_view }}">
     <div>

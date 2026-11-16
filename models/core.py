@@ -109,12 +109,16 @@ class DailyContactEntryStatus(str, Enum):
 
 class DailyContactReplyStatus(str, Enum):
     draft = "draft"
+    pending_review = "pending_review"
+    rejected = "rejected"
     published = "published"
 
     @property
     def label(self) -> str:
         return {
             self.draft: "下書き",
+            self.pending_review: "確認待ち",
+            self.rejected: "差し戻し",
             self.published: "公開済み",
         }[self]
 
@@ -1529,11 +1533,27 @@ class DailyContactReply(SQLModel, table=True):
     pending_draft: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     staff_user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
     staff_name: Optional[str] = None
+    reviewed_by_staff_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    reviewed_by_name: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
     child: Optional[Child] = Relationship(back_populates="daily_contact_replies")
+
+
+class UserOnboardingState(SQLModel, table=True):
+    __tablename__ = "user_onboarding_states"
+    __table_args__ = (UniqueConstraint("user_id", "tour_key", name="uq_user_onboarding_user_tour"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id", index=True)
+    staff_name: Optional[str] = None
+    tour_key: str = Field(default="staff_console_tour", index=True)
+    is_completed: bool = Field(default=True)
+    completed_at: datetime = Field(default_factory=utc_now)
 
 
 class GuardianHoursSetting(SQLModel, table=True):
@@ -3305,6 +3325,7 @@ class FacilitySettings(SQLModel, table=True):
     fever_caution_c: str = Field(default="37.5", max_length=4)
     fever_review_c: str = Field(default="38.0", max_length=4)
     parent_billing_portal_enabled: bool = Field(default=False)
+    contact_reply_review_required: bool = Field(default=False)
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
     updated_by_name: Optional[str] = None
