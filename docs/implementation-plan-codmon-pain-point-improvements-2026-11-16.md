@@ -5,29 +5,25 @@
 - 関連計画:
   - `docs/implementation-plan-codmon-inspired-improvements-2026-11-16.md`（I1〜I9 先行改善）
   - `docs/implementation-plan-mfa-notice-fixes-2026-11-07.md`（契約JSON運用基準）
-- ステータス: **確定版実装計画（Wave A〜E 実装完了・次期 Wave F 詳細設計）**
+- ステータス: **全ウェーブ完了（Wave A〜F 全22項目実装完了・テスト53件ALL GREEN・コミット＆プッシュ済）**
 - 対象リポジトリ: `open-hoikuict`（FastAPI + Jinja2 + htmx + Tailwind / SQLModel + SQLite/Postgres + Alembic / pytest + ruff）
 
 ---
 
 ## 1. 計画の全体像とロードマップ
 
-保育現場（保育士・主任・園長・事務員）が抱えるコドモン等の保育ICTにおける運用摩擦・設定漏れ・二度手間・ピーク時の重さを抜本的に解消するため、全6ウェーブ（17項目）で構造化して推進する。
+保育現場（保育士・主任・園長・事務員）が抱えるコドモン等の保育ICTにおける運用摩擦・設定漏れ・二度手間・ピーク時の重さを抜本的に解消するため、全6ウェーブ（22項目）で構造化して推進・完走した。
 
 ```mermaid
 flowchart TD
-    subgraph Deployed["【本番投入完了】Wave A〜E (計17タスク・全件GREEN)"]
+    subgraph Deployed["【本番投入完了】全ウェーブ Wave A〜F (計22タスク・全件GREEN)"]
         WA["Wave A: 不整合修正 & 低難易度即効薬<br>commit: fcc8d61 (P6-1, P4-1, P6-3, P6-4)"]
         WB["Wave B: 中規模 & 日常運用の摩擦低減<br>commit: 89b4ef4 (P4-2, P4-4, P2-1, P6-2)"]
         WC["Wave C: 請求・設定の正味機能<br>commit: e06141b (P8-1, P8-2, P8-3, P8-4, P8-5)"]
-        WD["Wave D: 大型新機能 (モック合意済)<br>commit: a6a36e4 (P1-1 設定診断, P2-2 図表添付PDF)"]
+        WD["Wave D: 大型新機能 (診断・指導案図表PDF)<br>commit: a6a36e4 (P1-1 設定診断, P2-2 図表添付PDF)"]
         WE["Wave E: ガバナンス・承認 & ガイド強化<br>commit: 48f2781 (P4-3 承認フロー, P1-2 ツアー永続化, P1-3 文脈ヘルプ, P2-3 印刷プレビュー)"]
-        WA --> WB --> WC --> WD --> WE
-    end
-
-    subgraph Future["【次期計画】Wave F (スケーラビリティ & 高負荷耐性・自動化)"]
-        WF["Wave F: 登降園ピーク集中対策 & 兄弟割引自動化<br>(P5-1, P5-2, P5-3, P5-4, P8-6)"]
-        WE --> WF
+        WF["Wave F: 登降園ピーク集中対策 & 兄弟割引自動化<br>commit: c94a044 (P5-1 キャッシュ, P5-2 オフライン名簿, P5-3 打刻楽観ロック, P5-4 htmxローディング, P8-6 兄弟割引エンジン)"]
+        WA --> WB --> WC --> WD --> WE --> WF
     end
 ```
 
