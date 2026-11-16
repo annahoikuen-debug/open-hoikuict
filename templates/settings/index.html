@@ -36,5 +36,27 @@
     {{ item('/settings/backups', 'バックアップ・復元' if restore_enabled else 'バックアップ管理', 'バックアップの状況確認・実行・予約と、園全体の復元を行います。' if restore_enabled else 'バックアップの状況確認と実行・予約を行います。') }}
   </section>
   {% endif %}
+
+  <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="help-tour-settings">
+    <h2 id="help-tour-settings" class="px-5 py-3 font-semibold text-slate-600">ヘルプとガイド</h2>
+    <div class="border-t border-slate-100 px-5 py-4 flex items-center justify-between gap-4">
+      <div>
+        <span class="block font-semibold text-slate-800">オンボーディングツアー</span>
+        <span class="mt-1 block text-sm text-slate-500">初回ログイン時に表示される画面ガイドツアーを再度開始します。</span>
+      </div>
+      <button type="button" onclick="if(window.restartOnboardingTour){window.restartOnboardingTour();}else{location.href='/';}" class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition">
+        ツアーを開始
+      </button>
+    </div>
+    <div class="border-t border-slate-100 px-5 py-4 flex items-center justify-between gap-4">
+      <div>
+        <span class="block font-semibold text-slate-800">キーボードショートカット一覧</span>
+        <span class="mt-1 block text-sm text-slate-500">日常業務を素早く切り替えるショートカットキー（g d, g a 等）を確認します。</span>
+      </div>
+      <button type="button" onclick="var m=document.getElementById('shortcut-help-modal');if(m)m.showModal();" class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition">
+        一覧を表示 (?)
+      </button>
+    </div>
+  </section>
 </div>
 {% endblock %}

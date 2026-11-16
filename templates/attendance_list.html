@@ -219,10 +219,51 @@
     {% endif %}
   </div>
 
+  {% if filters.is_single_day and current_user and current_user.can_edit %}
+  <!-- 一括操作アクションバー (I3) -->
+  <div id="bulk-attendance-toolbar" class="bg-indigo-50/60 px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between gap-3 flex-wrap">
+    <div class="flex items-center gap-3">
+      <span id="bulk-selected-count" class="text-xs font-bold bg-white text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-md shadow-sm">
+        0名 選択中
+      </span>
+      <span class="text-xs text-slate-500">チェックした園児をまとめて打刻（不整合時は全員ロールバック）</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <form id="bulk-attendance-form" method="post" action="/attendance/bulk-check-in" class="inline flex items-center gap-2" data-preserve-attendance-scroll>
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="date" value="{{ filters.display_date_value }}">
+        <input type="hidden" name="return_query" value="{{ current_query_string }}">
+        <div id="bulk-hidden-inputs"></div>
+        <button
+          type="button"
+          id="btn-bulk-check-in"
+          disabled
+          class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-md shadow-sm hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        >
+          一括登園打刻
+        </button>
+        <button
+          type="button"
+          id="btn-bulk-check-out"
+          disabled
+          class="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+        >
+          一括降園打刻
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   <div id="attendance-table-scroll" class="overflow-x-auto">
     <table class="min-w-full text-sm">
       <thead class="bg-indigo-50 text-indigo-800">
         <tr>
+          {% if filters.is_single_day and current_user and current_user.can_edit %}
+          <th class="w-10 px-3 py-2 text-center no-print">
+            <input type="checkbox" id="bulk-select-all" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" aria-label="全園児を選択">
+          </th>
+          {% endif %}
           <th class="px-4 py-2 text-left font-medium whitespace-nowrap">日付</th>
           <th class="px-4 py-2 text-left font-medium whitespace-nowrap">園児名</th>
           <th class="px-4 py-2 text-left font-medium whitespace-nowrap">クラス</th>
@@ -242,6 +283,13 @@
       <tbody class="divide-y divide-gray-100">
         {% for row in rows %}
         <tr class="{% if row.extended_care_requires_attention %}bg-amber-50 hover:bg-amber-100{% else %}hover:bg-gray-50{% endif %}">
+          {% if filters.is_single_day and current_user and current_user.can_edit %}
+          <td class="w-10 px-3 py-2 text-center no-print">
+            {% if row.is_enrolled %}
+            <input type="checkbox" class="bulk-child-cb rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" value="{{ row.child_id }}" data-status="{{ row.status }}" aria-label="{{ row.child_name }}を選択">
+            {% endif %}
+          </td>
+          {% endif %}
           <td class="px-4 py-2 whitespace-nowrap">{{ row.attendance_date.strftime("%Y-%m-%d") }}</td>
           <td class="px-4 py-2 whitespace-nowrap">{{ row.child_name }}</td>
           <td class="px-4 py-2 whitespace-nowrap">
@@ -393,6 +441,62 @@
       if (document.readyState === 'complete') restore();
       else window.addEventListener('load', restore, { once: true });
     } catch (_) { /* Ignore expired or unavailable browser state. */ }
+  })();
+  (() => {
+    const selectAll = document.getElementById('bulk-select-all');
+    const checkboxes = document.querySelectorAll('.bulk-child-cb');
+    const countBadge = document.getElementById('bulk-selected-count');
+    const btnIn = document.getElementById('btn-bulk-check-in');
+    const btnOut = document.getElementById('btn-bulk-check-out');
+    const form = document.getElementById('bulk-attendance-form');
+    const hiddenInputs = document.getElementById('bulk-hidden-inputs');
+
+    if (!form || !checkboxes.length) return;
+
+    const updateState = () => {
+      const selected = Array.from(checkboxes).filter(cb => cb.checked);
+      const count = selected.length;
+      if (countBadge) countBadge.textContent = `${count}名 選択中`;
+
+      if (btnIn) btnIn.disabled = count === 0;
+      if (btnOut) btnOut.disabled = count === 0;
+
+      if (selectAll) {
+        selectAll.checked = count > 0 && count === checkboxes.length;
+        selectAll.indeterminate = count > 0 && count < checkboxes.length;
+      }
+    };
+
+    selectAll?.addEventListener('change', () => {
+      checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+      updateState();
+    });
+
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', updateState);
+    });
+
+    const submitBulk = (actionUrl, confirmText) => {
+      const selected = Array.from(checkboxes).filter(cb => cb.checked);
+      if (!selected.length) return;
+      if (!confirm(`${selected.length}名の園児を${confirmText}しますか？\n（エラーが発生した場合は全員ロールバックされます）`)) return;
+
+      hiddenInputs.innerHTML = '';
+      selected.forEach(cb => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'child_ids';
+        input.value = cb.value;
+        hiddenInputs.appendChild(input);
+      });
+      form.action = actionUrl;
+      form.submit();
+    };
+
+    btnIn?.addEventListener('click', () => submitBulk('/attendance/bulk-check-in', '一括登園打刻'));
+    btnOut?.addEventListener('click', () => submitBulk('/attendance/bulk-check-out', '一括降園打刻'));
+
+    updateState();
   })();
 </script>
 {% endblock %}

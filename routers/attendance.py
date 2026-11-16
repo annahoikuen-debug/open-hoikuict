@@ -1033,3 +1033,118 @@ def check_out(
     session.commit()
 
     return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
+
+
+@router.post("/bulk-check-in")
+def bulk_check_in(
+    child_ids: list[int] = Form(...),
+    target_date: str = Form(..., alias="date"),
+    return_query: Optional[str] = Form(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """複数園児の登園を一括打刻する。1名でも不整合がある場合は全員ロールバック（all-or-nothing）。"""
+    require_can_edit(current_user)
+    if not child_ids:
+        raise HTTPException(status_code=400, detail="対象の園児が選択されていません")
+
+    day = _parse_target_date(target_date)
+    now = local_naive_now()
+    audit_now = utc_now()
+
+    records_to_update = []
+    for cid in child_ids:
+        child = session.get(Child, cid)
+        if not child:
+            raise HTTPException(status_code=404, detail=f"園児が見つかりません (ID: {cid})")
+        if child.status != ChildStatus.enrolled:
+            raise HTTPException(status_code=400, detail=f"{child.last_name} {child.first_name} は在園中ではありません")
+
+        record = session.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.child_id == cid,
+                AttendanceRecord.attendance_date == day,
+            )
+        ).first()
+
+        if record and record.check_out_at:
+            raise HTTPException(status_code=409, detail=f"{child.last_name} {child.first_name} は既に降園済みです")
+        if not record:
+            record = AttendanceRecord(child_id=cid, attendance_date=day, check_in_at=now)
+        elif record.check_in_at is None:
+            record.check_in_at = now
+        else:
+            continue
+
+        records_to_update.append((child, record))
+
+    for child, record in records_to_update:
+        record.updated_at = audit_now
+        session.add(record)
+        session.flush()
+        sync_attendance_alarm(session, child_id=child.id, target_date=day, record=record, now=audit_now)
+        try:
+            from pims_service import record_punch_log_for_core_child
+            record_punch_log_for_core_child(session, child.id, "登園", now)
+        except Exception:
+            pass
+
+    session.commit()
+    return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
+
+
+@router.post("/bulk-check-out")
+def bulk_check_out(
+    child_ids: list[int] = Form(...),
+    target_date: str = Form(..., alias="date"),
+    return_query: Optional[str] = Form(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """複数園児の降園を一括打刻する。1名でも不整合がある場合は全員ロールバック（all-or-nothing）。"""
+    require_can_edit(current_user)
+    if not child_ids:
+        raise HTTPException(status_code=400, detail="対象の園児が選択されていません")
+
+    day = _parse_target_date(target_date)
+    now = local_naive_now()
+    audit_now = utc_now()
+
+    records_to_update = []
+    for cid in child_ids:
+        child = session.get(Child, cid)
+        if not child:
+            raise HTTPException(status_code=404, detail=f"園児が見つかりません (ID: {cid})")
+        if child.status != ChildStatus.enrolled:
+            raise HTTPException(status_code=400, detail=f"{child.last_name} {child.first_name} は在園中ではありません")
+
+        record = session.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.child_id == cid,
+                AttendanceRecord.attendance_date == day,
+            )
+        ).first()
+
+        if not record or record.check_in_at is None:
+            raise HTTPException(status_code=400, detail=f"{child.last_name} {child.first_name} は登園打刻がされていません")
+        if record.check_out_at is not None:
+            continue
+
+        record.check_out_at = now
+        records_to_update.append((child, record))
+
+    for child, record in records_to_update:
+        record.updated_at = audit_now
+        session.add(record)
+        session.flush()
+        recalculate_attendance_charge(session, record)
+        sync_attendance_alarm(session, child_id=child.id, target_date=day, record=record, now=audit_now)
+        try:
+            from pims_service import record_punch_log_for_core_child
+            record_punch_log_for_core_child(session, child.id, "降園", now)
+        except Exception:
+            pass
+
+    session.commit()
+    return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
+

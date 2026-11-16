@@ -614,3 +614,92 @@ def update_attendance_verification(
     session.commit()
 
     return result(notice)
+
+
+@router.post("/bulk-contact-confirmation", response_class=HTMLResponse)
+def bulk_contact_confirmation(
+    child_ids: list[int] = Form(...),
+    target_date: str = Form(..., alias="date"),
+    layout: str = Form(default="flat"),
+    status_filter: str = Form(default="all", alias="filter"),
+    classroom_id: str = Form(default=""),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """未確認の複数園児に対し、一括で出欠確認依頼（通知）を送信する。"""
+    require_attendance_check_editor(current_user)
+    if not child_ids:
+        raise HTTPException(status_code=400, detail="対象の園児が選択されていません")
+
+    day = _parse_target_date(target_date)
+    now = utc_now()
+    notified_count = 0
+
+    for cid in child_ids:
+        child = session.get(Child, cid)
+        if not child or child.status != ChildStatus.enrolled:
+            continue
+
+        verification = session.exec(
+            select(AttendanceVerification).where(
+                AttendanceVerification.child_id == cid,
+                AttendanceVerification.target_date == day,
+            )
+        ).first()
+
+        if not verification:
+            verification = AttendanceVerification(
+                child_id=cid,
+                target_date=day,
+                status=AttendanceVerificationStatus.unknown,
+                updated_by_name=current_user.name,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(verification)
+            session.flush()
+
+        history = AttendanceVerificationHistory(
+            child_id=cid,
+            target_date=day,
+            status=AttendanceVerificationStatus.unknown,
+            updated_by_name=current_user.name,
+            reason="一括確認依頼",
+            previous_status=verification.status.value if verification else None,
+            actor_user_id=getattr(current_user, "user_id", None),
+            created_at=now,
+        )
+        session.add(history)
+        session.flush()
+
+        notifications = notify_attendance_confirmation_needed(
+            session,
+            child=child,
+            target_date=day,
+            source_id=str(history.id),
+            created_by_name=current_user.name,
+            now=now,
+        )
+        if notifications:
+            notified_count += 1
+
+        sync_attendance_alarm(
+            session,
+            child_id=cid,
+            target_date=day,
+            verification=verification,
+            now=now,
+        )
+
+    session.commit()
+    return RedirectResponse(
+        url=_build_redirect_url(
+            target_day=day,
+            selected_layout=_parse_layout(layout),
+            selected_filter=_parse_filter(status_filter),
+            selected_classroom_id=_parse_optional_int(classroom_id),
+            notice="parent_notified" if notified_count > 0 else "parent_not_found",
+        ),
+        status_code=303,
+    )
+
