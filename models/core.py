@@ -1770,6 +1770,30 @@ class FeeItem(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+class ExemptionType(str, Enum):
+    full = "full"
+    fixed_discount = "fixed_discount"
+    percentage = "percentage"
+
+
+class BillingExemption(SQLModel, table=True):
+    __tablename__ = "billing_exemptions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    child_id: int = Field(foreign_key="children.id", index=True)
+    fee_item_id: Optional[int] = Field(default=None, foreign_key="fee_items.id", index=True)
+    name: str = Field(default="減免措置")
+    exemption_type: ExemptionType = Field(default=ExemptionType.full)
+    discount_amount: int = Field(default=0)
+    discount_rate: int = Field(default=100)
+    valid_from: date
+    valid_to: Optional[date] = None
+    reason: Optional[str] = None
+    is_active: bool = Field(default=True, index=True)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class ExtensionFeeRule(SQLModel, table=True):
     __tablename__ = "extension_fee_rules"
 

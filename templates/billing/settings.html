@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block title %}料金マスタ・全銀口座振替設定 | open-hoikuict{% endblock %}
+{% block content %}
+<div class="max-w-6xl space-y-6">
+
+  <!-- ヘッダー -->
+  <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div>
+      <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+        <a href="/settings" class="hover:underline">設定</a>
+        <span>›</span>
+        <a href="/billing" class="hover:underline">請求管理</a>
+        <span>›</span>
+        <span>料金マスタ・減免・全銀設定</span>
+      </div>
+      <h1 class="text-2xl font-bold text-slate-800">料金マスタ・全銀口座振替・減免設定</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        園児ごとの請求項目マスタ定義、多子・自治体補助等の減免・免除登録、月途中日割りルール、全銀フォーマット口座振替情報を設定します。
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onclick="document.getElementById('new-exemption-modal').showModal()"
+        class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm transition"
+      >
+        ＋ 減免・免除設定を追加
+      </button>
+      <button
+        type="button"
+        onclick="document.getElementById('new-fee-item-modal').showModal()"
+        class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm transition"
+      >
+        ＋ 新しい料金項目を追加
+      </button>
+    </div>
+  </div>
+
+  {% if message %}
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-medium text-emerald-800">
+    ✅ {{ message }}
+  </div>
+  {% endif %}
+  {% if error %}
+  <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs font-medium text-rose-800">
+    ⚠️ {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- 1. 料金項目マスタ一覧 (FeeItem) -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" aria-labelledby="fee-items-heading">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 id="fee-items-heading" class="font-bold text-base text-slate-800">登録済み料金項目マスタ (FeeItem)</h2>
+        <span class="text-xs text-slate-400">毎月請求や単発請求の項目定義です</span>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-left border-collapse" id="fee-items-table">
+        <thead class="bg-slate-50 text-slate-700 border-b">
+          <tr>
+            <th class="p-3 w-16 text-center">表示順</th>
+            <th class="p-3">コード</th>
+            <th class="p-3">項目名</th>
+            <th class="p-3">カテゴリ</th>
+            <th class="p-3">単位</th>
+            <th class="p-3">既定金額</th>
+            <th class="p-3">課税区分</th>
+            <th class="p-3 text-center">状態</th>
+            <th class="p-3 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-slate-600">
+          {% for item in fee_items %}
+          <tr class="hover:bg-slate-50/50">
+            <td class="p-3 text-center font-mono text-slate-400">{{ item.display_order }}</td>
+            <td class="p-3 font-mono font-bold text-indigo-700">{{ item.code }}</td>
+            <td class="p-3 font-semibold text-slate-800">{{ item.name }}</td>
+            <td class="p-3">{{ item.category }}</td>
+            <td class="p-3">{{ item.charge_unit }}</td>
+            <td class="p-3 font-semibold font-mono text-slate-900">
+              {% if item.default_amount is not none %}¥{{ "{:,}".format(item.default_amount) }}{% else %}手動{% endif %}
+            </td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded text-2xs {% if item.taxable_type == 'taxable' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-700{% endif %}">
+                {{ "課税" if item.taxable_type == 'taxable' else "非課税" }}
+              </span>
+            </td>
+            <td class="p-3 text-center">
+              {% if item.is_active %}
+              <span class="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full text-2xs font-medium">有効</span>
+              {% else %}
+              <span class="bg-slate-100 text-slate-500 px-2.5 py-0.5 rounded-full text-2xs">無効</span>
+              {% endif %}
+            </td>
+            <td class="p-3 text-right">
+              <button
+                type="button"
+                onclick='openEditFeeModal({{ item.id }}, {{ item.name | tojson }}, {{ item.default_amount or 0 }}, {{ item.taxable_type | tojson }}, {{ "true" if item.is_active else "false" }}, {{ item.display_order }})'
+                class="text-indigo-600 hover:text-indigo-800 font-semibold"
+              >
+                編集
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="p-8 text-center text-slate-400">料金項目が登録されていません。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 2. 減免・免除登録マスタ (P8-3: BillingExemption) -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden" aria-labelledby="exemptions-heading">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div>
+        <h2 id="exemptions-heading" class="font-bold text-base text-slate-800">園児ごとの減免・免除登録マスタ (P8-3)</h2>
+        <span class="text-xs text-slate-400">第3子減免やひとり親就学支援など、請求生成時に自動反映される減免措置です</span>
+      </div>
+      <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+        登録件数: {{ exemptions | length }} 件
+      </span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-left border-collapse" id="exemptions-table">
+        <thead class="bg-slate-50 text-slate-700 border-b">
+          <tr>
+            <th class="p-3">対象園児</th>
+            <th class="p-3">減免措置名</th>
+            <th class="p-3">対象項目</th>
+            <th class="p-3">減免種別</th>
+            <th class="p-3">適用期間</th>
+            <th class="p-3">減免理由 / 根拠</th>
+            <th class="p-3 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-slate-600">
+          {% for ex in exemptions %}
+          {% set target_child = children_map.get(ex.child_id) %}
+          {% set target_fee = fee_items_map.get(ex.fee_item_id) if ex.fee_item_id else none %}
+          <tr class="hover:bg-slate-50/50">
+            <td class="p-3 font-semibold text-slate-800">
+              {% if target_child %}{{ target_child.full_name }}{% else %}園児ID: {{ ex.child_id }}{% endif %}
+            </td>
+            <td class="p-3 font-bold text-emerald-900">{{ ex.name }}</td>
+            <td class="p-3">
+              {% if target_fee %}
+              <span class="font-medium text-indigo-700">{{ target_fee.name }}</span>
+              {% else %}
+              <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-2xs font-medium">全項目対象</span>
+              {% endif %}
+            </td>
+            <td class="p-3">
+              {% if ex.exemption_type.value == 'full' or ex.exemption_type == 'full' %}
+              <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-2xs font-bold">全額免除 (100%)</span>
+              {% elif ex.exemption_type.value == 'fixed_discount' or ex.exemption_type == 'fixed_discount' %}
+              <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-2xs font-bold">定額減額 (-¥{{ "{:,}".format(ex.discount_amount) }})</span>
+              {% else %}
+              <span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-2xs font-bold">割合減額 ({{ ex.discount_rate }}%減額)</span>
+              {% endif %}
+            </td>
+            <td class="p-3 font-mono text-slate-600">
+              {{ ex.valid_from.strftime('%Y/%m/%d') }} 〜 {% if ex.valid_to %}{{ ex.valid_to.strftime('%Y/%m/%d') }}{% else %}無期限{% endif %}
+            </td>
+            <td class="p-3 text-slate-500 max-w-xs truncate">{{ ex.reason or '—' }}</td>
+            <td class="p-3 text-right">
+              <form method="post" action="/billing/settings/exemptions/{{ ex.id }}/delete" onsubmit="return confirm('この減免設定を削除しますか？');" class="inline">
+                <button type="submit" class="text-rose-600 hover:text-rose-800 font-semibold">削除</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="p-8 text-center text-slate-400">減免・免除措置は登録されていません。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 3. 月途中入退園の日割り算定ルール (P8-2) -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm p-6 space-y-4" aria-labelledby="proration-heading">
+    <div class="border-b pb-3 flex items-center justify-between">
+      <div>
+        <h2 id="proration-heading" class="font-bold text-base text-slate-800">月途中入退園の日割り算定ルール (P8-2)</h2>
+        <p class="text-xs text-slate-500 mt-0.5">月途中入園（例: 11/16入園）や退園児の給食費を実開園日数に基づき自動日割りします。</p>
+      </div>
+      <span class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-bold">
+        自動日割りポリシー: 有効
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+      <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+        <h3 class="font-bold text-slate-800 text-sm">📐 日割り算定ロジック</h3>
+        <p class="text-slate-600 leading-relaxed">
+          当月内の実開園平日日数（土日除外）を母数とし、園児の入園日以降／退園日以前の在園開園日数で日割り計算します。
+        </p>
+        <div class="bg-white p-3 rounded-lg border border-slate-200 font-mono text-slate-700 space-y-1">
+          <div>日割り額 = 満額 × (在園平日開園日数 ÷ 月間全平日開園日数)</div>
+          <div class="text-2xs text-slate-400">※ 1円未満は四捨五入（四捨五入ポリシー準拠）</div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+        <h3 class="font-bold text-slate-800 text-sm">💡 確定前自動検算 (P8-5) との連動</h3>
+        <p class="text-slate-600 leading-relaxed">
+          請求確定前には自動検算レポートが実行され、日割り適用世帯の内訳や、全額免除等に伴う0円請求世帯（全銀振替から自動除外）が事前確認できます。
+        </p>
+        <div class="text-2xs text-indigo-700 bg-indigo-50/70 p-2.5 rounded border border-indigo-100">
+          振替不能（残高不足等）となった未収金も、翌月請求サイクルへワンクリックで安全に繰り越し可能です。
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 全銀口座振替設定 (BillingSetting) -->
+  <section class="rounded-xl border border-slate-200 bg-white shadow-sm p-6 space-y-5" aria-labelledby="zengin-settings-heading">
+    <div class="border-b pb-3 flex items-center justify-between">
+      <div>
+        <h2 id="zengin-settings-heading" class="font-bold text-base text-slate-800">全銀協フォーマット口座振替設定 (BillingSetting)</h2>
+        <p class="text-xs text-slate-500 mt-0.5">預金口座振替依頼電文（固定長120バイト・CP932）を生成するための施設情報です。</p>
+      </div>
+    </div>
+
+    <form method="post" action="/billing/settings/zengin" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">施設名称（印字用）</label>
+          <input type="text" name="facility_name" value="{{ setting.facility_name }}" required class="w-full rounded border border-slate-300 p-2">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">委託者コード (10桁)</label>
+          <input type="text" name="collector_code" value="{{ setting.collector_code }}" required maxlength="10" class="w-full rounded border border-slate-300 p-2 font-mono">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">委託者名カナ (半角カナ・40文字)</label>
+          <input type="text" name="collector_name_kana" value="{{ setting.collector_name_kana }}" required maxlength="40" class="w-full rounded border border-slate-300 p-2 font-mono">
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">受取金融機関コード (4桁)</label>
+          <input type="text" name="withdrawal_bank_code" value="{{ setting.withdrawal_bank_code }}" required maxlength="4" class="w-full rounded border border-slate-300 p-2 font-mono">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">受取支店コード (3桁)</label>
+          <input type="text" name="withdrawal_branch_code" value="{{ setting.withdrawal_branch_code }}" required maxlength="3" class="w-full rounded border border-slate-300 p-2 font-mono">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">預金種目</label>
+          <select name="collector_account_type" class="w-full rounded border border-slate-300 p-2">
+            <option value="1" {% if setting.collector_account_type == "1" %}selected{% endif %}>1: 普通預金</option>
+            <option value="2" {% if setting.collector_account_type == "2" %}selected{% endif %}>2: 当座預金</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">受取口座番号 (7桁)</label>
+          <input type="text" name="collector_account_number" value="{{ setting.collector_account_number }}" required maxlength="7" class="w-full rounded border border-slate-300 p-2 font-mono">
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-3 border-t">
+        <button type="submit" class="rounded-xl bg-slate-900 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition">
+          全銀設定を保存する
+        </button>
+      </div>
+    </form>
+  </section>
+
+</div>
+
+<!-- 新規料金項目モーダル -->
+<dialog id="new-fee-item-modal" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl backdrop:bg-slate-900/40 max-w-md w-full">
+  <div class="flex items-center justify-between border-b pb-3 mb-4">
+    <h3 class="font-bold text-base text-slate-800">新規料金項目の登録</h3>
+    <button type="button" onclick="document.getElementById('new-fee-item-modal').close()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+  </div>
+  <form method="post" action="/billing/settings/fee-items" class="space-y-4 text-xs">
+    <div>
+      <label class="block font-medium text-slate-700 mb-1">項目コード（半角英数記号・一意）</label>
+      <input type="text" name="code" placeholder="例: meal_monthly" required class="w-full rounded border border-slate-300 p-2 font-mono">
+    </div>
+    <div>
+      <label class="block font-medium text-slate-700 mb-1">項目名称</label>
+      <input type="text" name="name" placeholder="例: 月極給食費" required class="w-full rounded border border-slate-300 p-2">
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">カテゴリ</label>
+        <select name="category" class="w-full rounded border border-slate-300 p-2">
+          <option value="meal">給食費 (meal)</option>
+          <option value="materials">教材費 (materials)</option>
+          <option value="extension">延長保育 (extension)</option>
+          <option value="other" selected>その他 (other)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">課税区分</label>
+        <select name="taxable_type" class="w-full rounded border border-slate-300 p-2">
+          <option value="non_taxable" selected>非課税</option>
+          <option value="taxable">課税 (10%)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">既定金額 (円)</label>
+        <input type="number" name="default_amount" value="0" min="0" required class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">表示順序</label>
+        <input type="number" name="display_order" value="100" class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 pt-3 border-t">
+      <button type="button" onclick="document.getElementById('new-fee-item-modal').close()" class="px-4 py-2 border rounded-xl font-medium text-slate-600">キャンセル</button>
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold">登録する</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 料金項目編集モーダル -->
+<dialog id="edit-fee-item-modal" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl backdrop:bg-slate-900/40 max-w-md w-full">
+  <div class="flex items-center justify-between border-b pb-3 mb-4">
+    <h3 class="font-bold text-base text-slate-800">料金項目の編集</h3>
+    <button type="button" onclick="document.getElementById('edit-fee-item-modal').close()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+  </div>
+  <form id="edit-fee-item-form" method="post" action="" class="space-y-4 text-xs">
+    <div>
+      <label class="block font-medium text-slate-700 mb-1">項目名称</label>
+      <input type="text" id="edit-fee-name" name="name" required class="w-full rounded border border-slate-300 p-2">
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">既定金額 (円)</label>
+        <input type="number" id="edit-fee-amount" name="default_amount" min="0" required class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">課税区分</label>
+        <select id="edit-fee-tax" name="taxable_type" class="w-full rounded border border-slate-300 p-2">
+          <option value="non_taxable">非課税</option>
+          <option value="taxable">課税 (10%)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">表示順序</label>
+        <input type="number" id="edit-fee-order" name="display_order" class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">状態</label>
+        <select id="edit-fee-active" name="is_active" class="w-full rounded border border-slate-300 p-2">
+          <option value="true">有効</option>
+          <option value="false">無効</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 pt-3 border-t">
+      <button type="button" onclick="document.getElementById('edit-fee-item-modal').close()" class="px-4 py-2 border rounded-xl font-medium text-slate-600">キャンセル</button>
+      <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold">変更を保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 新規減免登録モーダル (P8-3) -->
+<dialog id="new-exemption-modal" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl backdrop:bg-slate-900/40 max-w-lg w-full">
+  <div class="flex items-center justify-between border-b pb-3 mb-4">
+    <h3 class="font-bold text-base text-slate-800">🛡️ 減免・免除措置の新規登録 (P8-3)</h3>
+    <button type="button" onclick="document.getElementById('new-exemption-modal').close()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+  </div>
+  <form method="post" action="/billing/settings/exemptions" class="space-y-4 text-xs">
+    <div>
+      <label class="block font-medium text-slate-700 mb-1">対象園児 <span class="text-rose-500">*</span></label>
+      <select name="child_id" required class="w-full rounded border border-slate-300 p-2 font-medium">
+        <option value="">-- 園児を選択してください --</option>
+        {% for child in children %}
+        <option value="{{ child.id }}">{{ child.full_name }} ({{ child.first_name_kana }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">減免措置名 <span class="text-rose-500">*</span></label>
+        <input type="text" name="name" value="第3子減免" placeholder="例: 第3子減免、生活保護減額" required class="w-full rounded border border-slate-300 p-2">
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">対象項目</label>
+        <select name="fee_item_id" class="w-full rounded border border-slate-300 p-2">
+          <option value="">全項目（一括免除）</option>
+          {% for item in fee_items %}
+          <option value="{{ item.id }}">{{ item.name }} ({{ item.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">減免種別</label>
+        <select name="exemption_type" id="exemption-type-select" onchange="handleExemptionTypeChange()" class="w-full rounded border border-slate-300 p-1.5">
+          <option value="full" selected>全額免除 (100%)</option>
+          <option value="fixed_discount">定額減額 (-¥)</option>
+          <option value="percentage">割合減額 (-%)</option>
+        </select>
+      </div>
+      <div id="exemption-amount-field" class="opacity-50 pointer-events-none">
+        <label class="block font-medium text-slate-700 mb-1">減額金額 (円)</label>
+        <input type="number" id="input-discount-amount" name="discount_amount" value="0" min="0" class="w-full rounded border border-slate-300 p-1.5 font-mono">
+      </div>
+      <div id="exemption-rate-field" class="opacity-50 pointer-events-none">
+        <label class="block font-medium text-slate-700 mb-1">減額率 (%)</label>
+        <input type="number" id="input-discount-rate" name="discount_rate" value="100" min="1" max="100" class="w-full rounded border border-slate-300 p-1.5 font-mono">
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">適用開始日 <span class="text-rose-500">*</span></label>
+        <input type="date" name="valid_from" required class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+      <div>
+        <label class="block font-medium text-slate-700 mb-1">適用終了日（空欄は無期限）</label>
+        <input type="date" name="valid_to" class="w-full rounded border border-slate-300 p-2 font-mono">
+      </div>
+    </div>
+
+    <div>
+      <label class="block font-medium text-slate-700 mb-1">減免理由 / 自治体認定根拠</label>
+      <input type="text" name="reason" placeholder="例: 自治体多子世帯第3子以降無料措置認定" class="w-full rounded border border-slate-300 p-2">
+    </div>
+
+    <div class="flex justify-end gap-2 pt-3 border-t">
+      <button type="button" onclick="document.getElementById('new-exemption-modal').close()" class="px-4 py-2 border rounded-xl font-medium text-slate-600">キャンセル</button>
+      <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold">登録する</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  function openEditFeeModal(id, name, amount, taxableType, isActive, order) {
+    const form = document.getElementById('edit-fee-item-form');
+    form.action = `/billing/settings/fee-items/${id}/edit`;
+    document.getElementById('edit-fee-name').value = name;
+    document.getElementById('edit-fee-amount').value = amount;
+    document.getElementById('edit-fee-tax').value = taxableType;
+    document.getElementById('edit-fee-active').value = isActive ? 'true' : 'false';
+    document.getElementById('edit-fee-order').value = order;
+    document.getElementById('edit-fee-item-modal').showModal();
+  }
+
+  function handleExemptionTypeChange() {
+    const type = document.getElementById('exemption-type-select').value;
+    const amountField = document.getElementById('exemption-amount-field');
+    const rateField = document.getElementById('exemption-rate-field');
+
+    if (type === 'full') {
+      amountField.classList.add('opacity-50', 'pointer-events-none');
+      rateField.classList.add('opacity-50', 'pointer-events-none');
+    } else if (type === 'fixed_discount') {
+      amountField.classList.remove('opacity-50', 'pointer-events-none');
+      rateField.classList.add('opacity-50', 'pointer-events-none');
+    } else if (type === 'percentage') {
+      amountField.classList.add('opacity-50', 'pointer-events-none');
+      rateField.classList.remove('opacity-50', 'pointer-events-none');
+    }
+  }
+</script>
+{% endblock %}

@@ -1217,6 +1217,9 @@
     "closure_notice_enabled",
     "emergency_notice_enabled",
     "punch_correction_notice_enabled",
+    "notice_published_enabled",
+    "survey_published_enabled",
+    "fever_notification_enabled",
     "created_at",
     "updated_at"
   ],

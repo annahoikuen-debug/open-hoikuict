@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
 
+import child_records.models  # noqa: F401
 from auth import Role, StaffUser
 from billing_calculation_service import BillingCalculationError, apply_proration_rounding, validate_charge_amount
 from models import (

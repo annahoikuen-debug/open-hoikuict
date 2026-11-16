@@ -18,11 +18,13 @@ from models import (
     BillingClaimStatus,
     BillingCycle,
     BillingCycleStatus,
+    BillingExemption,
     BillingPaymentMethod,
     BillingSetting,
     Child,
     ChildStatus,
     DirectDebitStatus,
+    ExemptionType,
     Family,
     FamilyBillingProfile,
     FamilyBillingProfileChangeLog,
@@ -1369,3 +1371,470 @@ def unconfirm_cycle(
     session.add(cycle)
     session.commit()
     return {"id": cycle.id, "status": cycle.status.value}
+
+
+# ==========================================
+# P8-1: 料金マスタ & 全銀口座振替設定
+# ==========================================
+
+@router.get("/settings")
+def billing_settings_page(
+    request: Request,
+    message: str = "",
+    error: str = "",
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """料金マスタ一覧、全銀設定、減免措置マスタの管理画面 (P8-1, P8-3)。"""
+    require_can_edit(current_user)
+    fee_items = session.exec(select(FeeItem).order_by(FeeItem.display_order, FeeItem.id)).all()
+    setting = _ensure_test_billing_setting(session)
+    exemptions = session.exec(
+        select(BillingExemption).where(BillingExemption.is_active == True).order_by(BillingExemption.valid_from.desc(), BillingExemption.id.desc())
+    ).all()
+    children = session.exec(
+        select(Child).where(Child.status == ChildStatus.enrolled).order_by(Child.last_name_kana, Child.first_name_kana, Child.id)
+    ).all()
+    children_map = {c.id: c for c in session.exec(select(Child)).all()}
+    fee_items_map = {f.id: f for f in fee_items}
+
+    return templates.TemplateResponse(
+        request,
+        "billing/settings.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "fee_items": fee_items,
+            "setting": setting,
+            "exemptions": exemptions,
+            "children": children,
+            "children_map": children_map,
+            "fee_items_map": fee_items_map,
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+@router.post("/settings/exemptions")
+def create_exemption_action(
+    child_id: int = Form(...),
+    name: str = Form(...),
+    fee_item_id: int | None = Form(default=None),
+    exemption_type: str = Form(default="full"),
+    discount_amount: int = Form(default=0),
+    discount_rate: int = Form(default=100),
+    valid_from: str = Form(...),
+    valid_to: str | None = Form(default=None),
+    reason: str | None = Form(default=None),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """園児ごとの減免・免除措置を登録する (P8-3)。"""
+    require_admin(current_user)
+    child = session.get(Child, child_id)
+    if not child:
+        raise HTTPException(404, "園児が見つかりません")
+
+    from_d = date.fromisoformat(valid_from.strip())
+    to_d = date.fromisoformat(valid_to.strip()) if valid_to and valid_to.strip() else None
+
+    exemption = BillingExemption(
+        child_id=child_id,
+        name=name.strip(),
+        fee_item_id=fee_item_id if fee_item_id and fee_item_id > 0 else None,
+        exemption_type=ExemptionType(exemption_type),
+        discount_amount=max(0, discount_amount),
+        discount_rate=max(0, min(100, discount_rate)),
+        valid_from=from_d,
+        valid_to=to_d,
+        reason=reason.strip() if reason and reason.strip() else None,
+        is_active=True,
+    )
+    session.add(exemption)
+    session.commit()
+    return RedirectResponse(url="/billing/settings?message=減免・免除措置を登録しました", status_code=303)
+
+
+@router.post("/settings/exemptions/{exemption_id}/delete")
+def delete_exemption_action(
+    exemption_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """減免・免除措置を削除する (P8-3)。"""
+    require_admin(current_user)
+    exemption = session.get(BillingExemption, exemption_id)
+    if not exemption:
+        raise HTTPException(404, "減免設定が見つかりません")
+
+    session.delete(exemption)
+    session.commit()
+    return RedirectResponse(url="/billing/settings?message=減免・免除設定を削除しました", status_code=303)
+
+
+@router.post("/settings/fee-items")
+def create_fee_item_action(
+    request: Request,
+    code: str = Form(...),
+    name: str = Form(...),
+    category: str = Form("other"),
+    charge_unit: str = Form("monthly"),
+    default_amount: int = Form(0),
+    taxable_type: str = Form("non_taxable"),
+    display_order: int = Form(100),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """新しい料金項目を登録する (P8-1)。"""
+    require_admin(current_user)
+    clean_code = code.strip()
+    clean_name = name.strip()
+    if not clean_code or not clean_name:
+        raise HTTPException(400, "項目コードと項目名は必須です")
+
+    existing = session.exec(select(FeeItem).where(FeeItem.code == clean_code)).first()
+    if existing:
+        raise HTTPException(400, f"コード '{clean_code}' は既に使用されています")
+
+    item = FeeItem(
+        code=clean_code,
+        name=clean_name,
+        category=category,
+        charge_unit=charge_unit,
+        default_amount=max(0, default_amount),
+        taxable_type=taxable_type,
+        display_order=display_order,
+    )
+    session.add(item)
+    session.commit()
+    return RedirectResponse(url="/billing/settings?message=料金項目を追加しました", status_code=303)
+
+
+@router.post("/settings/fee-items/{item_id}/edit")
+def edit_fee_item_action(
+    item_id: int,
+    name: str = Form(...),
+    default_amount: int = Form(0),
+    taxable_type: str = Form("non_taxable"),
+    is_active: bool = Form(True),
+    display_order: int = Form(100),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """既存の料金項目を編集・有効無効切り替えする (P8-1)。"""
+    require_admin(current_user)
+    item = session.get(FeeItem, item_id)
+    if not item:
+        raise HTTPException(404, "料金項目が見つかりません")
+
+    item.name = name.strip()
+    item.default_amount = max(0, default_amount)
+    item.taxable_type = taxable_type
+    item.is_active = is_active
+    item.display_order = display_order
+    item.updated_at = utc_now()
+    session.add(item)
+    session.commit()
+    return RedirectResponse(url="/billing/settings?message=料金項目を更新しました", status_code=303)
+
+
+@router.post("/settings/zengin")
+def update_zengin_setting_action(
+    facility_name: str = Form(...),
+    collector_code: str = Form(...),
+    collector_name_kana: str = Form(...),
+    withdrawal_bank_code: str = Form(...),
+    withdrawal_branch_code: str = Form(...),
+    collector_account_number: str = Form(...),
+    collector_account_type: str = Form("1"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """全銀口座振替の基本設定を更新する (P8-1)。"""
+    require_admin(current_user)
+    setting = _ensure_test_billing_setting(session)
+    setting.facility_name = facility_name.strip()
+    setting.collector_code = collector_code.strip()
+    setting.collector_name_kana = collector_name_kana.strip()
+    setting.withdrawal_bank_code = withdrawal_bank_code.strip()
+    setting.withdrawal_branch_code = withdrawal_branch_code.strip()
+    setting.collector_account_number = collector_account_number.strip()
+    setting.collector_account_type = collector_account_type
+    setting.updated_at = utc_now()
+    session.add(setting)
+    session.commit()
+    return RedirectResponse(url="/billing/settings?message=全銀設定を更新しました", status_code=303)
+
+
+# ==========================================
+# P8-5: 確定前自動検算レポート
+# ==========================================
+
+def audit_billing_cycle(session: Session, cycle_id: int) -> dict[str, object]:
+    """請求確定前の整合性チェックと異常抽出レポートを生成する (P8-5)。"""
+    cycle = session.get(BillingCycle, cycle_id)
+    if not cycle:
+        raise HTTPException(404, "請求月が見つかりません")
+
+    claims = session.exec(select(BillingClaim).where(BillingClaim.billing_cycle_id == cycle_id)).all()
+
+    warnings: list[dict[str, str]] = []
+    total_claims_amount = 0
+    total_lines_amount = 0
+    zero_amount_count = 0
+    carryover_count = 0
+    prorated_count = 0
+
+    for claim in claims:
+        lines = session.exec(select(BillingChargeLine).where(BillingChargeLine.billing_claim_id == claim.id)).all()
+        lines_sum = sum(line.amount for line in lines)
+        total_lines_amount += lines_sum
+        total_claims_amount += claim.total_amount
+
+        # 1. 明細合計と請求額の不一致チェック
+        if lines_sum != claim.total_amount:
+            warnings.append({
+                "type": "mismatch",
+                "level": "error",
+                "message": f"家族ID {claim.family_id}: 明細合計 (¥{lines_sum:,}) と請求合計 (¥{claim.total_amount:,}) が一致しません。",
+            })
+
+        # 2. 0円請求のチェック
+        if claim.total_amount == 0:
+            zero_amount_count += 1
+
+        # 3. 繰越明細・日割り明細のチェック
+        for line in lines:
+            if "繰越" in (line.description or ""):
+                carryover_count += 1
+            if "日割り" in (line.description or ""):
+                prorated_count += 1
+
+    if zero_amount_count > 0:
+        warnings.append({
+            "type": "zero_amount",
+            "level": "warning",
+            "message": f"請求合計が 0 円の家族が {zero_amount_count} 件あります（口座振替依頼データからは自動除外されます）。",
+        })
+
+    if carryover_count > 0:
+        warnings.append({
+            "type": "carryover_detected",
+            "level": "info",
+            "message": f"前月からの振替不能繰越明細が {carryover_count} 件含まれています。",
+        })
+
+    # 4. 減免・免除措置の適用状況・期限満了チェック (P8-3)
+    active_exemptions = session.exec(
+        select(BillingExemption).where(BillingExemption.is_active == True)
+    ).all()
+    exemptions_count = len(active_exemptions)
+    for ex in active_exemptions:
+        if ex.valid_to and cycle.period_start <= ex.valid_to <= cycle.period_end:
+            child = session.get(Child, ex.child_id)
+            c_name = child.full_name if child else f"園児ID:{ex.child_id}"
+            warnings.append({
+                "type": "exemption_expiring",
+                "level": "info",
+                "message": f"減免期限満了: {c_name}（{ex.name}）の適用期限が {ex.valid_to.strftime('%Y/%m/%d')} で満了します。翌月以降の更新要否を確認してください。",
+            })
+
+    is_valid = not any(w["level"] == "error" for w in warnings)
+
+    return {
+        "cycle_id": cycle.id,
+        "year_month": cycle.year_month,
+        "is_valid": is_valid,
+        "claims_count": len(claims),
+        "total_amount": total_claims_amount,
+        "lines_amount": total_lines_amount,
+        "zero_amount_count": zero_amount_count,
+        "carryover_count": carryover_count,
+        "prorated_count": prorated_count,
+        "exemptions_count": exemptions_count,
+        "warnings": warnings,
+    }
+
+
+def apply_child_exemptions(
+    session: Session,
+    child_id: int,
+    fee_item_id: int | None,
+    original_amount: int,
+    target_date: date,
+) -> tuple[int, str]:
+    """園児の減免措置を適用した金額と適用理由を返す (P8-3)。
+
+    返り値: (減免後金額, 備考メッセージ)
+    """
+    exemptions = session.exec(
+        select(BillingExemption)
+        .where(
+            BillingExemption.child_id == child_id,
+            BillingExemption.is_active == True,
+            BillingExemption.valid_from <= target_date,
+        )
+    ).all()
+
+    applied_amount = original_amount
+    notes = []
+
+    for ex in exemptions:
+        if ex.valid_to and ex.valid_to < target_date:
+            continue
+        if ex.fee_item_id is not None and ex.fee_item_id != fee_item_id:
+            continue
+
+        if ex.exemption_type == ExemptionType.full:
+            applied_amount = 0
+            notes.append(f"{ex.name}(全額免除)")
+            break
+        elif ex.exemption_type == ExemptionType.fixed_discount:
+            applied_amount = max(0, applied_amount - ex.discount_amount)
+            notes.append(f"{ex.name}(-¥{ex.discount_amount:,})")
+        elif ex.exemption_type == ExemptionType.percentage:
+            discount = int(applied_amount * ex.discount_rate / 100)
+            applied_amount = max(0, applied_amount - discount)
+            notes.append(f"{ex.name}({ex.discount_rate}%減額)")
+
+    note_str = " / ".join(notes) if notes else ""
+    return applied_amount, note_str
+
+
+@router.get("/cycles/{cycle_id}/audit")
+def cycle_audit_api(
+    cycle_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """請求確定前の自動検算結果を返す (P8-5)。"""
+    require_can_edit(current_user)
+    return audit_billing_cycle(session, cycle_id)
+
+
+# ==========================================
+# P8-4: 振替不能（残高不足等）の翌月繰越
+# ==========================================
+
+@router.post("/claims/{claim_id}/carryover")
+def carryover_unpaid_claim(
+    claim_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """振替不能となった未収明細を翌月の請求サイクルへ繰り越す (P8-4)。"""
+    require_can_edit(current_user)
+    claim = session.get(BillingClaim, claim_id)
+    if not claim:
+        raise HTTPException(404, "請求が見つかりません")
+
+    cycle = session.get(BillingCycle, claim.billing_cycle_id)
+    if not cycle:
+        raise HTTPException(404, "請求サイクルが見つかりません")
+
+    carryover_amount = claim.total_amount
+    if carryover_amount <= 0:
+        raise HTTPException(400, "繰り越す未収金額がありません")
+
+    # 翌月のサイクルを探す（なければ直近の未確定サイクル、または自動生成）
+    all_cycles = session.exec(select(BillingCycle).order_by(BillingCycle.year_month)).all()
+    next_cycle = None
+    for c in all_cycles:
+        if c.year_month > cycle.year_month and c.status == BillingCycleStatus.generated:
+            next_cycle = c
+            break
+
+    if not next_cycle:
+        # 新しい未確定サイクルを生成
+        next_cycle = _create_blank_input_cycle(session, created_by=current_user.name)
+
+    # 翌月サイクルでの該当家族の請求を取得または作成
+    next_claim = session.exec(
+        select(BillingClaim).where(
+            BillingClaim.billing_cycle_id == next_cycle.id,
+            BillingClaim.family_id == claim.family_id,
+        )
+    ).first()
+
+    if not next_claim:
+        next_claim = BillingClaim(
+            billing_cycle_id=next_cycle.id,
+            family_id=claim.family_id,
+            claim_number=f"CLAIM-{next_cycle.year_month}-{claim.family_id:04d}",
+            total_amount=0,
+            status=BillingClaimStatus.draft,
+            payment_method=claim.payment_method,
+        )
+        session.add(next_claim)
+        session.flush()
+
+    # 繰越明細を追加
+    carryover_item = _ensure_manual_fee_item(session, code="carryover", name="振替不能分繰越")
+    carryover_line = BillingChargeLine(
+        billing_claim_id=next_claim.id,
+        fee_item_id=carryover_item.id,
+        source_type=BillingChargeSourceType.manual,
+        description=f"{cycle.year_month}分 振替不能分繰越",
+        amount=carryover_amount,
+        quantity=1,
+    )
+    session.add(carryover_line)
+    session.flush()
+
+    # 再計算
+    next_claim.total_amount += carryover_amount
+    next_claim.updated_at = utc_now()
+    session.add(next_claim)
+    session.commit()
+
+    return {
+        "status": "ok",
+        "message": f"{cycle.year_month}分 の未収額 ¥{carryover_amount:,} を {next_cycle.year_month} へ繰り越しました",
+        "next_cycle_year_month": next_cycle.year_month,
+        "carried_amount": carryover_amount,
+    }
+
+
+# ==========================================
+# P8-2: 月途中入退園の自動日割り算定ヘルパー
+# ==========================================
+
+def calculate_prorated_meal_fee(
+    full_amount: int,
+    start_date: date,
+    end_date: date,
+    enrollment_date: date | None,
+    withdrawal_date: date | None,
+) -> tuple[int, int, int]:
+    """月途中入退園の実開園平日日数に基づく日割り給食費を計算する (P8-2)。
+
+    返り値: (日割り金額, 在園開園日数, 全開園日数)
+    """
+    from datetime import timedelta
+    cur = start_date
+    total_weekdays = 0
+    enrolled_weekdays = 0
+
+    while cur <= end_date:
+        # 土日を除外（平日を開園日と仮定）
+        if cur.weekday() < 5:
+            total_weekdays += 1
+            is_enrolled = True
+            if enrollment_date and cur < enrollment_date:
+                is_enrolled = False
+            if withdrawal_date and cur > withdrawal_date:
+                is_enrolled = False
+            if is_enrolled:
+                enrolled_weekdays += 1
+        cur += timedelta(days=1)
+
+    if total_weekdays == 0:
+        return full_amount, 0, 0
+
+    if enrolled_weekdays >= total_weekdays:
+        return full_amount, total_weekdays, total_weekdays
+
+    # 四捨五入
+    prorated = int(round((full_amount * enrolled_weekdays) / total_weekdays))
+    return prorated, enrolled_weekdays, total_weekdays
