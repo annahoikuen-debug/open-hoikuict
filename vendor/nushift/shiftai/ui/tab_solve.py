@@ -75,7 +75,7 @@ def run_solve(*, force: bool = False, relaxation: int | None = None) -> SolveRes
 
     table = build_requirements()
     gaps = shortfall_gate(table, staff, preferences, settings, standard)
-    ack_key = "shortfall_ack"
+    ack_key = state.KEY_SHORTFALL_ACK
     if gaps and not state.get(ack_key):
         st.warning(
             f"⚠️ 需要が供給を上回る時間帯が {len(gaps)} 件あります。"
@@ -122,13 +122,20 @@ def run_solve(*, force: bool = False, relaxation: int | None = None) -> SolveRes
                     prior_duty_history={},
                     monthly_holiday_target=int(st.session_state.get("monthly_holiday_target", 8)),
                     children=children,
+                    # 週モードと同じ配置基準・重みを月次にも渡す。
+                    # 渡さないと context.standard / context.weights が None のままになり、
+                    # スコアの資格判定と重み付けが月次で無視される。
+                    standard=standard,
+                    weights=weights,
                 )
                 result = solve_monthly_hierarchical(
                     m_ctx,
                     time_limit_sec=limit,
+                    parallel_workers=int(st.session_state.get("parallel_workers", 1)),
                 )
             else:
-                result = solver.solve_shift(
+                from shiftai.weekly import solve_weekly
+                result = solve_weekly(
                     children,
                     staff,
                     table,
@@ -141,6 +148,8 @@ def run_solve(*, force: bool = False, relaxation: int | None = None) -> SolveRes
                     standard=standard,
                     patterns=patterns,
                     relaxation=level,
+                    engine=st.session_state.get("solve_engine", "hierarchical"),
+                    parallel_workers=int(st.session_state.get("parallel_workers", 1)),
                 )
         progress.progress(PROGRESS_STEPS[4][0], text=PROGRESS_STEPS[4][1])
         snap_changes: tuple = ()
@@ -716,6 +725,15 @@ def render(*, auto_requirements: bool = False, embed_shift: bool = False) -> Non
             help="1ヶ月などの長期シフトを作成する場合は「月次一括」を選択すると、公休目標や連勤制限を守りながら高速に解けます。",
         )
     with col_m2:
+        if st.session_state.get("solve_mode") == "weekly":
+            st.radio(
+                "週次エンジン",
+                options=["hierarchical", "legacy"],
+                format_func=lambda e: "階層エンジン (推奨)" if e == "hierarchical" else "旧単一モデル",
+                key="solve_engine",
+                horizontal=True,
+                help="hierarchical: 日単位チャンクで並列求解（高速）/ legacy: 旧単一モデル",
+            )
         if st.session_state.get("solve_mode") == "monthly":
             st.number_input(
                 "月間公休目標日数",

@@ -109,6 +109,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("041_shift_timefold_enhancements", _migrate_shift_timefold_enhancements),
         ("042_parent_push_preference_extra_mute_columns", _migrate_parent_push_preference_extra_mute_columns),
         ("043_message_templates_table", _migrate_message_templates_table),
+        ("044_attendance_lock_version", _migrate_attendance_lock_version),
     ]
 
 
@@ -852,6 +853,16 @@ def _migrate_parent_push_preference_extra_mute_columns() -> None:
             conn.commit()
     except Exception as exc:
         _log_migration_skip("parent push preference extra mute columns", exc)
+
+
+def _migrate_attendance_lock_version() -> None:
+    try:
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(attendance_records)")}
+            if columns and "lock_version" not in columns:
+                conn.exec_driver_sql("ALTER TABLE attendance_records ADD COLUMN lock_version INTEGER DEFAULT 1")
+    except Exception as exc:
+        _log_migration_skip("attendance_records lock_version column", exc)
 
 
 def _migrate_message_templates_table() -> None:

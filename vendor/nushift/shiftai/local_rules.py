@@ -418,7 +418,7 @@ MUNICIPAL_PRESETS: dict[str, StaffingStandard] = {
         break_minutes=config.DEFAULT_BREAK_MINUTES,
         break_stagger_minutes=config.DEFAULT_BREAK_STAGGER_MINUTES,
         work_start_base=_FACILITY_OPEN,
-        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, 15)),
+        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, _FACILITY_OPEN.minute)),
         early_care_window=(_FACILITY_OPEN, config.DEFAULT_EARLY_CARE_END),
         late_care_window=(_t(18, 15), config.DEFAULT_LATE_CARE_END),
         late_care_relaxed=False,
@@ -456,7 +456,7 @@ MUNICIPAL_PRESETS: dict[str, StaffingStandard] = {
         work_start_base=_FACILITY_OPEN,
         # 認可外保育施設に保育標準時間は無い。開所〜開所+11時間を
         # 「主たる開所時間」として扱う（認可外保育施設指導監督基準 第1(1)）。
-        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, 15)),
+        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, _FACILITY_OPEN.minute)),
         early_care_window=(_FACILITY_OPEN, config.DEFAULT_EARLY_CARE_END),
         late_care_window=(_t(18, 15), config.DEFAULT_LATE_CARE_END),
         late_care_relaxed=False,
@@ -492,7 +492,7 @@ MUNICIPAL_PRESETS: dict[str, StaffingStandard] = {
         break_minutes=config.DEFAULT_BREAK_MINUTES,
         break_stagger_minutes=config.DEFAULT_BREAK_STAGGER_MINUTES,
         work_start_base=_FACILITY_OPEN,
-        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, 15)),
+        standard_time=(_FACILITY_OPEN, _t(_FACILITY_OPEN.hour + _FACILITY_MAIN_HOURS, _FACILITY_OPEN.minute)),
         early_care_window=(_FACILITY_OPEN, config.DEFAULT_EARLY_CARE_END),
         late_care_window=(_t(18, 15), config.DEFAULT_LATE_CARE_END),
         late_care_relaxed=False,
@@ -617,10 +617,32 @@ def preset_source(standard: StaffingStandard) -> str:
     return standard.remarks
 
 
+_PRESET_ALIASES: dict[str, str] = {
+    "fukuoka_city": "福岡市",
+    "fukuoka": "福岡市",
+    "tokyo": "東京都",
+    "tokyo_metropolitan": "東京都",
+    "yokohama": "横浜市",
+    "osaka": "大阪市",
+    "osaka_city": "大阪市",
+    "nagoya": "名古屋市",
+    "kyoto": "京都市",
+    "sapporo": "札幌市",
+    "kobe": "神戸市",
+    "kawasaki": "川崎市",
+    "generic": "全国基準（厚労省）",
+    "national": "全国基準（厚労省）",
+    "national_standard": "全国基準（厚労省）",
+    "national_2024": "全国基準（厚労省）",
+    "standard": "全国基準（厚労省）",
+}
+
+
 def get_standard(key: str) -> StaffingStandard:
     """プリセットキーから ``StaffingStandard`` を取得する。不明キーは ``KeyError``。"""
+    resolved_key = _PRESET_ALIASES.get(key, key)
     try:
-        return MUNICIPAL_PRESETS[key]
+        return MUNICIPAL_PRESETS[resolved_key]
     except KeyError as exc:
         raise KeyError(
             f"不明なプリセットキーです: {key!r}（選択肢: {', '.join(MUNICIPAL_PRESETS)}）"

@@ -31,10 +31,11 @@ PuLP 4.0 以降は API が変わるため、古典的な
 
 from __future__ import annotations
 
+import math
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
-import os
 from time import perf_counter
 from typing import Any
 
@@ -86,6 +87,7 @@ from shiftai.greedy import (
 from shiftai.greedy import (
     staff_work_hours as staff_work_hours,
 )
+from shiftai.highs_start import HiGHSWithStart
 from shiftai.relaxation import (
     RELAX_LEVELS,
     RelaxLevel,
@@ -206,12 +208,12 @@ def _get_solver(
         try:
             num_threads = min(4, os.cpu_count() or 1)
             return (
-                pulp.HiGHS(
+                HiGHSWithStart(                                    # ★変更（旧: pulp.HiGHS(）
                     msg=msg,
                     timeLimit=limit,
                     threads=num_threads,
-                    gapRel=0.03,
-                    mip_heuristic_effort=0.2,
+                    gapRel=config.HIGHS_GAP_REL,                   # ★変更（旧: 0.03）
+                    mip_heuristic_effort=config.HIGHS_MIP_HEURISTIC_EFFORT,  # ★変更（旧: 0.2）
                 ),
                 "HiGHS",
             )
@@ -697,21 +699,33 @@ def _add_commute_penalty(
         return
     reach = min(reach, n - 1)
     slack_items: list[object] = []
+    prior: list[object] = [0] * n
     for i in range(1, n):
         start = duty.get(i, 0)
+        prev_prior = prior[i - 1]
+        duty_prev = duty.get(i - 1, 0)
+        # prior_i = OR(duty_0..duty_{i-1})：先行在勤があるか。
+        prior_i = pulp.LpVariable(f"{tag}_prior{i}", lowBound=0, upBound=1)
+        ctx.prob += prior_i >= prev_prior
+        if not _is_zero(duty_prev):
+            ctx.prob += prior_i >= duty_prev
+            ctx.prob += prior_i <= prev_prior + duty_prev
+        else:
+            ctx.prob += prior_i <= prev_prior
+        prior[i] = prior_i
         if _is_zero(start):
-            continue
-        prev = duty.get(i - 1, 0)
-        if _is_zero(start) and _is_zero(prev):
             continue
         window = [duty.get(j, 0) for j in range(max(0, i - reach), i)]
         window_vars = [v for v in window if not _is_zero(v)]
-        if not window_vars:
-            continue
         slack = pulp.LpVariable(f"{tag}_commute{i}", lowBound=0)
-        # 窓が在勤で埋まっているのに duty_i が立つと slack が 1 立つ
-        # （= 在勤ブロックを長い下班で分けた shortfall）。
-        _hard_le(ctx, start - pulp.lpSum(window_vars) - slack, 0, f"{tag}_commute_{i}")
+        # 先行在勤がない（初回ブロック）ときは slack を立てない。
+        # 先行在勤がある窓外の長い下班後の再開は罰する。
+        _hard_le(
+            ctx,
+            start - pulp.lpSum(window_vars) - slack + prior_i,
+            1,
+            f"{tag}_commute_{i}",
+        )
         slack_items.append(slack)
     if slack_items:
         obj.append(weights.split_duty_penalty * pulp.lpSum(slack_items))
@@ -925,8 +939,7 @@ def _build_cells(
                 else getattr(settings, "break_minutes", None) or break_minutes
             )
             is_part_short = (
-                (st.contract.daily_hours is not None and st.contract.daily_hours <= 6.0)
-                or st.contract.employment_type in (EmploymentType.PART, EmploymentType.BUNKIN)
+                st.contract.daily_hours is not None and st.contract.daily_hours <= 6.0
             )
             if (st.contract.break_minutes is not None and st.contract.break_minutes == 0) or is_part_short or cap_min <= 6 * 60:
                 eff_break = 0
@@ -942,7 +955,7 @@ def _build_cells(
                 # 案1: 1職員1日の在勤は1連続ブロック・休息は1回だけにする。
                 # allow_split=True（緩和 L3 ``RELAX_HOURS``）ならソフトに戻る。
                 _gran = max(1, int(requirements.granularity_min or slots[0].minutes))
-                _brk_slots = _break_slots(cap_min, eff_break, _gran)
+                _brk_slots = _break_slots(cap_min, eff_break, _gran, daily_hours=st.contract.daily_hours)
                 _add_duty_block(
                     ctx,
                     duty,
@@ -1012,13 +1025,13 @@ def _qualified_items(
 ) -> list[object]:
     """「必要保育士数」を満たす勤務変数を返す。
 
-    看護師・准看護師を保育士とみなせる基準
-    （``nurse_as_qualified_cap`` が 1 以上。企業主導型保育事業など）は看護師も含める。
-    ただし**上限を超える複数の看護師は同時に数えられない**ため、
-    看護師が上限より多いときだけ 0/1 変数を 1 つ追加して頭数を絞る。
-    通常（看護師が 1 名以下の園では）変数は増えない。
+    保育士・准看護師・``qualified_extra_roles`` を必要保育士数に算入する。
+    ``nurse_as_qualified_cap`` が 1 以上の場合（企業主導型保育事業など）、
+    看護師・准看護師は上限までのみなし保育士として算入する。
+    ``qualified_extra_roles`` と ``nurse_as_qualified_cap`` は排他（StaffingStandard.__post_init__）。
     """
     nurse_cap = standard.nurse_as_qualified_cap if standard is not None else 0
+    extra_roles = standard.qualified_extra_roles if standard is not None else frozenset()
     items: list[object] = []
     nurse_items: list[object] = []
     for member in staff:
@@ -1027,17 +1040,23 @@ def _qualified_items(
             continue
         if member.has_role(Role.HOIKUSHI):
             items.append(var)
+        elif set(member.roles) & extra_roles:
+            items.append(var)  # 比率の分子にそのまま算入（上限なし）
         elif nurse_cap > 0 and member.is_nurse:
             nurse_items.append(var)
-    if not nurse_items:
+    if not nurse_items or nurse_cap <= 0:
         return items
     if nurse_cap >= len(nurse_items):
         return items + nurse_items
 
-    # 看護師が上限より多いときだけ「1 人分だけ数える」変数を導入する。
-    used = pulp.LpVariable(f"nurse_used_{day.isoformat()}_{ctx.prob.name}_{idx}", cat=pulp.LpBinary)
-    for var in nurse_items:
-        ctx.prob += used >= var
+    # 上限付きのみなし保育士: used = min(nurse_cap, Σ nurses)。
+    # 目的関数上の短fallを埋めるため used は必要分まで最大化される。
+    used = pulp.LpVariable(
+        f"nurse_used_{day.isoformat()}_{ctx.prob.name}_{idx}",
+        lowBound=0,
+        upBound=nurse_cap,
+        cat=pulp.LpContinuous,
+    )
     ctx.prob += used <= _linear([(v, 1) for v in nurse_items])
     return items + [used]
 
@@ -1156,9 +1175,16 @@ def _add_workload(
             obj.append(weights.break_conflict_penalty * excess)
 
 
-def _break_slots(cap_min: int, break_minutes: int, gran: int) -> int:
-    """必要休憩スロット数を算出する（0 以上、日上限スロット数以下）。"""
-    if break_minutes <= 0 or cap_min <= 6 * 60:
+def _break_slots(cap_min: int, break_minutes: int, gran: int, daily_hours: float | None = None) -> int:
+    """必要休憩スロット数を算出する（0 以上、日上限スロット数以下）。
+
+    休憩不要の 6 時間以下は「契約上限」ではなく契約の標準勤務時間
+    (``daily_hours``) で判定する。実労働が短い日に休憩を過剰要求しない。
+    """
+    if break_minutes <= 0:
+        return 0
+    effective_cap = int(round((daily_hours if daily_hours is not None else cap_min / 60.0) * 60))
+    if effective_cap <= 6 * 60:
         return 0
     return min(max(1, -(-break_minutes // gran)), max(0, cap_min // gran))
 
@@ -1184,14 +1210,13 @@ def _add_breaks(
         )
         cap_min = _daily_cap_minutes(st.contract)
         is_part_short = (
-            (st.contract.daily_hours is not None and st.contract.daily_hours <= 6.0)
-            or st.contract.employment_type in (EmploymentType.PART, EmploymentType.BUNKIN)
+            st.contract.daily_hours is not None and st.contract.daily_hours <= 6.0
         )
         if (st.contract.break_minutes is not None and st.contract.break_minutes == 0) or is_part_short or cap_min <= 6 * 60:
             eff_break = 0
         else:
             eff_break = min(max(raw_break, config.MIN_ALLOWABLE_BREAK_MINUTES), config.MAX_ALLOWABLE_BREAK_MINUTES)
-        need_slots = _break_slots(cap_min, eff_break, gran)
+        need_slots = _break_slots(cap_min, eff_break, gran, daily_hours=st.contract.daily_hours)
         if need_slots <= 0:
             continue
         for day in requirements.all_days():
@@ -1432,7 +1457,23 @@ def _staff_signature(st: StaffMember, prefs: Mapping[str, StaffPreferences] | No
         c.latest_end,
         c.can_work_holiday,
         c.overtime_allowed,
+        # 36協定・契約細部：有無で daily_cap が変わるため、同一署名でも
+        # 交換不可能な職員が混ざると対称性破り（WLOG）が崩れる。
+        c.has_36_agreement,
+        c.variable_working_hours,
+        c.break_minutes,
+        c.min_daily_hours,
+        c.max_daily_hours,
+        c.max_work_blocks_per_day,
         pref_key,
+        # 交換不可能性：スキル・担任クラス・開閉所・リーダー・配置可否。
+        # 同一契約でもこれらが異なると入れ替え不可なので対称性破りの対象外とする。
+        frozenset(st.skills),
+        st.assigned_class_id,
+        st.can_open,
+        st.can_close,
+        st.can_lead,
+        st.is_placeable,
     )
 
 
@@ -1440,13 +1481,19 @@ def _add_symmetry_breaking(
     ctx: _ModelCtx,
     staff: Sequence[StaffMember],
     prefs: Mapping[str, StaffPreferences] | None,
+    fixed: Mapping[tuple[str, date, str], CellState] | None = None,
 ) -> None:
     """契約・希望が完全に同一の職員グループに勤務時間の大小関係を課す。
 
     この条件は「同じグループ内では入れ替えても目的関数が変わらない」ことを使う
     WLOG な対称性打断であり、最適解を失わない。職員数が多いほどCBCの探索が
     な探索になり、求解時間を大きく短縮できる。
+
+    ``fixed`` が空でないときは手動確定セルがあるため職員が入れ替え不可となり、
+    対称性破りをスキップする。
     """
+    if fixed:
+        return
     groups: dict[tuple, list[str]] = {}
     for st in staff:
         groups.setdefault(_staff_signature(st, prefs), []).append(st.staff_id)
@@ -1465,10 +1512,11 @@ def _add_hours_objective(
     obj: list[object],
     weights: ObjectiveWeights,
     prefs: Mapping[str, StaffPreferences] | None = None,
+    fixed: Mapping[tuple[str, date, str], CellState] | None = None,
 ) -> None:
     """勤務時間の偏り・月間時間・未使用職員・長時間勤務のペナルティ。"""
     days = requirements.all_days()
-    _add_symmetry_breaking(ctx, staff, prefs)
+    _add_symmetry_breaking(ctx, staff, prefs, fixed=fixed)
     if staff:
         hmax = pulp.LpVariable("H_max", lowBound=0)
         hmin = pulp.LpVariable("H_min", lowBound=0)
@@ -1944,7 +1992,7 @@ def _build_problem(
     if "weekly" not in drop_groups:
         _add_consecutive(ctx, staff, requirements, obj, weights)
     _add_preferences(ctx, staff, requirements, prefs, kinds, obj, weights)
-    _add_hours_objective(ctx, staff, requirements, obj, weights, prefs)
+    _add_hours_objective(ctx, staff, requirements, obj, weights, prefs, fixed=fixed)
     _add_pattern_alignment(ctx, staff, requirements, obj, weights, patterns or (), pattern_mode=pattern_mode)
     if "fairness" not in drop_groups:
         _add_fairness(ctx, staff, requirements, obj, weights, standard, patterns or ())
@@ -2024,7 +2072,7 @@ def solve_shift(
     relaxation: int = int(RelaxLevel.STRICT),
     drop_groups: frozenset[str] = frozenset(),
     solver_name: str = config.DEFAULT_SOLVER,
-    warm_start: bool = False,
+    warm_start: bool = True,
     warm_start_assignments: Mapping[tuple[str, date, str], CellState] | None = None,
     pattern_mode: bool = True,
     pairing_rules: Sequence[PairingRule] | None = None,
@@ -2098,6 +2146,7 @@ def solve_shift(
         "num_slots": len(slots),
         "relaxation": level,
         "relaxation_label": RELAX_LEVELS[level].label,
+        "budget_sec": budget,          # ★追加（全体予算の記録）
         "relaxed_constraints": list(describe_relaxations(level)),
         "patterns": [p.label for p in payload.patterns],
         "pattern_mode": payload.pattern_mode,
@@ -2186,11 +2235,18 @@ def solve_shift(
             applied_count = apply_warm_start(ctx, slots, warm_assignments)
             stats["warm_start_applied"] = applied_count > 0
             stats["warm_start_vars"] = applied_count
+            if applied_count > 0:
+                # 1パス目が解なしになった場合の 2パス目（罰変数化モデル）でも
+                # 同じ初期解を使えるように保持する。以前はここで捨てられており、
+                # 2パス目は毎回コールドスタートしていた。
+                # （``_best_effort`` は ``payload.warm_start_assignments`` を見る）
+                payload.warm_start_assignments = warm_assignments
 
     status, raw, actual_solver = _run_solver(
         ctx,
         max(1, int(budget * 0.5)),
         msg,
+        stats=stats,
         solver_name=payload.solver_name,
         warm_start=payload.warm_start and bool(stats.get("warm_start_applied", False)),
     )
@@ -2202,12 +2258,43 @@ def solve_shift(
     return _best_effort(payload, stats, started, budget, raw)
 
 
+def _collect_highs_info(prob: Any, stats: dict) -> None:
+    """HiGHS 実行後のギャップ・双境界・ノード数を stats に記録する。
+
+    CBC など ``solverModel`` を持たないソルバーでは何もしない。
+    ``getInfo()`` は solve 後のみ有効なので、呼び出しは ``_run_solver`` 内
+    （``ctx.prob.solve`` の直後）に限る。
+    """
+    model = getattr(prob, "solverModel", None)
+    if model is None:
+        return
+    try:
+        info = model.getInfo()
+    except Exception:
+        return
+    try:
+        val = float(info.mip_gap)
+        stats["mip_gap"] = val if math.isfinite(val) and val < 1e29 else None
+    except (TypeError, ValueError):
+        stats["mip_gap"] = None
+    try:
+        val = float(info.mip_dual_bound)
+        stats["mip_dual_bound"] = val if math.isfinite(val) and abs(val) < 1e29 else None
+    except (TypeError, ValueError):
+        stats["mip_dual_bound"] = None
+    try:
+        stats["mip_node_count"] = int(info.mip_node_count)
+    except (TypeError, ValueError):
+        stats["mip_node_count"] = None
+
+
 def _run_solver(
     ctx: _ModelCtx,
     limit_sec: int,
     msg: bool,
     solver_name: str = "auto",
     warm_start: bool = False,
+    stats: dict | None = None,
 ) -> tuple[SolveStatus, str, str]:
     """MILP ソルバー（HiGHS または CBC）を実行して SolveStatus とステータス文字列、ソルバー名を返す。"""
     solver_instance, actual_solver = _get_solver(
@@ -2216,10 +2303,27 @@ def _run_solver(
         solver_name=solver_name,
         warm_start=warm_start,
     )
+    if actual_solver == "PULP_CBC_CMD" and ctx.counts()[0] > config.MAX_CBC_MODEL_VARS:
+        # CBC は大規模モデルで 60 秒を無駄にする（初期解すら出せない）。
+        # 起動せず即座に INFEASIBLE を返し、呼び出し元に greedy フォール
+        # バックさせる（pass1/pass2 両方に効く単一箇所）。
+        if stats is not None:
+            # 全体予算（budget_sec）は上書きせず、CBC に実際に使った pass 予算を
+            # 別キーで記録する（CLI/UI の予算超過警告はこちらを参照する）
+            stats["pass_budget_sec"] = limit_sec
+        return (
+            SolveStatus.INFEASIBLE,
+            f"BudgetGuard / CBC 拒否（変数数 {ctx.counts()[0]} > {config.MAX_CBC_MODEL_VARS}）",
+            actual_solver,
+        )
     try:
         ctx.prob.solve(solver_instance)
     except Exception as exc:
         return SolveStatus.ERROR, f"SolveError / {exc}", actual_solver
+    if stats is not None:
+        _collect_highs_info(ctx.prob, stats)                    # ★追加（ステップ3で追加済み）
+        if actual_solver == "HiGHS":                            # ★追加
+            stats["mip_start_status"] = "on"                    # ★追加
     status_raw = pulp.LpStatus.get(ctx.prob.status, "Undefined")
     sol_raw = pulp.LpSolution.get(ctx.prob.sol_status, "No Solution Found")
     raw = f"{status_raw} / {sol_raw}"
@@ -2246,6 +2350,15 @@ def _run_solver(
         raw = f"{raw}（制約違反 {len(violated)} 本: {violated[0]}）"
         return SolveStatus.INFEASIBLE, raw, actual_solver
     if status_raw == "Optimal" and sol_raw == "Optimal Solution Found":
+        # HiGHS は gapRel 到達で早期終了すると Optimal と報告する。
+        # 実際のギャップが 0 でないなら「最適性の証明なし」と記録する。
+        if stats is not None:
+            gap = stats.get("mip_gap")
+            if gap is not None and math.isfinite(gap) and gap > 1e-9:
+                stats["solver_status_optimal_caveat"] = (
+                    f"MIPギャップ {float(gap) * 100:.2f}% で終了（最適性の証明は時間切れ）"
+                )
+                return SolveStatus.FEASIBLE, raw, actual_solver
         return SolveStatus.OPTIMAL, raw, actual_solver
     if status_raw == "Optimal":
         return SolveStatus.FEASIBLE, raw, actual_solver
@@ -2357,7 +2470,7 @@ def _best_effort(
     pass1_status: str,
 ) -> SolveResult:
     """配置基準を罰変数に置き換えた2パス目（ベストエフォート）を実行する。"""
-    diagnosis_msgs, diagnosis_items = _coverage_diagnosis(payload)
+    diagnosis = _coverage_diagnosis(payload)
     try:
         soft = _build_problem(
             payload.staff,
@@ -2384,29 +2497,44 @@ def _best_effort(
             {**stats, "pass2_build_error": f"{type(exc).__name__}: {exc}"},
             started,
             _INFEASIBLE_FALLBACK_MESSAGE,
-            diagnosis_msgs,
-            diagnosis_items,
+            diagnosis,
         )
 
     if payload.warm_start and payload.warm_start_assignments:
         apply_warm_start(soft, tuple(payload.requirements.slots), payload.warm_start_assignments)
 
     left = budget - (perf_counter() - started)
+    # 残り時間がわずかなら MIP スタート（CBC の MST 書き出し＋読み込み）の
+    # オーバーヘッドが探索時間を圧迫する。大規模モデルで時間切れが自明な場合、
+    # 初期解を渡しても結果は変わらず wall 時間だけが伸びる（実測: 7日28名で
+    # wall 89s → 178s）。残り時間が十分なときだけ初期解を渡す。
+    warm_start = (
+        payload.warm_start
+        and bool(payload.warm_start_assignments)
+        and left >= 10
+    )
     status, raw, actual_solver = _run_solver(
         soft,
         max(1, int(left)),
         False,
         solver_name=payload.solver_name,
-        warm_start=payload.warm_start and bool(payload.warm_start_assignments),
+        stats=stats,
+        warm_start=warm_start,
     )
     stats["solver"] = actual_solver
     stats["solver_status"] = f"{raw}（配置基準を罰変数化）"
     if status in (SolveStatus.INFEASIBLE, SolveStatus.ERROR):
-        return _greedy(payload, stats, started, _INFEASIBLE_FALLBACK_MESSAGE, diagnosis_msgs, diagnosis_items)
+        return _greedy(payload, stats, started, _INFEASIBLE_FALLBACK_MESSAGE, diagnosis)
     stats["num_variables"], stats["num_constraints"] = soft.counts()
     result = _finish(soft, payload, stats, started, status, pass_no=2, relaxed=True)
-    result.shortfall_diagnosis = diagnosis_items
-    result.messages = [_SOFT_COVERAGE_MESSAGE, *diagnosis_msgs, *result.messages]
+    # この分岐に来るのは **貪欲法の結果ではない**。
+    # ``status`` が INFEASIBLE / ERROR なら上の行で既に ``_greedy`` に
+    # 分岐しているため、ここに到達した結果は必ず MILP 2 パス目の解である。
+    # 修正前: 貪欲法のメッセージを無条件に先頭に置いていたため、
+    # 「貪欲法による暫定シフトを生成しました」と
+    # 「最適解を求めました」が同じ結果に対して同時に表示され、
+    # 利用者が結果全体を信用できなくなる状態になっていた。
+    result.messages = [_SOFT_COVERAGE_MESSAGE, *diagnosis, *result.messages]
     return result
 
 
@@ -2416,26 +2544,42 @@ def _greedy(
     started: float,
     message: str,
     diagnosis: list[str] | None = None,
-    diagnosis_items: list[dict] | None = None,
 ) -> SolveResult:
     """貪欲法による最終保険。"""
-    result = solve_shift_greedy(
-        payload.children,
-        payload.staff,
-        payload.requirements,
-        payload.prefs,
-        fixed_assignments=payload.fixed,
-        standard=payload.standard,
-        settings=payload.settings,
-    )
+    try:
+        result = solve_shift_greedy(
+            payload.children,
+            payload.staff,
+            payload.requirements,
+            payload.prefs,
+            fixed_assignments=payload.fixed,
+            standard=payload.standard,
+            settings=payload.settings,
+        )
+    except Exception as exc:
+        # 最後の砦が例外で落ちないよう、ERROR の SolveResult を返す。
+        result = SolveResult(
+            status=SolveStatus.ERROR,
+            shift_days=[],
+            violations=[],
+            messages=[f"{message}（貪欲法で例外: {exc})", *(diagnosis or [])],
+            stats={
+                **stats,
+                "solver": "greedy",
+                "fallback": "greedy",
+                "elapsed_sec": round(perf_counter() - started, 3),
+                "pass": 0,
+            },
+        )
+        return result
     result.messages = [message, *(diagnosis or []), *result.messages]
-    if diagnosis_items:
-        result.shortfall_diagnosis = diagnosis_items
     result.stats.update({k: v for k, v in stats.items() if k != "solver"})
     # 実際に走ったのは貪欲法なので solver 名を偽らない
     # （``PULP_CBC_CMD`` 固定だと HiGHS 環境で診断が誤解される）。
     result.stats["solver"] = "greedy"
     result.stats["fallback"] = "greedy"
+    result.stats["elapsed_sec"] = round(perf_counter() - started, 3)   # ★追加
+    result.stats["pass"] = 0                                            # ★追加（貪欲法パス）
     return result
 
 
@@ -2494,8 +2638,12 @@ def _finish(
             preferences=payload.prefs,
             weights=payload.weights,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        # スコア計算は付加価値だが、失敗を黙って捨てるとスコア機能が
+        # 死んでいることに誰も気づけない（実例: score.py が Role を
+        # import し忘れて NameError していた。except: pass で隠蔽されていた）。
+        # 診断できるように stats に記録する。
+        stats["score_error"] = f"{type(exc).__name__}: {exc}"
     return result
 
 
@@ -2538,15 +2686,10 @@ def _solution_messages(
     return out
 
 
-def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> tuple[list[str], list[dict]]:
-    """配置基準を満たせない原因を日本語で説明する（需要と供給の不足を提示する）。
-
-    戻り値: (表示用メッセージリスト, 構造化診断データリスト)
-    構造化データの各要素: {day, slot_label, need_all, sup_all, need_q, sup_q, short_all, short_q}
-    """
+def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> list[str]:
+    """配置基準を満たせない原因を日本語で説明する（需要と供給の不足を提示する）。"""
     rows = _shortfall_supply(payload)
     out: list[str] = []
-    items: list[dict] = []
     if rows:
         out.append(
             f"配置基準を満たせませんでした。需要 > 供給 となる時間帯は {len(rows)} 件です。"
@@ -2555,29 +2698,15 @@ def _coverage_diagnosis(payload: _SolveInput, top: int = 5) -> tuple[list[str], 
         )
         for day, label, need_all, need_q, sup_all, sup_q, _support in rows[:top]:
             detail = []
-            short_q = max(0, need_q - sup_q)
-            short_all = max(0, need_all - sup_all)
             if sup_q < need_q:
-                detail.append(f"保育士 不足{short_q}名（必要{need_q}名/供給{sup_q}名）")
+                detail.append(f"保育士 不足{need_q - sup_q}名（必要{need_q}名/供給{sup_q}名）")
             if sup_all < need_all:
                 detail.append(
-                    f"人員 不足{short_all}名（必要{need_all}名/供給{sup_all}名）"
+                    f"人員 不足{need_all - sup_all}名（必要{need_all}名/供給{sup_all}名）"
                 )
             out.append(f"  ・{day.isoformat()} {label}: " + "、".join(detail))
-            items.append(
-                {
-                    "day": day.isoformat(),
-                    "slot_label": label,
-                    "need_all": need_all,
-                    "sup_all": sup_all,
-                    "need_q": need_q,
-                    "sup_q": sup_q,
-                    "short_all": short_all,
-                    "short_q": short_q,
-                }
-            )
     out.extend(_staffing_advice(payload, rows))
-    return out, items
+    return out
 
 
 def _staffing_advice(payload: _SolveInput, rows: Sequence[tuple]) -> list[str]:

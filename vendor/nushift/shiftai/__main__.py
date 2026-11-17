@@ -79,7 +79,7 @@ from shiftai.exporter import (
 from shiftai.gap_analysis import analyze_gap, check_violations
 from shiftai.relaxation import MAX_RELAX_LEVEL, RELAX_LEVELS, normalize_level
 from shiftai.shift_patterns import default_patterns, normalize_patterns, parse_pattern_spec
-from shiftai.solver import shortfall_rows, snap_to_patterns, solve_shift
+from shiftai.solver import shortfall_rows, snap_to_patterns
 from shiftai.standards import build_requirements, peak_requirement, total_required_hours
 
 APP_FILE_NAME = "streamlit_app.py"
@@ -326,7 +326,11 @@ def cmd_compliance(args: argparse.Namespace) -> int:
     except ValueError:
         _error(f"制度名が不正です: {args.regulation}")
         return EXIT_ERROR
-    standard = local_rules.get_standard(args.standard) if args.standard else None
+    try:
+        standard = local_rules.get_standard(args.standard) if args.standard else None
+    except KeyError as exc:
+        _error(str(exc))
+        return EXIT_ERROR
     try:
         spec = _facility_spec_from_csv(args, standard)
     except ValueError as exc:
@@ -564,14 +568,20 @@ def cmd_solve(args: argparse.Namespace) -> int:
             prior_duty_history={},
             monthly_holiday_target=getattr(args, "monthly_holiday_target", 8) or 8,
             children=loaded.children,
+            # 週モードと同じ配置基準を月次にも渡す。渡さないと
+            # context.standard が None のままになり、スコアの
+            # SHORTFALL_QUALIFIED 再計算が資格定義を無視する。
+            standard=standard,
         )
         result = solve_monthly_hierarchical(
             monthly_ctx,
             time_limit_sec=args.time_limit,
             solver_name=args.solver,
+            parallel_workers=max(1, int(getattr(args, "workers", 1) or 1)),
         )
     else:
-        result = solve_shift(
+        from shiftai.weekly import solve_weekly
+        result = solve_weekly(
             loaded.children,
             loaded.staff,
             table,
@@ -584,8 +594,18 @@ def cmd_solve(args: argparse.Namespace) -> int:
             solver_name=args.solver,
             warm_start=not args.no_warm_start,
             pattern_mode=args.pattern_mode,
+            engine=args.engine,
+            parallel_workers=max(1, int(getattr(args, "workers", 1) or 1)),
         )
     _echo(f"最適化: {result.status.value}（{result.stats.get('elapsed_sec', 0.0)} 秒）")
+    gap = result.stats.get("mip_gap")
+    if gap is not None:
+        _echo(f"  MIPギャップ: {float(gap) * 100:.2f}% / 双境界: {result.stats.get('mip_dual_bound', '-')}")
+    if result.stats.get("pass_budget_sec") is not None:
+        _echo(
+            f"  ⚠ モデルが大きすぎるため（pass 予算 {result.stats['pass_budget_sec']} 秒）、"
+            "CBC を起動せず早期終了しました（--solver HiGHS で再試行してください）"
+        )
     for message in result.messages:
         _echo(f"  {message}")
 
@@ -868,10 +888,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="最適化モード（weekly: 週単位詳細最適化 / monthly: 2段階階層的月次最適化）。既定: weekly",
     )
     solve.add_argument(
+        "--engine",
+        choices=["hierarchical", "legacy"],
+        default=config.WEEKLY_ENGINE_DEFAULT,
+        help="週次エンジンの選択（hierarchical: 月次階層エンジン / legacy: 旧単一モデル）。既定: hierarchical（--mode monthly では無視されます）",
+    )
+    solve.add_argument(
         "--monthly-holiday-target",
         type=int,
         default=8,
         help="月次モード時の月間公休目標日数（既定: 8日）",
+    )
+    solve.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="月次モードで日ごとの求解を並列実行するワーカー数（既定: 1）。CPUコア数以下を推奨",
     )
     solve.add_argument(
         "--pattern-mode",
@@ -942,6 +974,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     except BrokenPipeError:
         _silence_broken_pipe()
         return EXIT_OK
+    except (ValueError, OSError) as exc:
+        # argparse の検証をすり抜けた入力（``--granularity 0`` や
+        # 開所＞閉所など）が build_requirements / ファイル I/O まで
+        # 到いて raise されたケース。素の traceback を出さず、
+        # 契約どおり日本語メッセージと ``EXIT_ERROR`` で返す。
+        _error(str(exc))
+        return EXIT_ERROR
     finally:
         try:
             sys.stdout.flush()

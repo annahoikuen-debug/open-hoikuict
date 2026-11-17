@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -106,7 +106,7 @@ class GasConfig:
     base_url: str
     sheet: str = "attendance"
     timeout_sec: int = DEFAULT_TIMEOUT
-    secret: str = ""
+    secret: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls) -> GasConfig | None:
@@ -306,9 +306,9 @@ class GoogleAppsScriptClient:
         return payload_to_frame(payload)
 
     def push_table(self, df: pd.DataFrame, sheet: str, *, mode: str = "replace") -> dict:
-        """DataFrame をシートへ送る。``mode`` は ``replace`` / ``append``。"""
+        """DataFrame をシートへ送る。``mode`` は ``replace`` / ``write`` / ``append``。"""
         if mode not in ("replace", "write", "append"):
-            raise GasConfigError(f"mode は 'replace' か 'append' にしてください（got {mode!r}）")
+            raise GasConfigError(f"mode は 'replace' / 'write' / 'append' にしてください（got {mode!r}）")
         action = "append" if mode == "append" else "write"
         body = {"action": action, "sheet": sheet}
         body.update(frame_to_payload(df))

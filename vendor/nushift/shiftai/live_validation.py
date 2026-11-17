@@ -389,6 +389,7 @@ def validate_day(
         actual = sum(
             1
             for member in staff
+            if member.is_placeable
             for i, s in enumerate(states.get(member.staff_id, []))
             if slots[i] == slot and s is CellState.WORK
         )
@@ -407,6 +408,7 @@ def validate_day(
             working_qualified = [
                 member
                 for member in staff
+                if member.is_placeable
                 if any(
                     slots[i] == slot and s is CellState.WORK
                     for i, s in enumerate(states.get(member.staff_id, []))
@@ -433,8 +435,7 @@ def _daily_cap_minutes(contract: Any) -> int:
 
 
 def _early_indices(slots: Sequence[Slot], standard: StaffingStandard | None) -> set[int]:
-    """早朝保育時間帯の添字集合（基準が無くても動くよう境界時刻で判定）。"""
+    """早朝保育時間帯の添字集合。"""
     if standard is None:
         return set()
-    boundary = to_minutes(standard.early_care_window[0])
-    return {i for i, slot in enumerate(slots) if slot.start_minutes <= boundary}
+    return {i for i, slot in enumerate(slots) if slot.overlaps(*standard.early_care_window)}

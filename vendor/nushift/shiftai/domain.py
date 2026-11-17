@@ -249,10 +249,11 @@ class Slot:
 
     def overlaps(self, start: time, end: time) -> bool:
         """[start, end) と重なるか（境界は重なりとみなさない）。"""
-        if self.is_midnight_end:
-            # [start_minutes, 1440) として比較する
-            return to_minutes(end) > self.start_minutes and to_minutes(start) < 24 * 60
-        return self.start < end and start < self.end
+        s_start = self.start_minutes
+        s_end = 24 * 60 if self.is_midnight_end else to_minutes(self.end)
+        o_start = to_minutes(start)
+        o_end = 24 * 60 if to_minutes(end) == 0 else to_minutes(end)
+        return s_start < o_end and o_start < s_end
 
     def contains(self, start: time, end: time) -> bool:
         """時間帯が [start, end) を完全に覆うか。"""
@@ -637,7 +638,7 @@ class AgeRatio:
     ``'trunc1'`` は小数第2位以下を切り捨てる（認可外保育施設の算出手法）。
     認可外では年齢区分ごとに切り捨てて**合算してから**丸めるため、
     単一年齢クラスに適用する意味はない。``StaffingStandard`` 側の
-    ``headcount_mode`` が用它をまとめる。
+    ``headcount_mode`` がそれをまとめる。
     """
 
 
@@ -946,7 +947,11 @@ class StaffingStandard:
         return False
 
     def is_standard_time(self, slot: Slot) -> bool:
-        return self.standard_time[0] <= slot.start and slot.end <= self.standard_time[1]
+        s_start = slot.start_minutes
+        s_end = 24 * 60 if slot.is_midnight_end else to_minutes(slot.end)
+        std_start = to_minutes(self.standard_time[0])
+        std_end = 24 * 60 if to_minutes(self.standard_time[1]) == 0 else to_minutes(self.standard_time[1])
+        return std_start <= s_start and s_end <= std_end
 
     def slot_kind(self, slot: Slot) -> SlotKind:
         if slot.overlaps(*self.early_care_window):
@@ -1262,11 +1267,6 @@ class SolveResult:
     objective_value: float | None = None
     violations: list[Violation] = field(default_factory=list)
     messages: list[str] = field(default_factory=list)
-    shortfall_diagnosis: list[dict] = field(default_factory=list)
-    """配置基準不足の診断データ（UI 表示用の構造化データ）。
-
-    各要素: {day, slot_label, need_all, sup_all, need_q, sup_q, short_all, short_q}
-    """
     stats: dict = field(default_factory=dict)
     """所要時間・変数数・制約数など。"""
     score: ShiftScore | None = None

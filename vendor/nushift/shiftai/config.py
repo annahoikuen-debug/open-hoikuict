@@ -74,7 +74,7 @@ FLOAT_TOLERANCE = 1e-6
 #:
 #: 園の運用では出退勤は1日1回である。「勤務 → 30分の穴 → 勤務」は
 #: 帰宅と再出勤を伴うため時間としては成立しても運用できない。
-#: 最短のántoんの穴であれば劳动合同上ありえるか、という判断は園ごとの運用規定で
+#: 最短の穴であれば労働契約上ありえるか、という判断は園ごとの運用規定で
 #: あるため法定値ではなく**園ルール**として扱い、UI で設定できるようにする。
 MIN_CONTIGUOUS_DUTY_MINUTES = 120
 
@@ -140,6 +140,27 @@ DEFAULT_TIME_LIMIT_SEC = 60
 
 #: MILP ソルバの既定エンジン（"auto" | "HiGHS" | "PULP_CBC_CMD"）。
 DEFAULT_SOLVER = "auto"
+
+#: CBC に渡せるモデルの最大変数数。これを超えるモデルは CBC を起動せず
+#: 早期に INFEASIBLE を返す（60 秒を無駄にしないため）。
+#: 実測: 30日一括モデルは 66,396 変数 / 75,358 制約で CBC は 60 秒経っても
+#: 初期解すら出せなかった。
+MAX_CBC_MODEL_VARS = 30_000
+
+#: 週次シフトの既定エンジン（"hierarchical" | "legacy"）。
+WEEKLY_ENGINE_DEFAULT = "hierarchical"
+
+#: 週次シフトのチャンクサイズ（日単位=1）。
+WEEKLY_CHUNK_SIZE = 1
+
+#: 週次シフトの並列ワーカー数（0=自動、CPU数-1）。
+WEEKLY_PARALLEL_WORKERS = 0
+
+#: HiGHS の既定ギャップ（最適性の証明をどこまで求めるか）。
+HIGHS_GAP_REL = 0.03
+
+#: HiGHS の MIP ヒューリスティック努力量。
+HIGHS_MIP_HEURISTIC_EFFORT = 0.2
 
 #: Streamlit の時刻入力ウィジェットに与える step（秒）。15分刻み。
 #: UI 固有の設定であり法定要件ではないため ``APP_`` 規約で持つ。
