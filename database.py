@@ -110,6 +110,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("042_parent_push_preference_extra_mute_columns", _migrate_parent_push_preference_extra_mute_columns),
         ("043_message_templates_table", _migrate_message_templates_table),
         ("044_attendance_lock_version", _migrate_attendance_lock_version),
+        ("045_parent_medical_responses", _migrate_parent_medical_table),
     ]
 
 
@@ -2134,4 +2135,17 @@ def _migrate_pims_attendance_tables() -> None:
             )
     except Exception as exc:
         _log_migration_skip("pims attendance tables", exc)
+
+
+def _migrate_parent_medical_table() -> None:
+    """Create parent_medical_responses table."""
+    try:
+        from models import ParentMedicalResponse
+        with engine.begin() as conn:
+            ParentMedicalResponse.metadata.create_all(
+                conn, tables=[ParentMedicalResponse.__table__]
+            )
+    except Exception as exc:
+        _log_migration_skip("parent medical responses table", exc)
+
 

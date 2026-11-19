@@ -1616,5 +1616,22 @@
     "tour_key",
     "is_completed",
     "completed_at"
+  ],
+  "parent_medical_responses": [
+    "answers",
+    "before",
+    "child_id",
+    "created_at",
+    "id",
+    "parent_account_id",
+    "parent_name",
+    "requested_by",
+    "review_note",
+    "reviewed_at",
+    "reviewed_by",
+    "status",
+    "submitted_at",
+    "xray_answer",
+    "xray_question"
   ]
 }

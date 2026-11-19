@@ -71,6 +71,7 @@ from routers.staff_surveys import router as staff_surveys_router
 from routers.surveys import router as surveys_router
 from routers.zengin import router as zengin_router
 from routers.videos import router as videos_router
+from routers.parent_medical import router as parent_medical_router
 from routers.document_exports import router as document_exports_router
 from child_records.router import router as child_records_router
 from child_records.router import settings_router as child_record_settings_router
@@ -172,6 +173,11 @@ app.add_exception_handler(StarletteHTTPException, staff_auth_http_exception_hand
 app.add_middleware(CsrfTokenMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+app.mount(
+    "/manual-guide-preview",
+    StaticFiles(directory=Path(__file__).parent / "docs" / "manual-guide-preview", html=True),
+    name="manual_guide",
+)
 app.include_router(staff_portal_router)
 app.include_router(search_router)
 app.include_router(message_templates_router)
@@ -194,6 +200,7 @@ app.include_router(restores_router)
 app.include_router(guardian_router)
 app.include_router(parent_accounts_router)
 app.include_router(parent_portal_router)
+app.include_router(parent_medical_router)
 app.include_router(parent_push_router)
 app.include_router(parent_push_settings_router)
 app.include_router(calendar_router)

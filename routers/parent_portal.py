@@ -67,6 +67,7 @@ from models import (
     ParentAccountStatus,
     ParentContactType,
     ParentChildLink,
+    ParentMedicalResponse,
     ParentNotification,
     PasswordCredential,
     ProfileChangeNotification,
@@ -158,6 +159,35 @@ def _parse_optional_int(raw: Optional[str]) -> Optional[int]:
         return int(str(raw).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _jp_short_label(value: Optional[datetime]) -> str:
+    if value is None:
+        return ""
+    return format_jst_datetime(value, "%m月%d日 %H:%M")
+
+
+def _close_label(closes_at: Optional[datetime]) -> str:
+    if closes_at is None:
+        return ""
+    close = ensure_utc_from_local(closes_at)
+    now = utc_now()
+    delta = (close - now).total_seconds()
+    if delta <= 0:
+        return "締切済み"
+    if delta < 86400:
+        hm = format_jst_datetime(close, "%H:%M")
+        return f"本日 {hm} まで（残り{max(1, round(delta / 3600))}時間）"
+    md = format_jst_datetime(close, "%m月%d日")
+    hm = format_jst_datetime(close, "%H:%M")
+    return f"{md} {hm} まで"
+
+
+WEEKDAY_JA = ["月", "火", "水", "木", "金", "土", "日"]
+
+
+def _jp_date_label(day: date) -> str:
+    return f"{day.month}月{day.day}日（{WEEKDAY_JA[day.weekday()]}）"
 
 
 def _contact_reply_key(child_id: int, target_date: date) -> str:
@@ -581,13 +611,13 @@ def _load_parent_updates(
             "title": item.title,
             "url": f"/parent-portal/notices/{item.id}",
             "published_at": item.publish_start_at or item.created_at,
-            "published_at_label": format_jst_datetime(item.publish_start_at or item.created_at),
+            "published_at_label": _jp_short_label(item.publish_start_at or item.created_at),
             "sort_at": ensure_utc(item.publish_start_at or item.created_at),
             "is_unread": item.id not in read_notice_ids,
             "is_important": item.priority.value == "high",
             "closes_at": None,
             "closes_at_label": None,
-            "summary": None,
+            "summary": (item.body or "")[:60],
         }
         for item in notices
     ]
@@ -598,9 +628,9 @@ def _load_parent_updates(
             "url": f"/parent-portal/surveys/{survey.id}",
             "published_at": survey.opens_at or survey.created_at,
             "published_at_label": (
-                format_local_datetime(survey.opens_at)
+                format_local_datetime(survey.opens_at, "%m月%d日 %H:%M")
                 if survey.opens_at
-                else format_jst_datetime(survey.created_at)
+                else format_jst_datetime(survey.created_at, "%m月%d日 %H:%M")
             ),
             "sort_at": (
                 ensure_utc_from_local(survey.opens_at)
@@ -610,7 +640,7 @@ def _load_parent_updates(
             "is_unread": True,
             "is_important": False,
             "closes_at": survey.closes_at,
-            "closes_at_label": format_local_datetime(survey.closes_at) if survey.closes_at else None,
+            "closes_at_label": _close_label(survey.closes_at),
             "summary": None,
         }
         for survey in unanswered_surveys
@@ -703,6 +733,20 @@ def parent_home(
         child_ids=child_ids,
     )
 
+    linked_ids = {link.child_id for link in current_parent_user.child_links}
+    medical_status = dict.fromkeys(linked_ids)
+    if linked_ids:
+        medical_status.update(
+            session.exec(
+                select(ParentMedicalResponse.child_id, ParentMedicalResponse.status)
+                .where(
+                    ParentMedicalResponse.parent_account_id == current_parent_user.id,
+                    ParentMedicalResponse.child_id.in_(linked_ids),
+                )
+                .order_by(ParentMedicalResponse.id)
+            ).all()
+        )
+
     latest_updates = _load_parent_updates(session, current_parent_user)
     urgent_surveys = _load_urgent_surveys(session, current_parent_user)
     recent_replies = session.exec(
@@ -721,15 +765,22 @@ def parent_home(
             "parent_portal_mode": True,
             "target_date": day,
             "target_date_value": day.isoformat(),
+            "target_date_jp": _jp_date_label(day),
             "children": children,
             "entry_by_child_id": entry_by_child_id,
             "reply_by_child_id": reply_by_child_id,
             "reply_display_by_child_id": reply_display_by_child_id,
             "pending_request_by_child_id": pending_request_by_child_id,
+            "medical_status": medical_status,
             "latest_updates": latest_updates[:5],
             "urgent_surveys": urgent_surveys,
             "recent_replies": recent_replies,
             "unread_notice_count": sum(1 for item in latest_updates if item["is_unread"]),
+            "unread_breakdown": {
+                "出欠確認": sum(1 for item in latest_updates if item["is_unread"] and item["kind"] == "parent_notification"),
+                "お知らせ": sum(1 for item in latest_updates if item["is_unread"] and item["kind"] == "notice"),
+                "アンケート": sum(1 for item in latest_updates if item["is_unread"] and item["kind"] == "survey"),
+            },
             "parent_billing_portal_enabled": is_parent_billing_enabled(session),
             "flash_notice": "きょうだい全員分の連絡を保存しました。" if notice == "bulk_saved" else ("日次連絡を保存しました。" if notice == "saved" else ""),
         },
@@ -1848,6 +1899,10 @@ async def submit_bulk_contact(
 @router.get("/history", response_class=HTMLResponse)
 def parent_contact_history(
     request: Request,
+    child_id: Optional[int] = Query(default=None),
+    period: Optional[str] = Query(default="all"),
+    kind: Optional[str] = Query(default="all"),
+    page: Optional[int] = Query(default=1),
     session: Session = Depends(get_session),
 ):
     current_parent_user = _get_parent_account(request, session)
@@ -1924,6 +1979,48 @@ def parent_contact_history(
         )
     history_items.sort(key=lambda item: (item["target_date"], item["child_id"]), reverse=True)
 
+    # 絞り込み
+    today = local_today()
+    filtered = history_items
+    if child_id is not None:
+        filtered = [i for i in filtered if i["child_id"] == child_id]
+    if period == "today":
+        filtered = [i for i in filtered if i["target_date"] == today]
+    elif period == "week":
+        week_start = today - timedelta(days=today.weekday())
+        filtered = [i for i in filtered if week_start <= i["target_date"] <= today]
+    elif period == "month":
+        filtered = [i for i in filtered if i["target_date"].year == today.year and i["target_date"].month == today.month]
+    if kind == "present":
+        filtered = [i for i in filtered if i["entry"] and i["entry"].contact_type == ParentContactType.present]
+    elif kind == "absent":
+        filtered = [i for i in filtered if i["entry"] and i["entry"].contact_type in {
+            ParentContactType.absent_private, ParentContactType.absent_sick,
+        }]
+    elif kind == "reply":
+        filtered = [i for i in filtered if i["reply"] is not None]
+
+    # ページング
+    per_page = 20
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    total = len(filtered)
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, pages)
+    start = (page - 1) * per_page
+    page_items = filtered[start:start + per_page]
+
+    children_for_filter = [
+        {
+            "id": child.id,
+            "full_name": child.full_name,
+            "classroom_name": child.classroom.name if child.classroom else "クラス未設定",
+        }
+        for child in _linked_children(current_parent_user)
+    ]
+
     return templates.TemplateResponse(
         request,
         "parent_portal/history.html",
@@ -1932,7 +2029,16 @@ def parent_contact_history(
             "current_parent_user": current_parent_user,
             "parent_portal_mode": True,
             "entries": entries,
-            "history_items": history_items,
+            "history_items": page_items,
+            "history_total": total,
+            "history_page": page,
+            "history_pages": pages,
+            "history_has_prev": page > 1,
+            "history_has_next": page < pages,
+            "history_selected_child": str(child_id) if child_id is not None else "",
+            "history_selected_period": period or "all",
+            "history_selected_kind": kind or "all",
+            "history_children": children_for_filter,
         },
     )
 

@@ -121,6 +121,7 @@
       {% endif %}
     </div>
     <h2 class="text-lg font-semibold text-gray-800">{{ notice.title }}</h2>
+    <p class="text-[10px] text-gray-500 mt-0.5">{{ (notice.body or "")[:80] }}</p>
     <p class="mt-1 text-sm text-gray-500">{{ (notice.publish_start_at if notice.publish_start_at else notice.created_at)|jst_datetime("%Y-%m-%d %H:%M") }} JST</p>
   </a>
   {% endif %}
