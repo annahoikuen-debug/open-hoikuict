@@ -635,7 +635,7 @@ class ParentPortalTests(unittest.TestCase):
         )
         self.assertEqual(staff_detail.status_code, 200)
         self.assertIn("公開済み", staff_detail.text)
-        self.assertIn("更新者: 台帳担当", staff_detail.text)
+        self.assertIn("担当: 台帳担当", staff_detail.text)
         self.assertIn("今日も元気に過ごしました。", staff_detail.text)
 
         parent_home = self.client.get(f"/parent-portal/?date={target.isoformat()}")

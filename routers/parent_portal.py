@@ -2045,6 +2045,9 @@ def parent_notice_list(
     updates = _load_parent_updates(session, current_parent_user, include_surveys=True)
     urgent_surveys = _load_urgent_surveys(session, current_parent_user)
 
+    if not category:
+        # デフォルト（カテゴリ未指定）は notice のみ。survey は category=survey で明示指定時に表示。
+        updates = [u for u in updates if u["kind"] != "survey"]
     if category:
         if category == "notice":
             updates = [u for u in updates if u["kind"] == "notice"]

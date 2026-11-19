@@ -45,7 +45,7 @@
     <div class="container nav-container">
       <a href="#hero" class="logo-wrap" id="brandLogo">
         <span>🧸 nusoft</span>
-        <span class="logo-badge">v0.4.0 (v0.6.0)</span>
+        <span class="logo-badge">v0.7.1</span>
       </a>
 
       <nav>
@@ -91,13 +91,13 @@
                 <span class="dot dot-green"></span>
               </div>
               <span class="mockup-title">NuShift 勤務割最適化ダッシュボード — あさひ保育園 (2026年10月度)</span>
-              <span class="status-pill success" id="mockupStatusPill">● 最適化完了 (CBC求解 18.2秒)</span>
+              <span class="status-pill success" id="mockupStatusPill">● 最適化完了 (HiGHS / Timefold求解 14.8秒)</span>
             </div>
 
             <!-- Interactive Toolbar -->
             <div class="mockup-toolbar">
               <span class="mockup-toolbar-label">🎮 ライブ操作デモ:</span>
-              <button type="button" class="mockup-ctrl-btn" id="heroRecomputeBtn">⚡ 最適化再計算 (CBC)</button>
+              <button type="button" class="mockup-ctrl-btn" id="heroRecomputeBtn">⚡ 最適化再計算 (HiGHS/Timefold)</button>
               <button type="button" class="mockup-ctrl-btn active" id="heroPinToggleBtn">📌 佐藤(主幹) ピン留め切替</button>
               <button type="button" class="mockup-ctrl-btn btn-alert" id="heroGapSimBtn">⚠️ お迎え急変シミュレート</button>
             </div>
@@ -362,28 +362,29 @@
 
         <div class="tab-content active" id="tab-shift">
           <div class="tab-text">
-            <h3>数理最適化ソルバーで、複雑なシフトを瞬時に作成</h3>
-            <p>厚生労働省の配置基準や職員の契約時間、希望休、有給休暇を満たすシフト表を CBC ソルバーが自動計算。現場に合わせたセル微調整やピン留め固定、労基法違反の承認ブロックまで完璧にサポートします。</p>
+            <h3>Timefold 協調数理最適化で、複雑なシフトを瞬時に作成</h3>
+            <p>厚生労働省の配置基準や職員の契約時間、希望休、有給休暇を満たすシフト表を HiGHS / Timefold 協調数理最適化エンジン（NuShift v0.7.1）が自動計算。法令違反ゼロ（Hard）、配置不足ショートフォール最小化（Medium）、現場希望・人件費最適化（Soft）の3階層スコアリングと過剰制約計画により、安全かつ実務的な勤務割を瞬時に導出します。</p>
             <ul class="feature-bullet-list">
-              <li><span class="bullet-icon">✓</span><span>厚労省基準・東京都独自基準など多彩なプリセット</span></li>
-              <li><span class="bullet-icon">✓</span><span>セル手動修正後の「ピン留め保護」再計算機能</span></li>
-              <li><span class="bullet-icon">✓</span><span>労働基準法第32条違反 (1日10h超) を防ぐ承認ゲート</span></li>
-              <li><span class="bullet-icon">✓</span><span>急なお迎え時間変更に連動するリアルタイムギャップ検知</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>Hard/Medium/Soft 3階層スコアリング:</strong> 法令制約と現場希望を厳密な優先度で評価</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>過剰制約計画 (Shortfall Capture):</strong> 人員不足時でも求解不能にならず不足枠を最小化</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>制約起訴 (Indictment) & 最小破壊修復:</strong> ペナルティ要因の可視化と突発欠勤時の最小影響リペア</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>現場記号パターンモード:</strong> 早・日・遅などの勤務枠へ吸着し現場用マトリクス即時出力</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>セル編集・ピン留め保護 & 承認ゲート:</strong> 労基法第32条違反（1日10h超）の完全遮断</span></li>
             </ul>
           </div>
           <div class="tab-visual">
             <div style="background: var(--bg-secondary); border-radius: 12px; padding: 24px; border: 1px solid var(--border-glass);">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <span style="font-weight: 700;">🧩 NuShift 最適化アルゴリズム</span>
-                <span class="status-pill success">MILP / CBC</span>
+                <span style="font-weight: 700;">🧬 NuShift Timefold 協調最適化</span>
+                <span class="status-pill success">HiGHS / LAHC / LNS</span>
               </div>
               <div style="font-family: monospace; font-size: 0.85rem; color: var(--accent-cyan); background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; line-height: 1.6;">
-                minimize: TotalLaborCost + Penalty<br>
-                subject to:<br>
-                &nbsp;&nbsp;Coverage[t] &gt;= RequiredStaff[t]<br>
-                &nbsp;&nbsp;DailyHours[s, d] &lt;= MaxDailyContract[s]<br>
-                &nbsp;&nbsp;FixedAssignments[s, t] == 1 (PINNED)<br>
-                &nbsp;&nbsp;ConsecutiveWorkDays[s] &lt;= 6
+                score: [Hard: 0 / Medium: 0 / Soft: -45]<br>
+                hierarchy:<br>
+                &nbsp;&nbsp;Hard: LegalCoverage &amp; Rest &amp; MaxHours<br>
+                &nbsp;&nbsp;Medium: OverconstrainedShortfalls (Min)<br>
+                &nbsp;&nbsp;Soft: Preferences &amp; FairDistribution<br>
+                repair: DisruptionReport(changed_staff=1, changed_slots=4)
               </div>
             </div>
           </div>
@@ -497,13 +498,13 @@
 
         <div class="tab-content" id="tab-billing">
           <div class="tab-text">
-            <h3>延長保育料リアルタイム速報 & 全銀フォーマット口座振替</h3>
-            <p>登降園キオスクの打刻実績から延長料金を15分/30分単位で自動算出。保護者スマホで今月の暫定延長料金がリアルタイムに確認でき、月末の金銭トラブルを未然に防止。全銀Zengin口座振替やA4請求書印刷、自治体一括徴収園向けのON/OFF設定も完備。</p>
+            <h3>延長保育料リアルタイム速報 & 全銀フォーマット口座振替 (5MB上限防御)</h3>
+            <p>登降園キオスクの打刻実績から延長料金を15分/30分単位で自動算出。保護者スマホで今月の暫定延長料金がリアルタイムに確認でき、月末の金銭トラブルを未然に防止。全銀Zengin口座振替やA4請求書印刷、5MBファイルサイズ上限防御（DoS対策・HTTP 413）、自治体一括徴収園向けのON/OFF設定も完備。</p>
             <ul class="feature-bullet-list">
               <li><span class="bullet-icon">✓</span><span><strong>当月延長料金リアルタイム速報:</strong> 打刻から即時算出し保護者へ開示（月末の疑義を防止）</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>確定請求書 ＆ A4印刷:</strong> 兄弟別の小計付き明細と口座振替予定を清潔なA4用紙に印刷可能</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>施設別ON/OFFオプトイン:</strong> 自治体徴収園や別ソフト管理園向けにワンクリックで非表示（404完全ガード）</span></li>
-              <li><span class="bullet-icon">✓</span><span><strong>全銀協標準フォーマット (Zengin):</strong> 国内ほぼ全行に対応した口座振替データ出力 & 結果自動消込</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>全銀協標準フォーマット (Zengin):</strong> 国内ほぼ全行に対応した口座振替データ出力（5MB上限保護）& 結果自動消込</span></li>
             </ul>
           </div>
           <div class="tab-visual">
