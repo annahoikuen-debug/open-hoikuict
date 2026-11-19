@@ -1600,6 +1600,8 @@
     "superseded_by_export_id",
     "reissue_reason",
     "canceled_reason",
+    "canceled_by",
+    "canceled_at",
     "submitted_at",
     "result_imported_at",
     "content_hash",

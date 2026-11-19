@@ -2,6 +2,7 @@
 {% block title %}園児別請求入力 | open-hoikuict{% endblock %}
 
 {% block content %}
+{% from 'billing/_reopen_controls.html' import reopen_button %}
 {% set can_edit_table = editable and current_user and current_user.can_edit %}
 
 <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -43,6 +44,8 @@
     </div>
     {% if can_edit_table %}
     <button form="child-charge-table" type="submit" class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">保存</button>
+    {% elif reopen_export and current_user and current_user.is_admin %}
+    {{ reopen_button(reopen_export, cycle.year_month) }}
     {% elif current_user and current_user.can_edit %}
     <form method="post" action="/billing/child-charges/new-editable-cycle">
       <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">入力用請求月を作成</button>
@@ -51,7 +54,7 @@
   </div>
 
   {% if can_edit_table %}
-  <form id="child-charge-table" method="post" action="/billing/cycles/{{ cycle.id }}/child-charges/table">
+  <form id="child-charge-table" data-billing-edit method="post" action="/billing/cycles/{{ cycle.id }}/child-charges/table">
     {% if return_month %}<input type="hidden" name="return_month" value="{{ return_month }}">{% endif %}
   {% endif %}
     <div class="overflow-x-auto">
@@ -102,6 +105,7 @@
               <input
                 name="amount_{{ column.code }}_{{ row.child.id }}"
                 type="number"
+                step="any"
                 inputmode="numeric"
                 value="{% if amount != 0 %}{{ amount }}{% endif %}"
                 class="h-9 w-28 rounded border border-slate-300 bg-white px-2 text-right text-sm font-medium text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400"
@@ -190,4 +194,5 @@
     </table>
   </div>
 </section>
+{% include 'billing/_reopen_controls.html' %}
 {% endblock %}

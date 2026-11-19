@@ -10,6 +10,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
+from family_emergency import load_orders
 
 from auth import get_current_staff_user
 from daily_contact_reply_fields import (
@@ -310,6 +311,9 @@ def _detail_response(request, session, current_user, child_id, day, classroom_id
     next_unreplied_url = f"/daily-contacts/{next_unreplied_child.id}?{_daily_contact_query(day, classroom_id, sort, view=view)}" if next_unreplied_child else None
 
     return templates.TemplateResponse(request, "daily_contacts/detail.html", {
+        "emergency": load_orders(session, child, day, legacy=not entry or
+                                 (entry.extra_data or {}).get("submitted_family_id", child.family_id) == child.family_id),
+        "emergency_day": day,
         "current_user": current_user, "target_date": day, "target_date_value": day.isoformat(),
         "selected_classroom_id": classroom_id, "selected_sort": sort, "selected_view": _normalize_view(view),
         "list_url": f"/daily-contacts/?{_daily_contact_query(day, classroom_id, sort, view=view)}",

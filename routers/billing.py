@@ -49,10 +49,13 @@ from zengin_service import (
     build_file_bytes,
     build_header_record,
     build_trailer_record,
+    cancel_zengin_export_for_edit,
     create_customer_number,
     create_zengin_export,
     import_result_file,
+    lock_billing_cycle,
     mark_zengin_export_submitted,
+    reopenable_export,
     supersede_zengin_export,
 )
 
@@ -360,6 +363,7 @@ def _add_child_charge(
     unit_label: str,
     source_date: date | None,
 ) -> BillingClaim:
+    cycle = lock_billing_cycle(session, cycle.id) or cycle
     if cycle.status not in {BillingCycleStatus.draft, BillingCycleStatus.generated, BillingCycleStatus.confirmed}:
         raise BillingCalculationError("Zengin出力後の請求月には明細を追加できません")
     if not description.strip():
@@ -558,10 +562,13 @@ async def billing_dashboard(
                     "total_amount": sum(claim.total_amount for claim in cycle_claims),
                     "exports": cycle_exports,
                     "status_label": BILLING_CYCLE_STATUS_LABELS.get(cycle.status, cycle.status.value),
+                    "reopen_export": reopenable_export(cycle, cycle_exports),
                 }
             )
 
         export_rows = []
+        reopen_ids = {row["reopen_export"].id for row in cycle_rows if row["reopen_export"]}
+        cycles_by_id = {cycle.id: cycle for cycle in cycles}
         export_ids = [export.id for export in exports if export.id is not None]
         lines_by_export: dict[int, list[ZenginExportLine]] = {}
         if export_ids:
@@ -577,6 +584,8 @@ async def billing_dashboard(
                     "export": export,
                     "line_count": len(lines),
                     "status_label": ZENGIN_EXPORT_STATUS_LABELS.get(export.status, export.status.value),
+                    "can_reopen": export.id in reopen_ids,
+                    "year_month": cycles_by_id[export.billing_cycle_id].year_month if export.billing_cycle_id in cycles_by_id else "",
                 }
             )
 
@@ -791,6 +800,7 @@ def child_charge_form(
             "table_rows": table_rows,
             "line_rows": line_rows,
             "editable": editable,
+            "reopen_export": reopenable_export(cycle, list(session.exec(select(ZenginExport).where(ZenginExport.billing_cycle_id == cycle_id)).all())),
             "can_manage_billing_accounts": can_manage_billing_accounts(session, current_user),
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
@@ -807,7 +817,8 @@ async def update_child_charge_table(
     current_user=Depends(get_current_staff_user),
 ):
     require_can_edit(current_user)
-    cycle = session.get(BillingCycle, cycle_id)
+    form = await request.form()
+    cycle = lock_billing_cycle(session, cycle_id)
     if cycle is None:
         raise HTTPException(status_code=404, detail="請求月が見つかりません")
     if cycle.status not in {BillingCycleStatus.draft, BillingCycleStatus.generated, BillingCycleStatus.confirmed}:
@@ -819,7 +830,6 @@ async def update_child_charge_table(
         .order_by(Child.last_name_kana, Child.first_name_kana, Child.id)
     ).all()
     children_by_id = {child.id: child for child in children if child.id is not None}
-    form = await request.form()
     return_month = str(form.get("return_month", "")).strip()
     touched_claims: list[BillingClaim] = []
 
@@ -846,7 +856,14 @@ async def update_child_charge_table(
         session.commit()
     except BillingCalculationError as exc:
         session.rollback()
-        return _cycle_redirect(cycle_id, error=str(exc))
+        response = child_charge_form(cycle_id, request, session, current_user)
+        context = dict(response.context, error=str(exc), return_month=return_month)
+        for row in context.get("table_rows", []):
+            for column in TABLE_CHARGE_COLUMNS:
+                field = f"amount_{column['code']}_{row['child'].id}"
+                if field in form and column['code'] not in row.get('locked_codes', set()):
+                    row['amounts'][column['code']] = str(form[field])
+        return templates.TemplateResponse(request, "billing/child_charges.html", context, status_code=400)
 
     if len(return_month) == 7 and return_month[4] == "-":
         return RedirectResponse(
@@ -958,6 +975,7 @@ def child_charge_input(
             ),
             "line_rows": line_rows,
             "editable": editable,
+            "reopen_export": reopenable_export(cycle, list(session.exec(select(ZenginExport).where(ZenginExport.billing_cycle_id == cycle_id)).all())),
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
         },
@@ -1245,6 +1263,46 @@ def mark_zengin_export_submitted_from_ui(
     except ZenginError as exc:
         return _dashboard_redirect(error=str(exc))
     return _dashboard_redirect(message=f"銀行提出済みにしました: export_id={export_id}")
+
+
+@router.post("/zengin/exports/{export_id}/cancel-ui")
+async def cancel_zengin_export_from_ui(
+    export_id: int,
+    request: Request,
+    reason: str = Form(default=""),
+    confirmed_unsubmitted: bool = Form(default=False),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_zengin_exporter(session, current_user)
+    try:
+        export = cancel_zengin_export_for_edit(
+            session,
+            export_id,
+            reason=reason,
+            confirmed_unsubmitted=confirmed_unsubmitted,
+            canceled_by=current_user.name,
+        )
+    except ZenginError as exc:
+        response = await billing_dashboard(request, session, current_user)
+        context = dict(response.context, error=str(exc))
+        row = next((row for row in context.get("export_rows", []) if row["export"].id == export_id), None)
+        if row and row.get("can_reopen"):
+            item = row["export"]
+            context["reopen_initial"] = dict(
+                id=item.id,
+                month=row.get("year_month", ""),
+                count=item.total_count,
+                amount=item.total_amount,
+                reason=reason,
+                checked=confirmed_unsubmitted,
+                error=str(exc),
+            )
+        return templates.TemplateResponse(request, "billing/index.html", context, status_code=409)
+    return _cycle_redirect(
+        export.billing_cycle_id,
+        message=f"出力 #{export.id} を取消しました。請求金額を修正・保存し、請求一覧からZenginを再作成してください。",
+    )
 
 
 @router.post("/zengin/exports/{export_id}/supersede-ui")

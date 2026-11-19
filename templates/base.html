@@ -917,6 +917,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
             {% if current_parent_user is defined and current_parent_user and current_parent_user.child_links %}
             <a href="/parent-portal/children/profile" class="text-sm hover:underline">子ども情報変更申請</a>
             {% endif %}
+            {% if current_parent_user %}<a href="/parent-portal/emergency-contacts" class="text-sm hover:underline">緊急時の連絡先</a>{% endif %}
             <a href="/parent-portal/history" class="text-sm hover:underline">日次連絡履歴</a>
             <a href="/parent-portal/notices" class="text-sm hover:underline">お知らせ</a>
             <a href="/parent-portal/videos" class="text-sm hover:underline">動画配信</a>

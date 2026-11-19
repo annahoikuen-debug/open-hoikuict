@@ -7,6 +7,8 @@ import unicodedata
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import selectinload
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from attendance_checks_service import sync_attendance_alarm
@@ -31,7 +33,9 @@ from models import ChildSex
 from child_profile_changes import normalize_child_profile_payload, with_current_photo_fields
 from pickup_plan_service import load_pickup_record, pickup_revision, save_pickup_plan
 from models import ChildStatus
-from home_care_details import CARE_KEYS, validate_home_care
+from home_care_details import APPETITES, CARE_KEYS, MEAL_KEYS, validate_home_care, validate_meals
+from family_emergency import base_editor_context, linked_to, load_orders, may_share, save_order
+from guardian_hours import closing_time
 from daily_contact_service import (
     load_latest_previous_contact,
     extract_copyable_fields,
@@ -50,6 +54,8 @@ from models import (
     ChildProfileChangeRequest,
     ChildProfileChangeRequestStatus,
     DailyContactEntry,
+    FamilyEmergencyOrder,
+    ChildEmergencyOrder,
     DailyContactReply,
     DailyContactReplyStatus,
     Family,
@@ -201,7 +207,7 @@ def _contact_form_data(entry: Optional[DailyContactEntry], form_data: Optional[d
         "absence_reason": contact_type_value if attendance_mode == "absent" else "",
         "contact_type": contact_type_value,
         "temperature": entry.temperature or "" if entry else "",
-        **{key: (entry.extra_data or {}).get(key, "") if entry else "" for key in CARE_KEYS},
+        **{key: (entry.extra_data or {}).get(key, "") if entry else "" for key in (*CARE_KEYS, *MEAL_KEYS)},
         "sleep_notes": entry.sleep_notes or "" if entry else "",
         "breakfast_status": entry.breakfast_status or "" if entry else "",
         "bowel_movement_status": entry.bowel_movement_status or "" if entry else "",
@@ -220,6 +226,7 @@ def _contact_form_data(entry: Optional[DailyContactEntry], form_data: Optional[d
 
 def _render_contact_form(
     request: Request,
+    session: Optional[Session] = None,
     *,
     current_parent_user: ParentAccount,
     child: Child,
@@ -236,6 +243,9 @@ def _render_contact_form(
     previous_entry_date: Optional[str] = None,
     previous_copy_fields: Optional[dict[str, str]] = None,
 ):
+    target_day = date.fromisoformat(target_date_value)
+    emergency = (load_orders(session, child, target_day, legacy=may_share(current_parent_user, child))
+                 if (session and linked_to(current_parent_user, child)) else None)
     pickup_values = {
         "planned_pickup_time": pickup_record.planned_pickup_time or "" if pickup_record else "",
         "pickup_person": pickup_record.pickup_person or "" if pickup_record else "",
@@ -255,6 +265,13 @@ def _render_contact_form(
             "child": child,
             "entry": entry,
             "target_date_value": target_date_value,
+            "target_day": target_day,
+            "appetites": APPETITES,
+            "closing_time": closing_time(session) if session else "18:00",
+            "response_conflict": status_code == 409,
+            "contact_revision": (form_data or {}).get("contact_revision") or (
+                ensure_utc(entry.updated_at).isoformat() if entry and entry.id is not None else "new"),
+            "emergency": emergency,
             "notice": notice,
             "form_error": form_error,
             "form_data": _contact_form_data(entry, form_data),
@@ -1155,6 +1172,68 @@ def save_parent_child_profile_request(
     )
 
 
+def _usual_order_page(request, session, parent, child, *, attempted=None, error="", status=200):
+    directory = may_share(parent, child)
+    state = load_orders(session, child, legacy=directory)
+    return templates.TemplateResponse(request, "parent_portal/emergency.html", {
+        "current_parent_user": parent, "parent_portal_mode": True,
+        "emergency": state, "child": child, **base_editor_context(child, state, directory),
+        "form_data": attempted or {}, "error": error,
+    }, status_code=status, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/emergency-contacts", response_class=HTMLResponse)
+def family_emergency_contacts(request: Request, session: Session = Depends(get_session)):
+    parent = _get_parent_account(request, session)
+    if not parent:
+        return RedirectResponse("/parent-portal/login", status_code=303)
+    children = [child for child in _linked_children(parent) if linked_to(parent, child)]
+    if len(children) == 1:
+        return RedirectResponse(f"/parent-portal/children/{children[0].id}/emergency-contacts", status_code=303)
+    return templates.TemplateResponse(request, "parent_portal/emergency.html", {
+        "current_parent_user": parent, "parent_portal_mode": True, "children": children,
+    }, status_code=200 if children else 403, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/children/{child_id}/emergency-contacts", response_class=HTMLResponse)
+def child_emergency_contacts(request: Request, child_id: int, session: Session = Depends(get_session)):
+    parent = _get_parent_account(request, session)
+    if not parent:
+        return RedirectResponse("/parent-portal/login", status_code=303)
+    child = _load_accessible_child(parent, child_id)
+    if not linked_to(parent, child):
+        raise HTTPException(403, "園児の登録を園にご確認ください。")
+    return _usual_order_page(request, session, parent, child)
+
+
+@router.post("/emergency-contacts")
+def legacy_order_submission(request: Request, session: Session = Depends(get_session)):
+    if not _get_parent_account(request, session):
+        return RedirectResponse("/parent-portal/login", status_code=303)
+    raise HTTPException(409, "連絡順は園児ごとの登録に変わりました。メニューからお子さまを選び直してください。")
+
+
+@router.post("/children/{child_id}/emergency-contacts")
+def save_child_emergency_contacts(request: Request, child_id: int, base_revision: int = Form(...),
+    emergency_label: list[str] = Form(default=[]), emergency_phone: list[str] = Form(default=[]),
+    session: Session = Depends(get_session)):
+    parent = _get_parent_account(request, session)
+    if not parent:
+        return RedirectResponse("/parent-portal/login", status_code=303)
+    child = _load_accessible_child(parent, child_id)
+    if not linked_to(parent, child):
+        raise HTTPException(403, "園児の登録を園にご確認ください。")
+    try:
+        save_order(session, child, None, "base", emergency_label, emergency_phone, base_revision,
+                   author=parent.display_name, source="parent", actor_id=str(parent.id), legacy=may_share(parent, child))
+        session.commit()
+    except HTTPException as exc:
+        session.rollback()
+        return _usual_order_page(request, session, parent, child, status=exc.status_code, error=str(exc.detail),
+            attempted={"emergency_rows": list(zip(emergency_label, emergency_phone)), "base_revision": base_revision})
+    return RedirectResponse(f"/parent-portal/children/{child.id}/emergency-contacts?saved=1", status_code=303)
+
+
 @router.get("/children/{child_id}/contact", response_class=HTMLResponse)
 def parent_contact_form(
     request: Request,
@@ -1195,6 +1274,7 @@ def parent_contact_form(
 
     return _render_contact_form(
         request,
+        session=session,
         current_parent_user=current_parent_user,
         child=child,
         entry=entry,
@@ -1221,6 +1301,17 @@ def save_parent_contact(
     temperature: str = Form(""),
     sleep_notes: str = Form(""),
     care_fields_version: str = Form(""),
+    meal_fields_version: str = Form(""),
+    contact_revision: str = Form(""),
+    dinner_appetite: str = Form(""),
+    dinner_contents: str = Form(""),
+    breakfast_appetite: str = Form(""),
+    emergency_mode: str = Form(""),
+    emergency_child_id: int = Form(0),
+    emergency_label: list[str] = Form(default=[]),
+    emergency_phone: list[str] = Form(default=[]),
+    base_revision: int = Form(0),
+    day_revision: int = Form(0),
     bedtime: str = Form(""),
     wakeup_time: str = Form(""),
     breakfast_contents: str = Form(""),
@@ -1275,6 +1366,9 @@ def save_parent_contact(
 
     form_data = {
         "attendance_mode": submitted_mode,
+        "dinner_appetite": dinner_appetite, "dinner_contents": dinner_contents, "breakfast_appetite": breakfast_appetite,
+        "emergency_mode": emergency_mode, "emergency_rows": list(zip(emergency_label, emergency_phone)),
+        "base_revision": base_revision, "day_revision": day_revision, "contact_revision": contact_revision,
         "absence_reason": submitted_reason,
         "contact_type": submitted_contact_type,
         "temperature": temperature,
@@ -1317,6 +1411,7 @@ def save_parent_contact(
             form_data["absence_reason"] = ""
             return _render_contact_form(
                 request,
+                session,
                 current_parent_user=current_parent_user,
                 child=child,
                 entry=None,
@@ -1331,6 +1426,7 @@ def save_parent_contact(
     else:
         return _render_contact_form(
             request,
+            session,
             current_parent_user=current_parent_user,
             child=child,
             entry=None,
@@ -1347,11 +1443,13 @@ def save_parent_contact(
         )
     ).first()
     care_values = None
-    if care_fields_version == "1" and selected_contact_type == ParentContactType.present:
+    if selected_contact_type == ParentContactType.present and (care_fields_version == "1" or meal_fields_version == "1"):
         try:
-            care_values = validate_home_care(form_data)
+            care_values = validate_home_care(form_data) if care_fields_version == "1" else {}
+            if meal_fields_version == "1":
+                care_values.update(validate_meals(form_data))
         except ValueError as exc:
-            return _render_contact_form(request, current_parent_user=current_parent_user, child=child,
+            return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
                 entry=entry, target_date_value=day.isoformat(), published_reply=published_reply,
                 form_error=str(exc), form_data=form_data)
     if selected_contact_type in {ParentContactType.present, ParentContactType.absent_sick}:
@@ -1362,6 +1460,7 @@ def save_parent_contact(
         if temperature_error:
             return _render_contact_form(
                 request,
+                session,
                 current_parent_user=current_parent_user,
                 child=child,
                 entry=entry,
@@ -1370,6 +1469,18 @@ def save_parent_contact(
                 form_error=temperature_error,
                 form_data=form_data,
             )
+
+    if contact_revision:
+        revision = ensure_utc(entry.updated_at).isoformat() if entry else "new"
+        matched = contact_revision == revision
+        if matched and entry:
+            matched = session.execute(update(DailyContactEntry).where(DailyContactEntry.id == entry.id,
+                DailyContactEntry.updated_at == entry.updated_at).values(updated_at=entry.updated_at)).rowcount == 1
+        if not matched:
+            session.rollback()
+            return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
+                entry=entry, target_date_value=day.isoformat(), form_error="ご家族が日次連絡を更新しました。最新の内容を確認してください。",
+                published_reply=published_reply, form_data=form_data, status_code=409)
 
     if selected_contact_type == ParentContactType.present and pickup_fields_version == "1":
         try:
@@ -1388,7 +1499,7 @@ def save_parent_contact(
                 parent_account_id=current_parent_user.id, source="parent_portal")
         except HTTPException as exc:
             session.rollback()
-            return _render_contact_form(request, current_parent_user=current_parent_user, child=child,
+            return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
                 entry=entry, target_date_value=day.isoformat(), published_reply=published_reply,
                 form_error=str(exc.detail), form_data=form_data, status_code=exc.status_code)
 
@@ -1416,7 +1527,8 @@ def save_parent_contact(
     if selected_contact_type == ParentContactType.present:
         entry.temperature = (temperature or "").strip() or None
         entry.sleep_notes = (sleep_notes or "").strip() or None
-        entry.breakfast_status = (breakfast_status or "").strip() or None
+        if meal_fields_version != "1":
+            entry.breakfast_status = (breakfast_status or "").strip() or None
         entry.bowel_movement_status = (bowel_movement_status or "").strip() or None
         entry.mood = (mood or "").strip() or None
         entry.cough = (cough or "").strip() or None
@@ -1432,6 +1544,7 @@ def save_parent_contact(
         if selected_contact_type == ParentContactType.absent_sick and not normalized_absence_temperature:
             return _render_contact_form(
                 request,
+                session,
                 current_parent_user=current_parent_user,
                 child=child,
                 entry=entry,
@@ -1443,6 +1556,7 @@ def save_parent_contact(
         if selected_contact_type == ParentContactType.absent_sick and not normalized_absence_symptoms:
             return _render_contact_form(
                 request,
+                session,
                 current_parent_user=current_parent_user,
                 child=child,
                 entry=entry,
@@ -1467,8 +1581,33 @@ def save_parent_contact(
         entry.absence_diagnosis = normalized_absence_diagnosis or None
         entry.absence_note = normalized_absence_note or None
 
+    if emergency_mode:
+        try:
+            if not linked_to(current_parent_user, child):
+                raise HTTPException(403, "園児の登録を園にご確認ください。")
+            if emergency_child_id != child.id or emergency_mode not in ("change", "usual", "withdraw"):
+                raise HTTPException(409, "この園児の日次連絡を開き直してください。")
+            save_order(session, child, day, emergency_mode, emergency_label, emergency_phone,
+                       base_revision, day_revision, author=current_parent_user.display_name,
+                       source="parent", actor_id=str(current_parent_user.id), legacy=may_share(current_parent_user, child))
+        except HTTPException as exc:
+            session.rollback()
+            return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
+                entry=entry, target_date_value=day.isoformat(), published_reply=published_reply,
+                form_error=str(exc.detail), form_data=form_data, status_code=exc.status_code)
     entry.updated_at = now
+    entry.extra_data = {**(entry.extra_data or {}), "submitted_family_id": child.family_id}
     session.add(entry)
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        if not session.exec(select(DailyContactEntry.id).where(
+                DailyContactEntry.child_id == child_id, DailyContactEntry.target_date == day)).first():
+            raise
+        return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
+            entry=None, target_date_value=day.isoformat(), published_reply=published_reply,
+            form_error="日次連絡が更新されました。最新の内容を確認してください。", form_data=form_data, status_code=409)
     sync_attendance_alarm(session, child_id=child_id, target_date=day, entry=entry, now=now)
     session.commit()
 
@@ -1743,17 +1882,43 @@ def parent_contact_history(
     entry_by_key = {_contact_reply_key(entry.child_id, entry.target_date): entry for entry in entries}
     children_by_id = {child.id: child for child in _linked_children(current_parent_user)}
     history_items = []
-    for key in entry_by_key.keys() | reply_by_key.keys():
+    family_answers = {}
+    if may_share(current_parent_user):
+        days = {e.target_date.isoformat() for e in entries
+                if (e.extra_data or {}).get("submitted_family_id") == current_parent_user.family_id}
+        if days:
+            family_answers = {a.scope: a for a in session.exec(select(FamilyEmergencyOrder).where(
+                FamilyEmergencyOrder.family_id == current_parent_user.family_id,
+                FamilyEmergencyOrder.scope.in_(days), FamilyEmergencyOrder.mode != "withdraw"))}
+    individual_answers = {}
+    for child in children_by_id.values():
+        if not linked_to(current_parent_user, child):
+            continue
+        records = session.exec(select(ChildEmergencyOrder).where(
+            ChildEmergencyOrder.child_id == child.id, ChildEmergencyOrder.family_key == (child.family_id or 0),
+            ChildEmergencyOrder.scope != "usual").order_by(ChildEmergencyOrder.revision.desc()))
+        for record in records:
+            individual_answers.setdefault(_contact_reply_key(child.id, date.fromisoformat(record.scope)), record)
+    for key in entry_by_key.keys() | reply_by_key.keys() | individual_answers.keys():
         entry = entry_by_key.get(key)
         reply = reply_by_key.get(key)
         contact = entry or reply
+        answer = individual_answers.get(key)
+        if not answer and entry and (entry.extra_data or {}).get("submitted_family_id") == current_parent_user.family_id:
+            answer = family_answers.get(entry.target_date.isoformat())
+        if not contact and answer.mode == "withdraw":
+            continue
+        child_id = contact.child_id if contact else answer.child_id
+        target_date = contact.target_date if contact else date.fromisoformat(answer.scope)
         history_items.append(
             {
                 "entry": entry,
                 "reply": reply,
-                "child": children_by_id.get(contact.child_id),
-                "child_id": contact.child_id,
-                "target_date": contact.target_date,
+                "child": children_by_id.get(child_id),
+                "child_id": child_id,
+                "target_date": target_date,
+                "emergency_answer": answer if answer and answer.mode != "withdraw" else None,
+                "legacy_answer": isinstance(answer, FamilyEmergencyOrder),
                 "reply_items": reply_items_for_display(reply),
             }
         )
@@ -2234,7 +2399,7 @@ def parent_profile_photo(request: Request, photo_id: str, session: Session = Dep
 def _parent_pickup_context(request, parent, child, day, session, *, error="", status_code=200, values=None):
     record = load_pickup_record(session, child.id, day)
     return templates.TemplateResponse(request, "parent_portal/pickup.html", {
-        "current_parent_user": parent, "parent_portal_mode": True, "child": child,
+        "current_parent_user": parent, "parent_portal_mode": True, "child": child, "closing_time": closing_time(session),
         "day": day, "record": record, "revision": values.get("revision", pickup_revision(record)) if values else pickup_revision(record), "error": error,
         "pickup_values": values if values is not None else {
             "planned_pickup_time": record.planned_pickup_time or "" if record else "",
