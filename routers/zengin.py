@@ -26,6 +26,10 @@ from zengin_service import (
 
 router = APIRouter(prefix="/billing/zengin", tags=["zengin"])
 
+# Zengin 結果ファイルは固定長 120 バイト/レコード × レコード数であるため、
+# 実用上の最大想定は数百 KB。巨大アップロードによるメモリ枯渇を防ぐため上限を設ける。
+MAX_RESULT_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
 
 @router.get("/{cycle_id}/preflight")
 def preflight_check(
@@ -144,6 +148,20 @@ async def import_results(
 ):
     require_zengin_exporter(session, current_user)
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_RESULT_FILE_SIZE:
+        log_export(
+            session,
+            export_type="zengin",
+            export_format="txt",
+            exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+            exported_by_name=current_user.name,
+            status="error",
+            error_message="結果ファイルが上限を超えています",
+        )
+        raise HTTPException(
+            status_code=413,
+            detail="結果ファイルが大きすぎます（上限 5MB）",
+        )
     try:
         parsed = import_result_file(session, file_bytes, export_id)
     except ZenginFileValidationError as exc:

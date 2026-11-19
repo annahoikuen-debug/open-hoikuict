@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import io
+import logging
 import re
 import zipfile
 from datetime import timedelta
 from typing import Any, Optional
 from urllib.parse import quote
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
@@ -50,6 +53,10 @@ STATUS_LABELS = {
     "error": "エラー",
     "warning": "警告",
 }
+
+# 一括 ZIP 出力に必要な reportlab PDF 生成はクラスごとに同期的に走るため、
+# 長時間応答なし・メモリ圧迫を防ぐため上限を設ける。
+MAX_BATCH_CLASSROOMS = 20
 
 
 @router.get("", response_class=HTMLResponse)
@@ -310,7 +317,7 @@ def _determine_classroom_age(session: Session, classroom: Classroom, target_mont
             if ages:
                 return max(set(ages), key=ages.count)
     except Exception:
-        pass
+        logger.warning("Failed to determine classroom age from children birth dates", exc_info=True)
 
     return 3
 
@@ -327,6 +334,12 @@ def download_monthly_class_batch(
 
     if not classroom_ids:
         raise HTTPException(status_code=400, detail="対象クラスを1つ以上選択してください")
+    unique_classroom_ids = list(dict.fromkeys(classroom_ids))
+    if len(unique_classroom_ids) > MAX_BATCH_CLASSROOMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"一括出力できるクラスは{MAX_BATCH_CLASSROOMS}件までです",
+        )
 
     month_str = month or utc_now().strftime("%Y-%m")
     try:
@@ -337,7 +350,7 @@ def download_monthly_class_batch(
         raise HTTPException(status_code=400, detail="対象月の形式が正しくありません (YYYY-MM)")
 
     classrooms = session.exec(
-        select(Classroom).where(Classroom.id.in_(classroom_ids)).order_by(Classroom.display_order, Classroom.id)
+        select(Classroom).where(Classroom.id.in_(unique_classroom_ids)).order_by(Classroom.display_order, Classroom.id)
     ).all()
     if not classrooms:
         raise HTTPException(status_code=404, detail="指定されたクラスが見つかりません")

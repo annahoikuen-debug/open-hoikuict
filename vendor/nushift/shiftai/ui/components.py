@@ -597,10 +597,16 @@ def render_fairness_panel(
 
 
 def staff_day_summary_frame(
-    shift_day: ShiftDay | None, slots: Sequence[Slot], staff: Sequence[Any]
+    shift_day: ShiftDay | None,
+    slots: Sequence[Slot],
+    staff: Sequence[Any],
+    *,
+    result: SolveResult | None = None,
+    day: date | None = None,
 ) -> pd.DataFrame:
-    """職員ごとの当日勤務サマリ（開始/終了/勤務/休憩）。"""
+    """職員ごとの当日勤務サマリ（開始/終了/勤務/休憩・Indictment起因ペナルティ）。"""
     records = []
+    indictments = result.score.indictments if result and result.score else {}
     for member in staff:
         work_minutes = 0
         break_minutes = 0
@@ -617,18 +623,27 @@ def staff_day_summary_frame(
                     last = slot
                 elif state is CellState.BREAK:
                     break_minutes += slot.minutes
-        records.append(
-            {
-                "職員ID": member.staff_id,
-                "氏名": member.name,
-                "資格": member.primary_role.value,
-                "勤務開始": first.start.strftime("%H:%M") if first else "—",
-                "勤務終了": last.end.strftime("%H:%M") if last else "—",
-                "勤務分数": work_minutes,
-                "休憩分数": break_minutes,
-                "実働時間": round(work_minutes / 60.0, 2),
-            }
-        )
+
+        ind = indictments.get((member.staff_id, day)) if day else None
+        penalty_desc = "適法 (0)"
+        if ind and ind.total_penalty > 0:
+            penalty_desc = f"⚠️ {int(ind.total_penalty)}"
+        reasons = "; ".join(ind.violations[:2]) if ind and ind.violations else "—"
+
+        rec = {
+            "職員ID": member.staff_id,
+            "氏名": member.name,
+            "資格": member.primary_role.value,
+            "勤務開始": first.start.strftime("%H:%M") if first else "—",
+            "勤務終了": last.end.strftime("%H:%M") if last else "—",
+            "勤務分数": work_minutes,
+            "休憩分数": break_minutes,
+            "実働時間": round(work_minutes / 60.0, 2),
+        }
+        if result is not None:
+            rec["制約状況"] = penalty_desc
+            rec["理由・指摘"] = reasons
+        records.append(rec)
     return pd.DataFrame.from_records(records)
 
 
@@ -809,8 +824,8 @@ def status_banner(result: SolveResult | None) -> None:
             f"ソルバ {stats.get('solver', '-')} / 変数 {stats.get('num_variables', '-')} / "
             f"制約 {stats.get('num_constraints', '-')}）"
         )
-    if stats.get("mip_gap") is not None:                                    # ★追加
-        detail += f" / ギャップ {float(stats['mip_gap']) * 100:.2f}%"        # ★追加
+    if stats.get("mip_gap") is not None:  # ★追加
+        detail += f" / ギャップ {float(stats['mip_gap']) * 100:.2f}%"  # ★追加
     if tone == "error":
         st.error(f"**{label}** — {detail}")
     elif tone == "warning":
@@ -1056,9 +1071,7 @@ def render_violation_actions(violations: Sequence[Violation], *, key_prefix: str
                         args=(target,),
                     )
         if len(cell_targets) > len(shown):
-            st.caption(
-                f"ほか {len(cell_targets) - len(shown)} 件のセル指定違反があります。"
-            )
+            st.caption(f"ほか {len(cell_targets) - len(shown)} 件のセル指定違反があります。")
 
     if partial_targets:
         st.markdown(f"##### ⚠️ 日付または職員を選択して修正する（{len(partial_targets)} 件）")
@@ -1074,8 +1087,7 @@ def render_violation_actions(violations: Sequence[Violation], *, key_prefix: str
                         f"{icon} {label}",
                         key=f"{key_prefix}_fix_partial_{index}",
                         width="stretch",
-                        help=theme.tab_ref_for("shift")
-                        + " を開いて該当の列または行を編集します。",
+                        help=theme.tab_ref_for("shift") + " を開いて該当の列または行を編集します。",
                         on_click=_jump,
                         args=(target,),
                     )
@@ -1097,9 +1109,7 @@ def render_violation_actions(violations: Sequence[Violation], *, key_prefix: str
                 continue
             shown_codes.append(v.code)
             hint = fix_hint(v.code) or "園の条件や職員データを見直してください。"
-            st.markdown(
-                f"- **{violation_title(v.code)}**: {_format_hint(hint)}"
-            )
+            st.markdown(f"- **{violation_title(v.code)}**: {_format_hint(hint)}")
         if len(shown_codes) < len({v.code for v in unfixable}):
             st.caption(
                 f"ほか {len({v.code for v in unfixable}) - len(shown_codes)} 種類の違反があります。"

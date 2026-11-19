@@ -35,6 +35,7 @@ from models import (
 )
 import routers.billing as billing_router_module
 import routers.zengin as zengin_router_module
+from routers.zengin import MAX_RESULT_FILE_SIZE
 from zengin_service import (
     ParsedResultRecord,
     ZenginError,
@@ -320,6 +321,28 @@ class BillingZenginTests(unittest.TestCase):
             files={"file": ("result.txt", b"\x81" * 120, "application/octet-stream")},
         )
         self.assertEqual(response.status_code, 422)
+        with Session(self.engine) as session:
+            export = session.get(ZenginExport, export_id)
+            self.assertEqual(export.status, ZenginExportStatus.submitted)
+            self.assertIsNone(export.result_imported_at)
+        client.close()
+
+    def test_result_file_over_size_limit_returns_413_without_importing(self):
+        cycle_id, _ = self._seed_exportable_claim()
+        with Session(self.engine) as session:
+            export = create_zengin_export(session, cycle_id, created_by="tester")
+            export_id = export.id
+            mark_zengin_export_submitted(session, export_id)
+
+        client = self._zengin_client()
+        # 5MB + 1 バイトのペイロード
+        oversized = b"\x00" * (MAX_RESULT_FILE_SIZE + 1)
+        response = client.post(
+            f"/billing/zengin/exports/{export_id}/results",
+            files={"file": ("result.txt", oversized, "application/octet-stream")},
+        )
+        self.assertEqual(response.status_code, 413)
+        self.assertIn("上限 5MB", response.json()["detail"])
         with Session(self.engine) as session:
             export = session.get(ZenginExport, export_id)
             self.assertEqual(export.status, ZenginExportStatus.submitted)

@@ -398,20 +398,48 @@ class Contract:
     def __post_init__(self) -> None:
         if self.daily_hours <= 0 or self.weekly_hours <= 0:
             raise ValueError("契約時間は正である必要があります")
-        if self.min_daily_hours is not None and (self.min_daily_hours <= 0 or self.min_daily_hours > self.daily_hours):
+        if self.min_daily_hours is not None and (
+            self.min_daily_hours <= 0 or self.min_daily_hours > self.daily_hours
+        ):
             raise ValueError("min_daily_hours は 0 より大きく daily_hours 以下にしてください")
-        if self.max_daily_hours is not None and (self.max_daily_hours <= 0 or self.max_daily_hours > config.STATUTORY_DAILY_WORK_HOURS):
-            raise ValueError(f"max_daily_hours は 0 より大きく {config.STATUTORY_DAILY_WORK_HOURS} 以下にしてください")
-        if self.min_daily_hours is not None and self.max_daily_hours is not None and self.min_daily_hours > self.max_daily_hours:
+        if self.max_daily_hours is not None and (
+            self.max_daily_hours <= 0 or self.max_daily_hours > config.STATUTORY_DAILY_WORK_HOURS
+        ):
+            raise ValueError(
+                f"max_daily_hours は 0 より大きく {config.STATUTORY_DAILY_WORK_HOURS} 以下にしてください"
+            )
+        if (
+            self.min_daily_hours is not None
+            and self.max_daily_hours is not None
+            and self.min_daily_hours > self.max_daily_hours
+        ):
             raise ValueError("min_daily_hours は max_daily_hours 以下にしてください")
         if self.employment_type is EmploymentType.SEI:
-            if self.min_daily_hours is not None and self.min_daily_hours < config.DEFAULT_SEI_MIN_DAILY_HOURS:
-                raise ValueError(f"正社員の min_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}時間以上にしてください")
-            if self.max_daily_hours is not None and self.max_daily_hours > config.DEFAULT_SEI_MAX_DAILY_HOURS:
-                raise ValueError(f"正社員の max_daily_hours は {config.DEFAULT_SEI_MAX_DAILY_HOURS}時間以下にしてください")
-        if self.break_minutes is not None and not (config.MIN_ALLOWABLE_BREAK_MINUTES <= self.break_minutes <= config.MAX_ALLOWABLE_BREAK_MINUTES):
-            raise ValueError(f"break_minutes は {config.MIN_ALLOWABLE_BREAK_MINUTES}〜{config.MAX_ALLOWABLE_BREAK_MINUTES}分の範囲にしてください")
-        if self.max_work_blocks_per_day is not None and not (1 <= self.max_work_blocks_per_day <= 4):
+            if (
+                self.min_daily_hours is not None
+                and self.min_daily_hours < config.DEFAULT_SEI_MIN_DAILY_HOURS
+            ):
+                raise ValueError(
+                    f"正社員の min_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}時間以上にしてください"
+                )
+            if (
+                self.max_daily_hours is not None
+                and self.max_daily_hours > config.DEFAULT_SEI_MAX_DAILY_HOURS
+            ):
+                raise ValueError(
+                    f"正社員の max_daily_hours は {config.DEFAULT_SEI_MAX_DAILY_HOURS}時間以下にしてください"
+                )
+        if self.break_minutes is not None and not (
+            config.MIN_ALLOWABLE_BREAK_MINUTES
+            <= self.break_minutes
+            <= config.MAX_ALLOWABLE_BREAK_MINUTES
+        ):
+            raise ValueError(
+                f"break_minutes は {config.MIN_ALLOWABLE_BREAK_MINUTES}〜{config.MAX_ALLOWABLE_BREAK_MINUTES}分の範囲にしてください"
+            )
+        if self.max_work_blocks_per_day is not None and not (
+            1 <= self.max_work_blocks_per_day <= 4
+        ):
             raise ValueError("max_work_blocks_per_day は 1〜4 の範囲にしてください")
         if self.max_monthly_hours < self.min_monthly_hours:
             raise ValueError("max_monthly_hours は min_monthly_hours 以上にしてください")
@@ -950,7 +978,9 @@ class StaffingStandard:
         s_start = slot.start_minutes
         s_end = 24 * 60 if slot.is_midnight_end else to_minutes(slot.end)
         std_start = to_minutes(self.standard_time[0])
-        std_end = 24 * 60 if to_minutes(self.standard_time[1]) == 0 else to_minutes(self.standard_time[1])
+        std_end = (
+            24 * 60 if to_minutes(self.standard_time[1]) == 0 else to_minutes(self.standard_time[1])
+        )
         return std_start <= s_start and s_end <= std_end
 
     def slot_kind(self, slot: Slot) -> SlotKind:
@@ -1225,12 +1255,105 @@ class ConstraintMatch:
 
 
 @dataclass(frozen=True)
+class Indictment:
+    """Timefold の Constraint Indictment 思想に基づく、特定エンティティ（職員×日付）の制約ペナルティ起因分析。"""
+
+    staff_id: str
+    day: date | None
+    hard_penalty_count: int = 0
+    soft_penalty_total: float = 0.0
+    violations: list[str] = field(default_factory=list)
+
+    @property
+    def total_penalty(self) -> float:
+        """ハード違反を1000点換算した総合ペナルティ。"""
+        return self.hard_penalty_count * 1000.0 + self.soft_penalty_total
+
+
+@dataclass(frozen=True)
+class DisruptionReport:
+    """Timefold の Minimal Disruption 思想に基づく、確定シフトからの変更破壊量レポート。"""
+
+    absent_staff_id: str
+    target_date: date
+    total_disrupted_staff: int
+    called_in_from_off: list[str] = field(default_factory=list)
+    """公休から急遽出勤になった職員ID一覧"""
+    hours_extended_staff: list[str] = field(default_factory=list)
+    """当日の勤務時間が延長された職員ID一覧"""
+    pattern_changed_staff: list[str] = field(default_factory=list)
+    """勤務時間帯（開始・終了）がスライド変更された職員ID一覧"""
+    disruption_score: float = 0.0
+    """定量ディスラプションスコア（公休出勤: 100点, パターン変更: 30点, 延長: 10点）"""
+
+    def summary(self) -> str:
+        parts = []
+        if self.called_in_from_off:
+            parts.append(f"公休出勤: {len(self.called_in_from_off)}名 ({', '.join(self.called_in_from_off)})")
+        if self.hours_extended_staff:
+            parts.append(f"時間延長: {len(self.hours_extended_staff)}名 ({', '.join(self.hours_extended_staff)})")
+        if self.pattern_changed_staff:
+            parts.append(f"時間帯変更: {len(self.pattern_changed_staff)}名 ({', '.join(self.pattern_changed_staff)})")
+        if not parts:
+            return "他職員への変更なし（欠員のみOFF）"
+        return " / ".join(parts)
+
+
+@dataclass(frozen=True)
 class ShiftScore:
-    """Timefold の HardSoftScore 思想に基づくシフト評価スコア。"""
+    """Timefold の HardMediumSoftScore 思想に基づくシフト評価スコア。"""
 
     hard_score: int  # 0: 完全適法 (BLOCKERゼロ), 負数: ハード制約違反件数 (-N)
-    soft_score: float  # ソフト評価値（目的関数ペナルティの合計、0に近いほど高品質）
+    soft_score: float = 0.0  # ソフト評価値（目的関数ペナルティの合計、0に近いほど高品質）
+    medium_score: float = 0.0  # ミディアム評価値（余剰配置・パート契約差異・欠員枠等）
     matches: dict[str, ConstraintMatch] = field(default_factory=dict)
+    indictments: dict[tuple[str, date | None], Indictment] = field(default_factory=dict)
+    """Timefold 互換の職員×日付ごとのペナルティ起因分析 (Constraint Indictments)。"""
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, ShiftScore):
+            return NotImplemented
+        if self.hard_score != other.hard_score:
+            return self.hard_score < other.hard_score
+        if abs(self.medium_score - other.medium_score) > 1e-6:
+            return self.medium_score < other.medium_score
+        return self.soft_score < other.soft_score
+
+    def __le__(self, other: object) -> bool:
+        if not isinstance(other, ShiftScore):
+            return NotImplemented
+        return self < other or self == other
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, ShiftScore):
+            return NotImplemented
+        if self.hard_score != other.hard_score:
+            return self.hard_score > other.hard_score
+        if abs(self.medium_score - other.medium_score) > 1e-6:
+            return self.medium_score > other.medium_score
+        return self.soft_score > other.soft_score
+
+    def __ge__(self, other: object) -> bool:
+        if not isinstance(other, ShiftScore):
+            return NotImplemented
+        return self > other or self == other
+
+    @property
+    def staff_indictments(self) -> dict[str, float]:
+        """職員ごとのペナルティ合計値。"""
+        res: dict[str, float] = {}
+        for (sid, _), ind in self.indictments.items():
+            res[sid] = res.get(sid, 0.0) + ind.total_penalty
+        return res
+
+    @property
+    def day_indictments(self) -> dict[date, float]:
+        """日付ごとのペナルティ合計値。"""
+        res: dict[date, float] = {}
+        for (_, d), ind in self.indictments.items():
+            if d is not None:
+                res[d] = res.get(d, 0.0) + ind.total_penalty
+        return res
 
     @property
     def is_feasible(self) -> bool:
@@ -1240,6 +1363,7 @@ class ShiftScore:
     def to_dict(self) -> dict:
         return {
             "hard_score": self.hard_score,
+            "medium_score": round(self.medium_score, 2),
             "soft_score": round(self.soft_score, 2),
             "is_feasible": self.is_feasible,
             "matches": {
@@ -1253,6 +1377,16 @@ class ShiftScore:
                     "details": m.details[:20],
                 }
                 for k, m in self.matches.items()
+            },
+            "indictments": {
+                f"{k[0]}_{k[1]}": {
+                    "staff_id": ind.staff_id,
+                    "day": ind.day.isoformat() if ind.day else None,
+                    "hard_penalty_count": ind.hard_penalty_count,
+                    "soft_penalty_total": round(ind.soft_penalty_total, 2),
+                    "violations": ind.violations[:10],
+                }
+                for k, ind in self.indictments.items()
             },
         }
 
@@ -1271,6 +1405,8 @@ class SolveResult:
     """所要時間・変数数・制約数など。"""
     score: ShiftScore | None = None
     """Timefold 互換のハード・ソフト定量スコアおよび説明内訳。"""
+    overconstrained_shortfalls: list[dict] = field(default_factory=list)
+    """Timefold の Overconstrained Planning 思想に基づく、不足スロット（欠員・外部応援枠）一覧。"""
 
     @property
     def ok(self) -> bool:
@@ -1383,12 +1519,30 @@ class FacilitySettings:
     """正社員の1日最高勤務時間（時間）。"""
 
     def __post_init__(self) -> None:
-        if not (config.MIN_ALLOWABLE_BREAK_MINUTES <= self.break_minutes <= config.MAX_ALLOWABLE_BREAK_MINUTES):
-            raise ValueError(f"break_minutes は {config.MIN_ALLOWABLE_BREAK_MINUTES}〜{config.MAX_ALLOWABLE_BREAK_MINUTES}分の範囲にしてください")
-        if not (config.DEFAULT_SEI_MIN_DAILY_HOURS <= self.sei_min_daily_hours <= config.DEFAULT_SEI_MAX_DAILY_HOURS):
-            raise ValueError(f"sei_min_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}〜{config.DEFAULT_SEI_MAX_DAILY_HOURS}時間の範囲にしてください")
-        if not (config.DEFAULT_SEI_MIN_DAILY_HOURS <= self.sei_max_daily_hours <= config.DEFAULT_SEI_MAX_DAILY_HOURS):
-            raise ValueError(f"sei_max_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}〜{config.DEFAULT_SEI_MAX_DAILY_HOURS}時間の範囲にしてください")
+        if not (
+            config.MIN_ALLOWABLE_BREAK_MINUTES
+            <= self.break_minutes
+            <= config.MAX_ALLOWABLE_BREAK_MINUTES
+        ):
+            raise ValueError(
+                f"break_minutes は {config.MIN_ALLOWABLE_BREAK_MINUTES}〜{config.MAX_ALLOWABLE_BREAK_MINUTES}分の範囲にしてください"
+            )
+        if not (
+            config.DEFAULT_SEI_MIN_DAILY_HOURS
+            <= self.sei_min_daily_hours
+            <= config.DEFAULT_SEI_MAX_DAILY_HOURS
+        ):
+            raise ValueError(
+                f"sei_min_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}〜{config.DEFAULT_SEI_MAX_DAILY_HOURS}時間の範囲にしてください"
+            )
+        if not (
+            config.DEFAULT_SEI_MIN_DAILY_HOURS
+            <= self.sei_max_daily_hours
+            <= config.DEFAULT_SEI_MAX_DAILY_HOURS
+        ):
+            raise ValueError(
+                f"sei_max_daily_hours は {config.DEFAULT_SEI_MIN_DAILY_HOURS}〜{config.DEFAULT_SEI_MAX_DAILY_HOURS}時間の範囲にしてください"
+            )
         if self.sei_min_daily_hours > self.sei_max_daily_hours:
             raise ValueError("sei_min_daily_hours は sei_max_daily_hours 以下にしてください")
         if not (1 <= self.max_work_blocks_per_day <= 4):
@@ -1463,6 +1617,7 @@ class CancellationToken:
 
     def __init__(self) -> None:
         import threading
+
         self._event = threading.Event()
 
     def cancel(self) -> None:
@@ -1476,4 +1631,3 @@ class CancellationToken:
     def reset(self) -> None:
         """フラグをリセットする。"""
         self._event.clear()
-

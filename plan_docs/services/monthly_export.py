@@ -48,7 +48,14 @@ class ExportInput(BaseModel):
     fields: dict[str, ExportCell] | None = None
 
 
-def export_context(payload, user, repository, classroom, document, sheet):
+def export_context(
+    payload: ExportInput,
+    user: object,
+    repository: object,
+    classroom: object,
+    document: object,
+    sheet: dict,
+) -> dict:
     """Resolve names/roster on the server; only authorized draft text is accepted."""
     if payload.mode == 'saved':
         if not document or payload.document_id != document.id:
@@ -70,8 +77,10 @@ def export_context(payload, user, repository, classroom, document, sheet):
             raise HTTPException(422, '帳票に存在しない欄または園児が指定されています')
         sheet = sheet | {'fields': {k: {'body': v.body} for k, v in payload.fields.items()}}
         owner = payload.owner_name
-    # Apply the same bounds to saved records, which can predate current validation.
-    if len(sheet['children']) > 300 or sum(len(v.get('body', '')) for v in sheet['fields'].values()) > 500000:
+
+    children = sheet.get("children") or []
+    fields = sheet.get("fields") or {}
+    if len(children) > 300 or sum(len(v.get('body', '')) for v in fields.values()) > 500000:
         raise HTTPException(422, '出力できる容量を超えています。本文や園児数を確認してください')
     return {'target_month': payload.target_month, 'age': payload.age, 'classroom_name': classroom.name,
             'owner_name': owner, 'sheet': sheet}

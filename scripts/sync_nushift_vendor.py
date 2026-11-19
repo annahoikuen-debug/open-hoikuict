@@ -26,15 +26,33 @@ TEST_FILE = ROOT / "tests" / "services" / "test_shiftai_vendor.py"
 
 DEFAULT_SOURCE = Path(r"E:\nushift\nushift")
 
+# 除外条件を verify() と write_manifest() で共通化する。
+EXCLUDE_PARTS = ("__pycache__", ".git")
+EXCLUDE_SUFFIXES = (".pyc", ".gitignore", ".gitattributes")
+
+
+def _is_excluded(path: Path) -> bool:
+    return (
+        any(part in EXCLUDE_PARTS for part in path.parts)
+        or path.suffix in EXCLUDE_SUFFIXES
+    )
+
 
 def get_git_commit(repo_path: Path) -> str:
-    res = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(
+            f"Error: failed to resolve git commit in {repo_path}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     return res.stdout.strip()[:7]
 
 
@@ -54,8 +72,16 @@ def verify(source_repo: Path) -> bool:
         print(f"Error: {DEST_SHIFTAI} does not exist.", file=sys.stderr)
         return False
 
-    src_files = {p.relative_to(src_dir): p for p in src_dir.rglob("*.py") if "__pycache__" not in p.parts}
-    dest_files = {p.relative_to(DEST_SHIFTAI): p for p in DEST_SHIFTAI.rglob("*.py") if "__pycache__" not in p.parts}
+    src_files = {
+        p.relative_to(src_dir): p
+        for p in src_dir.rglob("*.py")
+        if not _is_excluded(p)
+    }
+    dest_files = {
+        p.relative_to(DEST_SHIFTAI): p
+        for p in DEST_SHIFTAI.rglob("*.py")
+        if not _is_excluded(p)
+    }
 
     missing_in_dest = set(src_files.keys()) - set(dest_files.keys())
     extra_in_dest = set(dest_files.keys()) - set(src_files.keys())
@@ -155,7 +181,7 @@ def write_manifest(source_repo: Path, commit_hash: str) -> None:
     files = {
         str(p.relative_to(DEST_SHIFTAI).as_posix()): compute_file_hash(p)
         for p in sorted(DEST_SHIFTAI.rglob("*.py"))
-        if "__pycache__" not in p.parts
+        if not _is_excluded(p)
     }
     manifest = {
         "source_repo": str(source_repo),
