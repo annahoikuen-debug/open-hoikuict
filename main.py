@@ -16,13 +16,14 @@ if (os.getenv("HOIKUICT_ENV") or "").strip().lower() != "production":
     load_dotenv()
 
 from fastapi import Depends, FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import (
     create_db_and_tables,
 )
 from routers.attendance import router as attendance_router
+from routers.monitoring import router as monitoring_router
 from routers.attendance_checks import router as attendance_checks_router
 from routers.pims_attendance import router as pims_attendance_router
 from routers.billing import router as billing_router
@@ -173,6 +174,11 @@ app.add_exception_handler(StarletteHTTPException, staff_auth_http_exception_hand
 app.add_middleware(CsrfTokenMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(Path(__file__).parent / "static" / "favicon.ico")
 app.mount(
     "/manual-guide-preview",
     StaticFiles(directory=Path(__file__).parent / "docs" / "manual-guide-preview", html=True),
@@ -251,6 +257,7 @@ app.include_router(shift_portal_requests_router, dependencies=[Depends(get_curre
 app.include_router(shift_requests_admin_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
 app.include_router(shift_nushift_export_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
 app.include_router(shift_exports_router, dependencies=[Depends(get_current_staff_user)])
+app.include_router(monitoring_router)
 
 @app.get("/switch-role", dependencies=[Depends(require_mock_staff_auth)])
 def switch_role(redirect: str = "/"):

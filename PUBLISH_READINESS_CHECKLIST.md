@@ -72,6 +72,18 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
 ---
 
+### 5. 公開前コードレビュー指摘事項の修正（2026-11-20）
+
+| 指摘区分 | 対象ファイル | 修正内容 | ステータス |
+|---|---|---|:---:|
+| **Critical** | `guardian_qr_service.py` | `execute_sibling_qr_punch` で `target_date` が指定された際に打刻日時が実行日固定になっていた問題を修正（`punch_time = datetime.combine(day, now_naive.time())`）。`test_pims_core_sync.py` パス。 | 修正完了 |
+| **Critical** | `database.py` | 既存マイグレーション ID への追記による既存 DB スキーマ欠落を解消するため、`046_daily_contact_review_columns` を分離定義し、`daily_contact_replies` の `reviewed_by_staff_id` 等のカラム追加を確実に適用。`test_daily_contacts_nav.py` パス。 | 修正完了 |
+| **High** | `tests/system/test_spec_changes_20260919.py` | Phase 1 で追加された閉園時間チェック（< closing_time）に合わせてテスト側の `planned_pickup_time="18:45"` に更新し、閉園後予定（22:45）が存在する場合のキオスク修正フローのアサーションを分離検証。`test_spec_changes_20260919.py` 全件パス。 | 修正完了 |
+| **High** | `tests/conftest.py` | pytest の autouse fixture を新設し、テスト毎に `cache_service.invalidate_all_caches()` を実行してインメモリキャッシュによるテスト間汚染（test pollution）を根絶。`test_daily_contact_content_list.py` パス。 | 修正完了 |
+| **High** | `scripts/backup_contracts/schema-20261105.json` | 新規追加テーブル 6 件（`parent_medical_responses`, `family_emergency_orders`, `child_emergency_orders`, `billing_exemptions`, `plan_document_attachments`, `user_onboarding_states`）および追加カラム群をバックアップ契約スキーマに同期。`test_backup_v2.py` 全41件パス。 | 修正完了 |
+
+---
+
 ## 公開前チェックリスト
 
 ### 必須項目
@@ -111,3 +123,7 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 - [ ] 本番デプロイ手順 (Docker, systemd など) が文書化されていること
 - [ ] 環境変数の一覧と説明が文書化されていること
 - [ ] セキュリティインシデント対応手順が文書化されていること
+- [x] `docs/manual-guide-preview/` を試作版・モックから「オープン保育ICT 総合操作マニュアル・ビジュアルガイド (v0.7.1)」へ全面的にリニューアル（2026-11-20 実施）:
+  - 外部URL依存を解消し、園内LAN・オフラインで完結するローカルリンク化を徹底
+  - 主要機能ガイドを追加（NuShiftシフト自動作成・ピン留め、月次請求・全銀口座振替・締め解除、連絡帳ダブルチェック承認、緊急連絡先優先順位、医療同意・レントゲン承諾）
+  - ロール別ナビゲーション（保育士向け、管理者向け、保護者向け）とA4印刷（研修資料配布）対応

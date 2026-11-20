@@ -15,13 +15,37 @@ from time_utils import local_today, utc_now
 import family_archive_guard  # noqa: F401 -- requires audited archive-state transitions
 
 DATABASE_URL = os.getenv("HOIKUICT_DATABASE_URL", "sqlite:///./hoikuict.db")
+# Heroku / Supabase / Render 等の postgres:// を postgresql:// に正規化
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 _database_url = make_url(DATABASE_URL)
-_is_sqlite_url = _database_url.get_backend_name() == "sqlite"
-engine = create_engine(
-    DATABASE_URL,
-    echo=False,
-    connect_args={"timeout": 15} if _is_sqlite_url else {},
-)
+_backend = _database_url.get_backend_name()
+_is_sqlite_url = _backend == "sqlite"
+_is_postgres_url = _backend in ("postgresql", "postgres")
+
+if _is_sqlite_url:
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False,
+        connect_args={"timeout": 15},
+    )
+elif _is_postgres_url:
+    from sqlalchemy.pool import QueuePool
+
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False,
+        poolclass=QueuePool,
+        pool_size=int(os.getenv("HOIKUICT_DB_POOL_SIZE", "20")),
+        max_overflow=int(os.getenv("HOIKUICT_DB_MAX_OVERFLOW", "10")),
+        pool_timeout=int(os.getenv("HOIKUICT_DB_POOL_TIMEOUT", "30")),
+        pool_recycle=int(os.getenv("HOIKUICT_DB_POOL_RECYCLE", "1800")),
+        pool_pre_ping=True,  # 切断されたコネクションの自動検知と再接続
+    )
+else:
+    engine = create_engine(DATABASE_URL, echo=False)
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +61,18 @@ if _is_sqlite_url:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute("PRAGMA cache_size = -64000")
             cursor.execute("PRAGMA temp_store = MEMORY")
+        finally:
+            cursor.close()
+elif _is_postgres_url:
+    @event.listens_for(engine, "connect")
+    def _set_postgres_connection_settings(dbapi_connection, connection_record) -> None:
+        del connection_record
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("SET timezone = 'Asia/Tokyo'")
+            cursor.execute("SET application_name = 'open-hoikuict'")
+        except Exception as exc:
+            logger.warning("PostgreSQL セッション設定に失敗しました: %s", exc)
         finally:
             cursor.close()
 
@@ -111,6 +147,8 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("043_message_templates_table", _migrate_message_templates_table),
         ("044_attendance_lock_version", _migrate_attendance_lock_version),
         ("045_parent_medical_responses", _migrate_parent_medical_table),
+        ("046_daily_contact_review_columns", _migrate_daily_contact_review_columns),
+        ("047_attendance_idempotency_key", _migrate_attendance_idempotency_key),
     ]
 
 
@@ -136,6 +174,21 @@ def _record_migration(conn, migration_id: str) -> None:
     )
 
 
+def run_alembic_migrations() -> None:
+    """Alembic をプログラム経由で実行し、データベースを最新リビジョン (head) に更新する。"""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini")
+    if not os.path.exists(alembic_ini_path):
+        logger.warning("alembic.ini が見つからないため、Alembic マイグレーションをスキップします: %s", alembic_ini_path)
+        return
+    alembic_cfg = Config(alembic_ini_path)
+    logger.info("Alembic マイグレーション (upgrade head) を実行します...")
+    command.upgrade(alembic_cfg, "head")
+    logger.info("Alembic マイグレーションが完了しました。")
+
+
 def create_db_and_tables() -> None:
     import models  # noqa: F401
     import child_records.models  # noqa: F401
@@ -143,10 +196,14 @@ def create_db_and_tables() -> None:
     import shift_schedule.db_models  # noqa: F401
 
     if engine.dialect.name != "sqlite":
+        if os.getenv("HOIKUICT_AUTO_MIGRATE") == "1":
+            run_alembic_migrations()
+            return
         if os.getenv("HOIKUICT_ALLOW_UNMANAGED_SCHEMA") != "1":
             raise RuntimeError(
                 "組み込みマイグレーションはSQLite専用です。"
-                "他DBではHOIKUICT_ALLOW_UNMANAGED_SCHEMA=1と外部管理済みスキーマが必要です。"
+                "他DBではHOIKUICT_AUTO_MIGRATE=1（Alembic自動適用）または"
+                "HOIKUICT_ALLOW_UNMANAGED_SCHEMA=1と外部管理済みスキーマが必要です。"
             )
         _validate_unmanaged_schema()
         return
@@ -162,7 +219,34 @@ def create_db_and_tables() -> None:
         migrate()
         with engine.begin() as conn:
             _record_migration(conn, migration_id)
+    _ensure_default_organization_and_facility()
     _validate_sqlite_foreign_keys()
+
+
+def _ensure_default_organization_and_facility() -> None:
+    """デフォルト法人および施設レコードが存在しない場合、シームレスに初期投入する。"""
+    from sqlmodel import Session
+    from models.organization import (
+        DEFAULT_FACILITY_ID,
+        DEFAULT_ORGANIZATION_ID,
+        Facility,
+        Organization,
+        get_default_facility,
+        get_default_organization,
+    )
+
+    try:
+        with Session(engine) as session:
+            org = session.get(Organization, DEFAULT_ORGANIZATION_ID)
+            if org is None:
+                session.add(get_default_organization())
+                session.commit()
+            fac = session.get(Facility, DEFAULT_FACILITY_ID)
+            if fac is None:
+                session.add(get_default_facility())
+                session.commit()
+    except Exception as exc:
+        logger.debug("デフォルト法人・施設初期化スキップ: %s", exc)
 
 
 def _migrate_facility_settings() -> None:
@@ -854,6 +938,17 @@ def _migrate_parent_push_preference_extra_mute_columns() -> None:
             conn.commit()
     except Exception as exc:
         _log_migration_skip("parent push preference extra mute columns", exc)
+
+
+def _migrate_attendance_idempotency_key() -> None:
+    try:
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(attendance_records)")}
+            if columns and "idempotency_key" not in columns:
+                conn.exec_driver_sql("ALTER TABLE attendance_records ADD COLUMN idempotency_key VARCHAR(128)")
+                conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_attendance_records_idempotency_key ON attendance_records (idempotency_key)")
+    except Exception as exc:
+        _log_migration_skip("attendance_records idempotency_key column", exc)
 
 
 def _migrate_attendance_lock_version() -> None:
@@ -2147,5 +2242,26 @@ def _migrate_parent_medical_table() -> None:
             )
     except Exception as exc:
         _log_migration_skip("parent medical responses table", exc)
+
+
+def _migrate_daily_contact_review_columns() -> None:
+    """連絡帳ダブルチェック承認フロー用カラムを追加する。"""
+    try:
+        additions = {
+            "pending_draft": "JSON",
+            "reviewed_by_staff_id": "CHAR(32)",
+            "reviewed_by_name": "VARCHAR",
+            "rejection_reason": "VARCHAR",
+            "reviewed_at": "DATETIME",
+        }
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(daily_contact_replies)")}
+            if columns:
+                for name, kind in additions.items():
+                    if name not in columns:
+                        conn.exec_driver_sql(f"ALTER TABLE daily_contact_replies ADD COLUMN {name} {kind}")
+    except Exception as exc:
+        _log_migration_skip("daily contact review columns", exc)
+
 
 

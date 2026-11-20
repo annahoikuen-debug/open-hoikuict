@@ -7,7 +7,7 @@ import hmac
 import json
 import os
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -190,6 +190,7 @@ def execute_sibling_qr_punch(
 
     day = target_date or local_today()
     now_naive = local_naive_now()
+    punch_time = datetime.combine(day, now_naive.time()) if target_date else now_naive
     audit_now = utc_now()
     updated_records: list[AttendanceRecord] = []
 
@@ -207,20 +208,20 @@ def execute_sibling_qr_punch(
         if action == "check_in":
             if record.check_in_at:
                 continue  # すでに登園打刻済みならスキップ
-            record.check_in_at = now_naive
+            record.check_in_at = punch_time
             record.updated_at = audit_now
             from pims_service import record_punch_log_for_core_child
-            record_punch_log_for_core_child(session, cid, "登園", now_naive)
+            record_punch_log_for_core_child(session, cid, "登園", punch_time)
         elif action == "check_out":
             if record.check_out_at:
                 continue  # すでに降園打刻済みならスキップ
-            record.check_out_at = now_naive
+            record.check_out_at = punch_time
             if actual_pickup_person:
                 record.actual_pickup_person = actual_pickup_person
             record.updated_at = audit_now
             recalculate_attendance_charge(session, record)
             from pims_service import record_punch_log_for_core_child
-            record_punch_log_for_core_child(session, cid, "降園", now_naive)
+            record_punch_log_for_core_child(session, cid, "降園", punch_time)
 
         sync_attendance_alarm(session, child_id=cid, target_date=day, record=record, now=audit_now)
         updated_records.append(record)

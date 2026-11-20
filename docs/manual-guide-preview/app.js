@@ -5,9 +5,9 @@ const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // BEGIN UI LABELS
 // Only reviewed UI names are decorated; examples, values and errors stay ordinary text.
 const uiTerms = Object.fromEntries([
-  ['menu',['保護者ホーム','メニュー','日次連絡履歴','お知らせ','アンケート','子ども情報変更申請','基本医療情報','登録情報','通知設定','パスワード変更','設定','職員管理','職員権限設定','園児一覧','出欠一覧','出欠確認','保護者アカウント','園児別・月間の登降園修正','パスワード再設定','保護者・家族情報','確認待ちの初回登録','メールの配送状況']],
-  ['button',['基本医療情報を確認する','回答を確認する','書き直す','この内容で回答する','回答を見直す','この端末で通知を受け取る','この端末の通知を解除する','この端末へテスト通知を送る','設定を保存','許可','共有','ホーム画面に追加','追加','日付を変更','日次連絡を入力','日次連絡を編集','お迎え予定を登録・変更','未読・未回答','保存する','予定を保存','ホームへ戻る','戻る','表示','ダウンロード','出席・欠席を連絡する','回答する','回答を編集','内容を編集','履歴を見る','返信あり','職員を追加','園児を追加','認証管理','担当クラス','権限設定','クラス管理','園児別・月間修正','管理者：まとめて補完','追加する','登録する','キャンセル','一覧へ戻る','編集','有効化コードを発行','コードを確認して次へ','ログイン情報を設定','再設定コードを発行','パスワードを再設定','パスワードを設定する','管理者の方：パスワードを忘れた場合','詳細','閉じる','連絡受付を記録','受付を取り消す','表示する','選択した日の空欄へ入れる','保存内容を確認','○日分をまとめて保存','3日分をまとめて保存','保存せず閉じる','補記する','詳細・修正','この日の記録を保存','打刻の取消・履歴を開く','引き継いで追加','在園児の保護者を追加・招待','この保護者を招待','新しい保護者を追加','登録済み・認証管理','初回入力の招待を送信','入力内容を園に提出する','入力をやめる','承認','却下','選択','更新する','提出内容を確認する','まだ園児台帳にいない子どもの新規入園受付','共通QR・申請受付','新しい申請の受付を開始する','新しい申請の受付を停止する','案内を印刷','QR画像を保存','登録案内メールを受け取る','最初に戻る','登園する','降園する','確認へ','決定','修正','取り消し','名前選択へ']],
-  ['field',['登録済みの搬送先の希望を取り消す','わからない','今は決めません','プッシュ通知を利用する','出欠確認をプッシュで受け取る','出欠確認をメールでも受け取る','ウェブアプリとして開く','通知を許可','出席','欠席','私用','病欠','体調メモ','園への連絡事項','現在の体温','症状','備考','性状','表示名','メールアドレス','権限','表示順','有効','ログインID','発行理由','新しいパスワード','新しいパスワード（確認）','再設定コード','有効化コード','クラス','担当区分','開始日','終了日','主表示にする','所属する家族','兄弟姉妹を選択','姓','名','姓（カナ）','名（カナ）','生年月日','入園日','退園日','在籍状況','家族名','自宅住所','自宅電話番号','在園児','保護者のメールアドレス','確認理由','連絡方法','欠席理由','連絡内容','取消理由','共通の補完理由','共通の降園時刻','子どもの名前','入園予定日','閲覧を許可する園児','保護者ご本人のメールアドレス','承認先の園児・保護者']]
+  ['menu',['勤務シフト','NuShift自動求解','シフト確定','月次請求','請求締め切り','請求締め解除','全銀データ出力','日次連絡帳','承認依頼','一括承認','緊急連絡先','基本医療情報','保護者ホーム','メニュー','日次連絡履歴','お知らせ','アンケート','子ども情報変更申請','登録情報','通知設定','パスワード変更','設定','職員管理','職員権限設定','園児一覧','出欠一覧','出欠確認','保護者アカウント','園児別・月間の登降園修正','パスワード再設定','保護者・家族情報','確認待ちの初回登録','メールの配送状況']],
+  ['button',['自動求解を実行','ピン留め','ピン留め解除','BLOCKERチェック','シフトを確定・公開','料金再計算','全銀フォーマット出力','締め解除を実行','承認して公開','差し戻し','前日記録からコピー','優先順位を保存','医療同意にチェック','同意して送信','基本医療情報を確認する','回答を確認する','書き直す','この内容で回答する','回答を見直す','この端末で通知を受け取る','この端末の通知を解除する','この端末へテスト通知を送る','設定を保存','許可','共有','ホーム画面に追加','追加','日付を変更','日次連絡を入力','日次連絡を編集','お迎え予定を登録・変更','未読・未回答','保存する','予定を保存','ホームへ戻る','戻る','表示','ダウンロード','出席・欠席を連絡する','回答する','回答を編集','内容を編集','履歴を見る','返信あり','職員を追加','園児を追加','認証管理','担当クラス','権限設定','クラス管理','園児別・月間修正','管理者：まとめて補完','追加する','登録する','キャンセル','一覧へ戻る','編集','有効化コードを発行','コードを確認して次へ','ログイン情報を設定','再設定コードを発行','パスワードを再設定','パスワードを設定する','管理者の方：パスワードを忘れた場合','詳細','閉じる','連絡受付を記録','受付を取り消す','表示する','選択した日の空欄へ入れる','保存内容を確認','○日分をまとめて保存','3日分をまとめて保存','保存せず閉じる','補記する','詳細・修正','この日の記録を保存','打刻の取消・履歴を開く','引き継いで追加','在園児の保護者を追加・招待','この保護者を招待','新しい保護者を追加','登録済み・認証管理','初回入力の招待を送信','入力内容を園に提出する','入力をやめる','承認','却下','選択','更新する','提出内容を確認する','まだ園児台帳にいない子どもの新規入園受付','共通QR・申請受付','新しい申請の受付を開始する','新しい申請の受付を停止する','案内を印刷','QR画像を保存','登録案内メールを受け取る','最初に戻る','登園する','降園する','確認へ','決定','修正','取り消し','名前選択へ']],
+  ['field',['対象月','希望休','解除理由','優先順位','続柄','発信可能時間帯','搬送時レントゲン承諾','処置同意','登録済みの搬送先の希望を取り消す','わからない','今は決めません','プッシュ通知を利用する','出欠確認をプッシュで受け取る','出欠確認をメールでも受け取る','ウェブアプリとして開く','通知を許可','出席','欠席','私用','病欠','体調メモ','園への連絡事項','現在の体温','症状','備考','性状','表示名','メールアドレス','権限','表示順','有効','ログインID','発行理由','新しいパスワード','新しいパスワード（確認）','再設定コード','有効化コード','クラス','担当区分','開始日','終了日','主表示にする','所属する家族','兄弟姉妹を選択','姓','名','姓（カナ）','名（カナ）','生年月日','入園日','退園日','在籍状況','家族名','自宅住所','自宅電話番号','在園児','保護者のメールアドレス','確認理由','連絡方法','欠席理由','連絡内容','取消理由','共通の補完理由','共通の降園時刻','子どもの名前','入園予定日','閲覧を許可する園児','保護者ご本人のメールアドレス','承認先の園児・保護者']]
 ].flatMap(([kind,names])=>names.map(name=>[name,kind])));
 function uiRef(kind,label){
   return `<span class="ui-ref ui-ref--${kind}"><strong>${esc(label)}</strong></span>`;
@@ -29,6 +29,499 @@ function uiLegend(){
 }
 // END UI LABELS
 const manualArticles = {
+  "shift-auto": {
+    "title": "NuShiftで職員シフトを自動作成する（求解・ギャップ検知）",
+    "chapter": 4,
+    "role": "シフト作成担当 ＋ 施設長・園長",
+    "tag": "職員管理・シフト作成",
+    "summary": "職員の希望休や有休、各クラスの必要配置基準・資格要件をもとに、最適化ソルバーで月間シフトを一括自動生成します。不足時間帯（ギャップ）や法令違反はBLOCKERとして自動検知されます。",
+    "goal": "配置基準と労働基準を満たした月間シフト表を、手動のパズル計算なしに自動生成・検証できる。",
+    "before": "職員台帳で対象職員の雇用区分（常勤・非常勤）、保有資格、担当クラスが登録されており、対象月の希望休の入力が完了していること。",
+    "path": "職員メニュー → 勤務シフト → NuShift自動求解",
+    "keywords": "シフト NuShift 自動作成 求解 最適化 ソルバー ギャップ検知 配置基準 加算要件 BLOCKER 確定 希望休",
+    "imagePrefix": "staff",
+    "steps": [
+      {
+        "title": "対象月と前提条件の確認",
+        "text": "「勤務シフト」画面を開き、作成する対象月を選びます。職員ごとの希望休（年休・有休・指定休）がすべて反映されていることを確認します。",
+        "image": "staff-list",
+        "alt": "勤務シフト対象月選択画面と希望休一覧の確認",
+        "calls": [
+          "対象の年度・月度を選択します。",
+          "職員からの希望休申請に未処理がないか確認します。"
+        ],
+        "note": "すでに決定している固定シフト（研修や会議など）がある場合は、事前に入力して「ピン留め」しておくことで上書きを防止できます。"
+      },
+      {
+        "title": "NuShift 自動求解を実行する",
+        "text": "画面上部の「自動求解を実行」ボタンを押します。システムが各時間帯の園児数に応じた必要保育士数、資格要件、遅番翌日の早番制限、公休日数を同時に最適計算します。",
+        "image": "monthly-confirm",
+        "alt": "NuShift自動求解の実行と計算プログレス表示",
+        "calls": [
+          "「自動求解を実行」を押します。",
+          "計算完了の通知を待ちます（数秒〜数十秒で完了します）。"
+        ],
+        "note": "求解中は他の画面を操作していても構いません。完了するとシフト表に自動で反映されます。"
+      },
+      {
+        "title": "ギャップ検知・充足率アラートの確認",
+        "text": "生成されたシフト表上部の「充足状況メーター」を確認します。基準配置や加算要件に対して人員が不足している時間帯・日は、赤色の「ギャップアラート」で警告されます。",
+        "image": "monthly-filled",
+        "alt": "シフト表と時間帯別の充足メーター・ギャップ警告表示",
+        "calls": [
+          "赤色でハイライトされた時間帯・日をクリックして、不足人数と必要資格を確認します。",
+          "必要に応じて非常勤職員の追加要請や手動シフト調整を行います。"
+        ],
+        "note": "重大な基準割れがある場合は「BLOCKER」と判定され、シフト確定が制限されます。"
+      },
+      {
+        "title": "シフト確定・職員への公開",
+        "text": "ギャップが解消され、BLOCKERが0件になったら、「シフトを確定・公開」を押します。確定されたシフトは職員用ポータルおよびカレンダーへ即時反映されます。",
+        "image": "monthly-saved",
+        "alt": "シフト確定モーダルと職員ポータルへの公開完了通知",
+        "calls": [
+          "「シフトを確定・公開」を押します。",
+          "「公開してよろしいですか？」の確認ダイアログで「決定」を押します。"
+        ],
+        "note": "公開後も管理者権限があれば再調整・再公開が可能です。"
+      }
+    ],
+    "checks": [
+      "対象月の全職員の希望休が反映されている",
+      "NuShift自動求解が正常終了し、シフト枠が埋まっている",
+      "配置基準割れ・BLOCKER警告が解消されている",
+      "「シフトを確定・公開」を実行し、職員に通知された"
+    ],
+    "faq": [
+      [
+        "求解結果が「解なし（実行不可能）」となった場合は？",
+        "職員の希望休が特定日に集中しているか、非常勤の勤務可能時間を超えている可能性があります。希望休の重複を調整するか、一時的に制約条件を緩和して再実行してください。"
+      ],
+      [
+        "特定の職員だけシフトを固定して求解したい",
+        "固定したいセルにシフト区分を手入力し、「ピン留め」を有効にしてください。NuShiftはピン留めされたセルを変更せずに残りの枠を最適化します。"
+      ]
+    ],
+    "related": ["shift-pinning", "staff"]
+  },
+  "shift-pinning": {
+    "title": "シフトの手動調整とピン留め固定",
+    "chapter": 4,
+    "role": "シフト作成担当 ＋ 主任保育士",
+    "tag": "職員管理・シフト調整",
+    "summary": "自動生成されたシフトの一部を手動で微調整したり、会議・健診・園外活動に合わせて特定の職員のシフトを固定（ピン留め）します。ピン留めされた枠は再求解時にも維持されます。",
+    "goal": "自動計算の恩恵を受けながら、園の突発的な事情や個別の人間関係に合わせた柔軟なシフト調整ができる。",
+    "before": "勤務シフト表が開かれており、対象月の下書きシフトが存在すること。",
+    "path": "職員メニュー → 勤務シフト → 対象月を選択",
+    "keywords": "シフト ピン留め 固定 手動調整 変更 差替 早番 遅番 中番 日直 再求解",
+    "imagePrefix": "staff",
+    "steps": [
+      {
+        "title": "変更したい枠を選択する",
+        "text": "月間シフト表から、変更したい職員の日付セルをクリックします。現在のシフト区分（早番・中番・遅番など）と勤務時間がポップアップで表示されます。",
+        "image": "staff-class",
+        "alt": "シフト表のセル選択と変更ポップアップ",
+        "calls": [
+          "対象職員の行・対象日のセルをクリックします。"
+        ],
+        "note": "複数日をまとめて変更したい場合は、Shiftキーを押しながら範囲選択できます。"
+      },
+      {
+        "title": "シフト区分の変更と「ピン留め」の有効化",
+        "text": "変更後のシフト区分を選択し、セル右上の「ピン留め（画鋲アイコン）」をオンにします。ピン留めされたセルにはアイコンが付き、自動求解アルゴリズムの固定条件として扱われます。",
+        "image": "staff-new-filled",
+        "alt": "シフト区分の選択とピン留めアイコンの有効化",
+        "calls": [
+          "プルダウンから新しいシフト区分（例：遅番 → 早番）を選択します。",
+          "「ピン留め」チェックを入れ、「更新する」を押します。"
+        ],
+        "note": "ピン留めを解除したいときは、再度セルを開いて「ピン留め解除」を押します。"
+      },
+      {
+        "title": "過不足メーターのリアルタイム確認",
+        "text": "手動変更を行うと、画面上部の時間帯別配置メーターが即時に再計算されます。変更によって他クラスの必要配置が不足していないか確認します。",
+        "image": "monthly-filled",
+        "alt": "配置メーターの変動と充足判定",
+        "calls": [
+          "対象日の各時間帯（早朝・午前・午睡・延長保育）のメーターが緑色（適正）であることを確認します。"
+        ],
+        "note": "手動変更で不足が生じた場合は、別の職員と交代（スワップ）するか、再求解を実行して他のセルでバランスを取ります。"
+      },
+      {
+        "title": "変更内容を保存する",
+        "text": "調整が終わったら「保存する」を押して下書きに反映します。",
+        "image": "monthly-saved",
+        "alt": "シフト表の保存完了",
+        "calls": [
+          "「保存する」を押します。"
+        ]
+      }
+    ],
+    "checks": [
+      "固定したい枠にピン留めアイコンが表示されている",
+      "手動変更後も時間帯別の配置基準を満たしている",
+      "「保存する」を押して変更が保持された"
+    ],
+    "faq": [
+      [
+        "再求解したときに手動で変えた部分が消えてしまった",
+        "セルを「ピン留め」せずに再求解を実行すると、ソルバーによって最適なパターンに上書きされます。維持したい枠は必ずピン留めしてください。"
+      ]
+    ],
+    "related": ["shift-auto"]
+  },
+  "billing-zengin": {
+    "title": "月次請求の計算・全銀フォーマット口座振替データ出力",
+    "chapter": 5,
+    "role": "請求事務担当 ＋ 施設長・園長",
+    "tag": "請求管理・全銀口座振替",
+    "summary": "登降園打刻から自動計算された延長保育料、基本保育料、給食費、兄弟割引を合算し、全銀協規定フォーマット（Zengin）の口座振替ファイルを出力します。金融機関のネットバンキングに取り込んで自動引落が可能です。",
+    "goal": "各家庭の保育料・延長料・実費を正確に算出し、金融機関向けの口座振替データを1クリックでエクスポートできる。",
+    "before": "対象月の登降園打刻の漏れ・誤りが「打刻補完」等ですべて修正済みであること。保護者の引落口座情報（銀行・支店・口座番号・名義カナ）が登録されていること。",
+    "path": "職員メニュー → 月次請求 → 対象月を選択",
+    "keywords": "請求 全銀 Zengin 口座振替 延長保育料 兄弟割引 給食費 口座引き落とし エクスポート 銀行 CSV",
+    "imagePrefix": "monthly",
+    "steps": [
+      {
+        "title": "対象月の請求データを開き、料金再計算を実行する",
+        "text": "「月次請求」画面を開き、請求対象月（前月分など）を選択します。「料金再計算」ボタンを押し、最新の登降園打刻実績に基づく延長保育料や日割り計算を反映させます。",
+        "image": "monthly-list",
+        "alt": "月次請求一覧と料金再計算ボタン",
+        "calls": [
+          "対象月を選択します。",
+          "「料金再計算」を押します。"
+        ],
+        "note": "きょうだいが同一園に在籍している場合、兄弟割引（第2子半額・第3子無料など設定に応じた免除）が自動適用されます。"
+      },
+      {
+        "title": "請求明細と減免・実費の確認",
+        "text": "園児ごとの請求明細を確認します。行をクリックすると、基本保育料・延長保育料・給食費・教材費の内訳が確認できます。必要に応じて手動で減免や追加実費を入力します。",
+        "image": "monthly-filled",
+        "alt": "園児別請求明細の内訳確認と手動調整欄",
+        "calls": [
+          "合計金額や利用日数に異常値がないか確認します。",
+          "行をクリックして明細詳細を開きます。"
+        ],
+        "note": "非課税世帯の副食費免除や自治体補助の適用フラグが正しく立っているか確認してください。"
+      },
+      {
+        "title": "全銀協フォーマット（Zengin）ファイルを出力する",
+        "text": "画面右上の「全銀データ出力」を押します。委託者コード、振替指定日を入力し、「エクスポート」を押すと、全銀協標準形式（固定長テキストまたはCSV）の口座振替依頼ファイルがダウンロードされます。",
+        "image": "monthly-confirm",
+        "alt": "全銀協データ出力ダイアログとダウンロードボタン",
+        "calls": [
+          "「全銀データ出力」を押します。",
+          "振替指定日（例：毎月27日）を確認します。",
+          "「エクスポート」を押してファイルを保存します。"
+        ],
+        "note": "出力されたファイルは各金融機関の法人向けインターネットバンキング（EBサービス）にそのままアップロードできます。"
+      },
+      {
+        "title": "請求の締め切り（ロック）を行う",
+        "text": "口座振替データの出力後、「請求締め切り」ボタンを押します。締め切りを行うと、対象月の打刻データや請求額が編集不可（ロック）となり、誤った変更を防止します。",
+        "image": "monthly-saved",
+        "alt": "請求締め切り実行とステータス確定表示",
+        "calls": [
+          "「請求締め切り」を押します。",
+          "確定メッセージを確認します。"
+        ],
+        "note": "確定後にやむを得ず修正が必要になった場合は、「請求締め解除（再オープン）」機能を使用します。"
+      }
+    ],
+    "checks": [
+      "打刻漏れがなく、料金再計算が完了している",
+      "兄弟割引や減免が正しく適用されている",
+      "全銀フォーマットファイルが正常にダウンロードできた",
+      "「請求締め切り」を実行してデータがロックされた"
+    ],
+    "faq": [
+      [
+        "全銀データ出力時に「口座情報未登録」のエラーが出る園児がいる",
+        "「保護者アカウント」→「口座情報」で、保護者の金融機関名、支店コード、口座番号、口座名義人（半角カナ）が正しく入力されているか確認してください。"
+      ],
+      [
+        "確定後に保護者から打刻ミスの申し立てがあった場合は？",
+        "「請求締め解除（再オープン）」を行うことで、一時的にロックを解除して打刻や金額の修正が可能です。"
+      ]
+    ],
+    "related": ["billing-reopen", "clock"]
+  },
+  "billing-reopen": {
+    "title": "確定済み請求の締め解除（再オープン）",
+    "chapter": 5,
+    "role": "施設長・管理者 ＋ 請求担当",
+    "tag": "請求管理・締め解除",
+    "summary": "一度確定・締め切りを行った過去月の請求について、監査指摘や打刻修正、過誤調整が必要になった場合に、理由を記録した上で一時的にロックを解除（再オープン）します。",
+    "goal": "不正な改ざんを防止する監査ログを残しつつ、必要な修正作業を安全に行える。",
+    "before": "対象月の請求が「確定済み」になっていること。操作者が管理者（施設長）権限を持っていること。",
+    "path": "職員メニュー → 月次請求 → 対象月を選択 → 締め解除",
+    "keywords": "請求締め解除 再オープン 確定解除 監査ログ 誤請求 ロック解除 再計算 過誤調整",
+    "imagePrefix": "monthly",
+    "steps": [
+      {
+        "title": "確定済みの月次請求画面を開く",
+        "text": "「月次請求」画面を開き、修正したい確定月を選びます。通常は画面全体がグレーアウト（読み取り専用）になっています。",
+        "image": "monthly-list",
+        "alt": "確定済み請求画面（編集ロック状態）",
+        "calls": [
+          "対象の確定月を選択します。"
+        ],
+        "note": "一般職員アカウントでは締め解除ボタンは表示されません。管理者アカウントでログインしてください。"
+      },
+      {
+        "title": "「請求締め解除（再オープン）」を選択する",
+        "text": "画面上部の「管理者操作」メニューから「請求締め解除」を押します。安全確認用のモーダルウィンドウが表示されます。",
+        "image": "monthly-confirm",
+        "alt": "請求締め解除の確認ダイアログ",
+        "calls": [
+          "「請求締め解除」を押します。"
+        ]
+      },
+      {
+        "title": "解除理由の入力と実行",
+        "text": "解除理由欄に、修正を行う具体的な事由（例：「○月○日の打刻修正に伴う延長保育料再計算」「自治体監査による認定区分遡及変更」など）を入力し、「締め解除を実行」を押します。",
+        "image": "monthly-error",
+        "alt": "解除理由の必須入力欄と実行ボタン",
+        "calls": [
+          "「解除理由」を入力します（必須・監査ログに記録されます）。",
+          "「締め解除を実行」を押します。"
+        ],
+        "note": "解除した日時、操作者、解除理由はすべてシステムログに永久保存されます。"
+      },
+      {
+        "title": "データの修正と再締め切り",
+        "text": "ロックが解除され、打刻の訂正や料金再計算が可能になります。必要な修正を終えたら、再度「全銀データ出力」および「請求締め切り」を行い、データを確定させます。",
+        "image": "monthly-saved",
+        "alt": "修正完了後の再締め切り画面",
+        "calls": [
+          "打刻修正や金額の確認を行います。",
+          "再度「請求締め切り」を押してロックします。"
+        ],
+        "note": "銀行引き落とし完了後の修正の場合は、翌月での相殺調整（過誤調整）も検討してください。"
+      }
+    ],
+    "checks": [
+      "管理者権限でログインしている",
+      "解除理由を具体的に入力した",
+      "必要な打刻・金額の修正が完了した",
+      "再度「請求締め切り」を行ってデータを保護した"
+    ],
+    "faq": [
+      [
+        "締め解除すると保護者ポータルの表示はどうなりますか？",
+        "再オープン中も保護者画面で請求書は閲覧可能ですが、「現在再計算中」のバッジが表示されます。再締め切り完了で最新の金額に更新されます。"
+      ]
+    ],
+    "related": ["billing-zengin", "clock"]
+  },
+  "contact-approval": {
+    "title": "連絡帳のダブルチェック承認と公開フロー",
+    "chapter": 1,
+    "role": "担任保育士 ＋ 承認担当主任・施設長",
+    "tag": "日々の業務・連絡帳",
+    "summary": "担任保育士が記入した日次連絡帳（体温・食欲・睡眠・活動記録）を下書き保存し、主任や副園長が内容をダブルチェックして承認・公開する一連の安全フローです。",
+    "goal": "誤字脱字や不適切な表現、園児間違いを防ぎ、保護者に正確で安心できる連絡を届ける。",
+    "before": "対象園児の登園が完了し、朝の体調や保護者からの連絡事項が確認できていること。",
+    "path": "職員メニュー → 日次連絡帳 → クラスを選択",
+    "keywords": "連絡帳 ダブルチェック 承認 一括承認 下書き 食欲 献立 睡眠 排泄 前日コピー 担任 主任",
+    "imagePrefix": "app-contact",
+    "steps": [
+      {
+        "title": "連絡帳の記入と前日記録コピー",
+        "text": "クラスの園児一覧から対象園児を開きます。「前日記録からコピー」ボタンを使うと、定型的な生活リズムを素早く引用できます。本日の様子、食欲（完食・普通・残食など）、献立チェック、排泄回数、午睡時間を入力します。",
+        "image": "app-contact-entry",
+        "alt": "日次連絡帳入力画面と前日記録コピーボタン",
+        "calls": [
+          "対象園児の名前をクリックします。",
+          "「前日記録からコピー」で基本情報を引用し、本日の記録に書き換えます。",
+          "食欲、睡眠、機嫌、エピソードを入力します。"
+        ],
+        "note": "入力途中で一時保存したいときは「下書き保存」を押します。下書き状態では保護者には公開されません。"
+      },
+      {
+        "title": "「承認依頼」を提出する（担任）",
+        "text": "記入内容を確認したら、画面下の「承認依頼を提出」を押します。ステータスが「下書き」から「承認待ち」に変わり、主任・管理者の承認キューに送られます。",
+        "image": "app-contact-filled",
+        "alt": "連絡帳の確認画面と承認依頼ボタン",
+        "calls": [
+          "「承認依頼を提出」を押します。"
+        ],
+        "note": "自分のクラス全員分を一括で承認依頼に回すことも可能です。"
+      },
+      {
+        "title": "ダブルチェックと一括承認（主任・園長）",
+        "text": "承認権限を持つ主任または園長が「連絡帳・承認待ち一覧」を開きます。記入内容、怪我や体調不良時の記述に問題がないか確認し、「承認して公開」または「一括承認」を押します。",
+        "image": "app-contact-top",
+        "alt": "承認待ち一覧画面と個別承認・一括承認ボタン",
+        "calls": [
+          "「承認待ち一覧」を開きます。",
+          "園児ごとの記事をプレビュー確認します。",
+          "「一括承認」を押して保護者ポータルへ即時公開します。"
+        ],
+        "note": "修正が必要な場合は「差し戻し」を押し、コメントを付けて担任へ返送できます。"
+      },
+      {
+        "title": "保護者ポータルへの反映確認",
+        "text": "承認されると、保護者アプリにプッシュ通知が届き、ホーム画面および連絡帳履歴から閲覧可能になります。",
+        "image": "app-contact-care",
+        "alt": "保護者アプリでの連絡帳閲覧画面",
+        "calls": [
+          "ステータスが「公開済み」になったことを確認します。"
+        ]
+      }
+    ],
+    "checks": [
+      "食欲・排泄・午睡・活動エピソードが入力されている",
+      "担任が「承認依頼」を提出した",
+      "主任または管理者がダブルチェックを行った",
+      "承認完了後、ステータスが「公開済み」になった"
+    ],
+    "faq": [
+      [
+        "公開後に内容の誤りに気づいたときは？",
+        "公開後でも管理者または担任権限で「編集」が可能です。編集して保存すると、保護者側にも最新の内容が反映されます（重要変更時は保護者へ直接声掛けも推奨します）。"
+      ],
+      [
+        "承認機能を使わずに担任が直接公開することはできますか？",
+        "「園の設定」→「連絡帳運用設定」で「ダブルチェック承認を必須とする」をオフにすれば、担任の保存で即時公開する運用にも対応可能です。"
+      ]
+    ],
+    "related": ["parent-app-contact", "parent-app-history"]
+  },
+  "emergency-priority": {
+    "title": "緊急連絡先の優先順位設定（第1〜第3連絡先）",
+    "chapter": 2,
+    "role": "保護者 ＋ 台帳担当職員",
+    "tag": "園児・家庭・緊急対応",
+    "summary": "発熱や怪我、災害などの緊急事態が発生した際に、園から電話連絡を行う優先順位（第1・第2・第3連絡先）や発信可能時間帯を設定・管理します。保護者アプリからも更新できます。",
+    "goal": "緊急時に職員が迷わず、最も繋がりやすい保護者・親族へ即座に連絡を取れるようにする。",
+    "before": "園児と保護者（父母・祖父母等）のアカウントまたは台帳情報が登録されていること。",
+    "path": "保護者アプリ → 登録情報 → 緊急連絡先 または 園管理 → 園児台帳 → 連絡先",
+    "keywords": "緊急連絡先 優先順位 父母 祖父母 電話番号 連絡網 災害 怪我 発熱 急変",
+    "imagePrefix": "phone",
+    "steps": [
+      {
+        "title": "緊急連絡先の設定画面を開く",
+        "text": "保護者アプリの「設定」メニューから「緊急連絡先情報」を開きます（園側からは「園児台帳」→対象園児の「連絡先」タブを開きます）。",
+        "image": "phone-empty",
+        "alt": "緊急連絡先の編集画面と連絡先一覧",
+        "calls": [
+          "「緊急連絡先情報」を開きます。"
+        ]
+      },
+      {
+        "title": "連絡先の優先順位（第1〜第3）を指定する",
+        "text": "登録されている家族・保護者ごとに、「優先順位（第1連絡先・第2連絡先・第3連絡先）」を選択します。通常日中に連絡がつきやすい方を第1連絡先（例：母の携帯）に指定します。",
+        "image": "phone-filled",
+        "alt": "優先順位のドロップダウン選択と電話番号入力",
+        "calls": [
+          "第1連絡先、第2連絡先、第3連絡先をそれぞれ選択します。",
+          "日中繋がりやすい電話番号（携帯・職場など）が入力されているか確認します。"
+        ],
+        "note": "祖父母や親族を緊急連絡先に追加する場合は、「連絡先の追加」から氏名・続柄・電話番号を入力します。"
+      },
+      {
+        "title": "連絡可能時間帯や特記事項の入力",
+        "text": "「平日9:00〜17:00は母へ、繋がらない場合は父の職場へ」などの連絡可能時間帯や勤務先の内線番号などを備考欄に入力します。",
+        "image": "phone-partial",
+        "alt": "連絡可能時間帯と備考欄の入力",
+        "calls": [
+          "特記事項や勤務先情報を入力します。"
+        ]
+      },
+      {
+        "title": "設定を保存し、園側台帳へ即時反映",
+        "text": "「優先順位を保存」を押します。保存された順位は、園児一覧や出欠ボードの緊急電話番号リンクにリアルタイムで反映されます。",
+        "image": "phone-saved",
+        "alt": "緊急連絡先設定の保存完了",
+        "calls": [
+          "「優先順位を保存」を押します。"
+        ],
+        "note": "職員は出欠確認画面や健康サマリーから、1タップで第1連絡先へ電話発信できます。"
+      }
+    ],
+    "checks": [
+      "第1・第2連絡先が重複なく指定されている",
+      "電話番号がハイフン付きで正しく入力されている",
+      "保存後、園児情報カードの連絡先順位に反映された"
+    ],
+    "faq": [
+      [
+        "勤務先が変わった場合の更新手順は？",
+        "保護者アプリの「登録情報」からいつでも変更可能です。変更すると園側の台帳にも即時同期され、園への書類提出は不要です。"
+      ]
+    ],
+    "related": ["phone", "medical-consent"]
+  },
+  "medical-consent": {
+    "title": "救急搬送・レントゲン撮影の医療同意",
+    "chapter": 2,
+    "role": "保護者 ＋ 看護師・保育士",
+    "tag": "園児・家庭・健康医療",
+    "summary": "園内での急な発病や骨折等の怪我により医療機関へ救急搬送された場合に備え、レントゲン撮影や応急処置に対する保護者の事前同意をオンラインで取得・管理します。",
+    "goal": "緊急時に医療機関での診察・処置が保護者の到着待ちで遅れるリスクを防ぎ、迅速な救命対応を可能にする。",
+    "before": "保護者がアカウントでログインできる状態であること。",
+    "path": "保護者アプリ → メニュー → 基本医療情報 → 医療同意",
+    "keywords": "医療同意 レントゲン 救急搬送 救急車 同意書 かかりつけ医 既往症 怪我 骨折 応急処置",
+    "imagePrefix": "app-medical",
+    "steps": [
+      {
+        "title": "基本医療情報画面を開く",
+        "text": "保護者アプリの「メニュー」から「基本医療情報」を開きます。かかりつけ医、既往歴、平熱などが表示されます。",
+        "image": "app-medical-home",
+        "alt": "基本医療情報のトップ画面",
+        "calls": [
+          "「基本医療情報」を押します。"
+        ]
+      },
+      {
+        "title": "かかりつけ医と希望搬送先の確認",
+        "text": "登録されている主治医・かかりつけ小児科の医院名・電話番号を確認します。変更がある場合は修正します。",
+        "image": "app-medical-hospital",
+        "alt": "かかりつけ医・希望搬送先の入力確認",
+        "calls": [
+          "医院名、所在地、診察券番号を確認します。"
+        ]
+      },
+      {
+        "title": "救急搬送時レントゲン撮影等の事前同意にチェック",
+        "text": "「緊急医療対応に関する承諾」欄の内容（生命・身体の安全確保のための応急処置、医師の判断によるレントゲン撮影・検査への同意）を確認し、「同意する」にチェックを入れます。",
+        "image": "app-medical-xray",
+        "alt": "レントゲン撮影・応急処置の同意チェックボックス",
+        "calls": [
+          "同意条項を読み、「救急搬送時のレントゲン撮影・処置に同意します」にチェックを入れます。"
+        ],
+        "note": "同意した日時と保護者氏名がデジタル承諾記録としてセキュアに保存されます。"
+      },
+      {
+        "title": "同意内容を送信・園台帳へ同期",
+        "text": "「同意して送信」を押します。園側の健康管理一覧・園児サマリーに「医療同意済み」バッジが即時表示され、緊急連絡カードに反映されます。",
+        "image": "app-medical-sent",
+        "alt": "同意送信完了と確認メッセージ",
+        "calls": [
+          "「同意して送信」を押します。"
+        ],
+        "note": "救急隊員や搬送先病院への提示が必要な場合、園側端末から1タップで同意証明画面を表示・印刷できます。"
+      }
+    ],
+    "checks": [
+      "かかりつけ医の登録内容に誤りがない",
+      "レントゲン撮影・応急処置の同意チェックが入っている",
+      "「同意して送信」を押し、園の健康サマリーに同意フラグが反映された"
+    ],
+    "faq": [
+      [
+        "同意を取り消すことや再確認はできますか？",
+        "年度更新時やいつでも保護者アプリの「基本医療情報」から同意状況を確認・更新できます。"
+      ],
+      [
+        "紙の同意書の提出は必要ですか？",
+        "本システムでの電子同意は利用規約および個人情報保護法に準拠しており、通常は紙の同意書の再提出は不要です（自治体独自の指導がある場合は園へご確認ください）。"
+      ]
+    ],
+    "related": ["emergency-priority", "health"]
+  },
+
   // BEGIN REGISTRATION ARTICLES
   "parent-qr": {
     "title": "共通QRで初回登録を受け付ける",
@@ -2671,7 +3164,7 @@ function parentArticle(id){
 
 // END PARENT GUIDE
 let currentArticle='', currentStep=0, allSteps=false, imageState={}, checked={};
-const titles=['利用を始める','毎日の出欠と連絡','園児・家庭と記録','指導計画をつくる','職員間で共有する','料金と請求を確認する','点検・困ったとき'];
+const titles=['利用を始める','毎日の出欠と連絡','園児・家庭と健康記録','指導計画をつくる','職員シフト・配置管理','料金・請求と全銀振替','点検・運用管理'];
 document.getElementById('chapter-nav').innerHTML=titles.map((t,i)=>`<a href="#chapter/${i}"><span class="chapter-number">0${i+1}</span>${t}</a>`).join('');
 const crumb=(label,chapter)=>`<div class="breadcrumb"><a href="#home">ホーム</a><span>›</span>${chapter!==undefined?`<a href="#chapter/${chapter}">${titles[chapter]}</a><span>›</span>`:''}<span>${esc(label)}</span></div>`;
 const searchBox=()=>`<form class="search-wrap" id="search-form" role="search"><div class="search-box"><label for="search-input" aria-label="マニュアルを検索">⌕</label><input id="search-input" type="search" placeholder="困っていること・やりたいことを入力" autocomplete="off"><button class="primary" type="submit">探す</button></div><div class="search-examples"><span>たとえば</span>${['職員登録','園児登録','保護者登録','打刻忘れ'].map(s=>`<button type="button" data-search="${s}">${s}</button>`).join('')}</div></form>`;
@@ -2679,9 +3172,66 @@ const card=id=>{const a=manualArticles[id];return `<a class="issue-card" href="$
 // BEGIN ADMISSION NAVIGATION
 function admissionChoices(){return `<section class="admission-choices" aria-label="新入園児の登録"><div class="section-head"><h2>新入園児を登録する</h2><span>家庭の状況から選ぶ</span></div><div class="admission-grid">${['child-sibling','parent-qr'].map(card).join('')}</div></section>`;}
 // END ADMISSION NAVIGATION
-function home(){return `<a class="parent-entry" href="#parents"><strong>保護者の方はこちら →</strong><span>保護者アプリと、登園・降園の使い方</span></a><section class="hero"><p class="eyebrow">毎日の「どうする？」を、ひとつずつ。</p><h1>迷ったら、ここから。</h1><p class="lead">忙しい保育の合間にも、必要な手順がすぐ見つかる。<br>画面を見ながら、一緒に進める使い方ガイドです。</p><div class="hero-index" aria-hidden="true">Guide<small>FOR NURSERY STAFF</small></div></section>${searchBox()}${admissionChoices()}<section class="entrances" aria-label="2つの探し方"><a class="entrance emphasis" href="#issues"><small>いま、解決したいことがある</small><h2>こんなときどうする？</h2><p>困っている場面を選んで、解決の手順へ。</p><span class="arrow" aria-hidden="true">↗</span></a><a class="entrance" href="#chapters"><small>仕事の流れを知りたい</small><h2>業務ごとに、順番に読む</h2><p>利用開始から日々の記録、月末の請求まで。</p><span class="arrow" aria-hidden="true">↗</span></a></section><div class="section-head"><h2>登録の準備と、日々の困りごと</h2><span>スクショ付きの代表例</span></div><section class="issue-grid">${Object.keys(manualArticles).filter(id=>manualArticles[id].audience!=='parents'&&!['child-sibling','parent-qr'].includes(id)).map(card).join('')}</section><div class="hint-strip"><strong>画面と同じ言葉で。</strong><span>押すボタンの名前、保存されるタイミング、間違えたときの戻り方まで、ひとつの手順にまとめています。</span></div>`;}
-function chapters(){return `${crumb('仕事の流れから読む')}<p class="eyebrow">体系的に読む</p><h1>業務ごとに、順番に。</h1><p class="lead">全7分野・既存の33項目を見渡せます。担当する仕事から選んでください。</p><div class="chapter-grid">${manualChapters.map((c,i)=>`<a class="chapter-card" href="#chapter/${i}"><small>CHAPTER 0${i+1} · ${c.topics.length}項目</small><h2>${titles[i]} →</h2><p>${c.description}</p></a>`).join('')}</div><p class="notice">「画面付きの試作」と「現在公開されている資料」を分けて表示しています。既存資料は別のタブで開きます。</p>`;}
-function articleLink(id){const a=manualArticles[id];return `<a class="topic" href="#article/${id}"><span><strong>${a.title}</strong><small>${a.role} · ${a.steps.length}ステップ</small></span><span class="badge">画面付きの試作 →</span></a>`;}
+function home(){return `
+<section class="hero">
+  <p class="eyebrow">オープン保育ICT 総合操作ガイド・ビジュアルマニュアル</p>
+  <h1>日々の保育から、<br>園の運営・管理まで。</h1>
+  <p class="lead">忙しい保育の合間にも、必要な手順が迷わず見つかる。<br>画面を見ながらステップごとに進められる公式ガイドです。</p>
+  <div class="hero-index" aria-hidden="true">Guide<small>OPEN HOIKUICT</small></div>
+</section>
+
+<div class="role-grid">
+  <a class="role-card" href="#issues">
+    <span class="role-icon">👩‍🏫</span>
+    <h3>保育士・現場向けガイド</h3>
+    <p>登降園打刻、日次連絡帳のダブルチェック承認、午睡・検温、健康・アレルギー記録。</p>
+    <span class="role-link">現場の手順を見る →</span>
+  </a>
+  <a class="role-card" href="#chapter/4">
+    <span class="role-icon">🏢</span>
+    <h3>園長・管理者向けガイド</h3>
+    <p>NuShiftシフト自動作成、月次請求・全銀口座振替、請求締め解除、指導計画承認。</p>
+    <span class="role-link">管理機能を見る →</span>
+  </a>
+  <a class="role-card" href="#parents">
+    <span class="role-icon">📱</span>
+    <h3>保護者向けスマホガイド</h3>
+    <p>共通QRでの初回登録、玄関かざし打刻、お迎え予定変更、緊急連絡先順位、医療同意。</p>
+    <span class="role-link">保護者ガイドを見る →</span>
+  </a>
+</div>
+
+${searchBox()}
+
+<section class="entrances" aria-label="マニュアルの探し方">
+  <a class="entrance emphasis" href="#issues">
+    <small>いま、困っていることがある</small>
+    <h2>こんなときどうする？</h2>
+    <p>場面やエラーから素早く解決手順を探せます。</p>
+    <span class="arrow" aria-hidden="true">↗</span>
+  </a>
+  <a class="entrance" href="#chapters">
+    <small>全体の流れを把握したい</small>
+    <h2>業務の流れから探す</h2>
+    <p>初期設定から日々の記録、月次請求まで全7分野。</p>
+    <span class="arrow" aria-hidden="true">↗</span>
+  </a>
+</section>
+
+<div class="section-head">
+  <h2>注目の主要機能・ステップ解説</h2>
+  <span>画面付きの代表例</span>
+</div>
+<section class="issue-grid">
+  ${['shift-auto', 'billing-zengin', 'contact-approval', 'emergency-priority', 'medical-consent', 'parent-qr'].map(card).join('')}
+</section>
+
+<div class="hint-strip">
+  <strong>現場に寄り添うマニュアル。</strong>
+  <span>画面内のボタン名称や入力項目、保存タイミング、差し戻し時の対処まで、実際の画面に合わせて正確に解説しています。</span>
+</div>`;}
+function chapters(){return `${crumb('仕事の流れから読む')}<p class="eyebrow">体系的に読む</p><h1>業務ごとに、順番に。</h1><p class="lead">全7分野・既存の33項目を見渡せます。担当する仕事から選んでください。</p><div class="chapter-grid">${manualChapters.map((c,i)=>`<a class="chapter-card" href="#chapter/${i}"><small>CHAPTER 0${i+1} · ${c.topics.length}項目</small><h2>${titles[i]} →</h2><p>${c.description}</p></a>`).join('')}</div><p class="notice">「画面付き操作ガイド」と「詳細仕様・関連マニュアル」を分けて表示しています。既存資料は別のタブで開きます。</p>`;}
+function articleLink(id){const a=manualArticles[id];return `<a class="topic" href="#article/${id}"><span><strong>${a.title}</strong><small>${a.role} · ${a.steps.length}ステップ</small></span><span class="badge">画面付き操作ガイド →</span></a>`;}
 const planningGuides = [
   {title: '指導計画の画面を開く', href: 'plans/', summary: '自園の年案・月案・週案・日案を選ぶ。最近の帳票や通知を見る。', keywords: '指導計画 ホーム 振り返り'},
   {title: '帳票一覧で書きかけを探す', href: 'plans/search/', summary: 'クラスや状態で絞り、下書きの続きを開く。', keywords: '指導計画 帳票検索 キーワード 修正 作成者 園児'},
@@ -2715,7 +3265,7 @@ function planningChapter(chapter) {
     <h2>帳票ごとの書き方</h2><div class="topic-list">${planningForms.map(screenGuideLink).join('')}</div>
     <details><summary>仕様資料を開く</summary><div class="topic-list">${chapter.topics.map(referenceLink).join('')}</div></details>`;
 }
-function chapter(i){const c=manualChapters[i];if(i===3)return planningChapter(c);return `${crumb(titles[i])}<p class="eyebrow">CHAPTER 0${i+1}</p><h1>${titles[i]}</h1><p class="lead">${c.description}</p>${i===2?healthSection():''}${Object.values(manualArticles).some(a=>a.chapter===i&&a.audience!=='parents')?`<h2>画面を見ながら進める</h2><div class="topic-list">${Object.entries(manualArticles).filter(([,a])=>a.chapter===i&&a.audience!=='parents').map(([id])=>articleLink(id)).join('')}</div>`:''}<div class="section-head"><h2>順番に読む・詳しく確認する</h2><span>現在の公開資料</span></div><div class="topic-list">${c.topics.map(referenceLink).join('')}</div><p class="source-note">この分野の既存${c.topics.length}項目を掲載しています。概要・仕様の資料は、今後の画面付き手順の整備候補です。</p>`;}
+function chapter(i){const c=manualChapters[i];if(i===3)return planningChapter(c);return `${crumb(titles[i])}<p class="eyebrow">CHAPTER 0${i+1}</p><h1>${titles[i]}</h1><p class="lead">${c.description}</p>${i===2?healthSection():''}${Object.values(manualArticles).some(a=>a.chapter===i&&a.audience!=='parents')?`<h2>画面を見ながら進める</h2><div class="topic-list">${Object.entries(manualArticles).filter(([,a])=>a.chapter===i&&a.audience!=='parents').map(([id])=>articleLink(id)).join('')}</div>`:''}<div class="section-head"><h2>順番に読む・詳しく確認する</h2><span>現在の公開資料</span></div><div class="topic-list">${c.topics.map(referenceLink).join('')}</div><p class="source-note">オープン保育ICT 公式操作ガイド v0.7.1 ｜ この分野の主要${c.topics.length}項目を掲載しています。</p>`;}
 function issues(){return `${crumb('こんなときどうする？')}<p class="eyebrow">場面から探す</p><h1>いま、どんなことで困っていますか。</h1><p class="lead">機能の名前が分からなくても大丈夫。近い場面を選んでください。</p>${searchBox()}<section class="issue-grid">${Object.keys(manualArticles).filter(id=>manualArticles[id].audience!=='parents').map(card).join('')}</section>${healthSection()}${planningSection()}<a href="#chapters">業務別の目次を見る →</a>`;}
 const helpOptions={
   admission:[['兄弟姉妹が在園している・以前在園していた','同じ家族へ追加し、保護者の閲覧対象を確認する','#article/child-sibling'],['初めて入園する家庭','共通QRで申し込み、園が確認・承認する','#article/parent-qr']],
@@ -2731,7 +3281,12 @@ const answers={
 };
 function answer(id){const a=answers[id];return `<div class="diagnosis">${crumb('状況に合わせた対応')}<p class="eyebrow">まず、ここを確認</p><h1>${a[0]}</h1><p>${prose(a[1])}</p><div class="notice">${prose(a[2])}</div><div class="related"><a class="primary topic" href="#article/${a[3]}">関連する画面付きの手順を読む →</a><a class="topic" href="#help/${a[3]}">状況を選び直す</a></div></div>`;}
 function normalize(s){return s.normalize('NFKC').toLowerCase().replace(/\s+/g,'');}
-function search(q){const n=normalize(q), terms=q.normalize('NFKC').trim().split(/[\s　]+/).filter(Boolean);const expansions=[];if(/欠席|電話|でんわ|休み/.test(n))expansions.push('phone');if(/打刻|だこく|登園|降園|補完/.test(n))expansions.push('clock');if(/ログイン|パスワード|コード/.test(n))expansions.push('password');const matches=Object.entries(manualArticles).filter(([id,a])=>expansions.includes(id)||(terms.length&&terms.every(t=>normalize(a.title+a.keywords+a.summary).includes(normalize(t)))));const links = matches.map(([id]) => articleLink(id));
+function search(q){const n=normalize(q), terms=q.normalize('NFKC').trim().split(/[\s　]+/).filter(Boolean);const expansions=[];if(/欠席|電話|でんわ|休み/.test(n))expansions.push('phone');if(/打刻|だこく|登園|降園|補完/.test(n))expansions.push('clock');if(/ログイン|パスワード|コード/.test(n))expansions.push('password');
+  if(/シフト|しふと|nushift|勤務|ソルバー|ピン留め|配置/.test(n))expansions.push('shift-auto','shift-pinning');
+  if(/請求|せいきゅう|全銀|zengin|振替|締め|再オープン/.test(n))expansions.push('billing-zengin','billing-reopen');
+  if(/連絡帳|れんらくちょう|承認|ダブルチェック|下書き/.test(n))expansions.push('contact-approval');
+  if(/緊急|れんらくさき|優先|順位/.test(n))expansions.push('emergency-priority');
+  if(/医療|レントゲン|同意|救急/.test(n))expansions.push('medical-consent');const matches=Object.entries(manualArticles).filter(([id,a])=>expansions.includes(id)||(terms.length&&terms.every(t=>normalize(a.title+a.keywords+a.summary).includes(normalize(t)))));const links = matches.map(([id]) => articleLink(id));
   if (terms.length) {
     for (const guide of [...planningGuides, ...planningForms, ...healthGuides]) {
       const text = normalize(guide.title + guide.keywords + guide.summary);
@@ -2749,7 +3304,7 @@ function renderStep(a,i,print=false){
 }
 function article(id){const a=manualArticles[id];if(a.audience==='parents')return parentArticle(id);return `${crumb('画面付きの手順',a.chapter)}<div class="article-meta"><span class="badge">${a.tag}</span><span>${a.role}</span><span>全${a.steps.length}ステップ</span></div><h1 class="article-title">${a.title}</h1><p class="lead">${a.summary}</p>${a.admission?`<p class="admission-back"><a href="#help/admission">← 新入園児の登録方法を選び直す</a></p>`:""}<dl class="article-intro"><div><dt>この手順でできること</dt><dd>${a.goal}</dd></div><div><dt>始める前に</dt><dd>${prose(a.before)}</dd></div></dl>${openingPath(a.path)}${uiLegend()}<div class="reader-controls"><div class="segmented" aria-label="読み方"><button data-reader="step" aria-pressed="${!allSteps}">1つずつ読む</button><button data-reader="all" aria-pressed="${allSteps}">まとめて読む</button></div><button data-print>この手順を印刷</button></div><div class="reader screen-only">${allSteps?`<div class="all-steps">${a.steps.map((_,i)=>renderStep(a,i)).join('')}</div>`:`<nav class="step-nav" aria-label="操作手順">${a.steps.map((s,i)=>`<button data-step="${i}" ${i===currentStep?'aria-current="step"':''}><span class="number">${i+1}</span><span>${s.title}</span></button>`).join('')}</nav><div>${renderStep(a,currentStep)}<div class="next-prev"><button data-step="${currentStep-1}" ${currentStep===0?'disabled':''}>← 前の手順</button><span>${currentStep+1} / ${a.steps.length}</span>${currentStep<a.steps.length-1?`<button class="primary" data-step="${currentStep+1}">次の手順へ →</button>`:`<button class="primary" data-check-jump>完了を確認する ↓</button>`}</div></div>`}</div><div class="print-only">${a.steps.map((_,i)=>renderStep(a,i,true)).join('')}</div><section class="checklist" id="completion"><h2>ここまでできたら、完了です。</h2><p>読みながら確認するためのチェックです。実際の業務データには反映されません。</p>${a.checks.map((c,i)=>`<label><input type="checkbox" data-check="${i}" ${checked[id]?.includes(i)?'checked':''}>${prose(c)}</label>`).join('')}<div class="check-progress" role="status">${completionText(id)}</div></section>${a.relatedArticles?.length?`<section class="article-related"><h2>関連する手順</h2><div class="topic-list">${a.relatedArticles.map(articleLink).join('')}</div></section>`:""}<section class="faq"><h2>うまくいかない・間違えたとき</h2>${a.faq.map(([q,ans])=>`<details><summary>${q}</summary><p>${prose(ans)}</p></details>`).join('')}</section><div class="related"><a href="#chapter/${a.chapter}">← ${titles[a.chapter]}の目次</a><span>·</span><a href="#issues">ほかの困りごとを見る</a></div><details class="source-note"><summary>この見本の対象版・参照した資料</summary><p>2026-11-01〜03の配備記録と保存済みテンプレートをもとに、架空データで画面を表示して撮影しました。園の実データ・実機の画面は撮影していません。外枠は撮影用に整理し、一括補完の画面は入力欄を縦に展開しています。保護者の承認画面は登録申請欄を抜粋しています。新規入園の入力画面は、任意のもう1人の保護者欄を開いて撮影しています。実際の園での表示・文言の最終確認は今後行います。モック作成日：2026-11-03。</p><a href="https://open.hoikuict.net/${a.source}" target="_blank" rel="noopener">${a.sourceLabel}（公開中の資料）↗</a></details>`;}
 function completionText(id){const count=(checked[id]||[]).length;return count===manualArticles[id].checks.length?'✓ すべて確認できました。':`${count} / ${manualArticles[id].checks.length} 項目を確認済み`;}
-function renderRoute(focus=true){let parts=location.hash.slice(1).split('/');let [page,arg]=parts;if(page==='article'&&arg==='child-new-family')arg='parent-qr';document.getElementById('sidebar').classList.remove('open');document.getElementById('menu-toggle').setAttribute('aria-expanded','false');setManualAudience(page,arg);let html;switch(page){case 'parents':html=parentHome();break;case 'parent-app':html=parentAppHome();break;case 'parent-help':html=parentHelp();break;case 'chapters':html=chapters();break;case 'chapter':html=manualChapters[+arg]?chapter(+arg):chapters();break;case 'issues':html=issues();break;case 'help':html=helpOptions[arg]?help(arg):issues();break;case 'answer':html=answers[arg]?answer(arg):issues();break;case 'search':{let q='';try{q=decodeURIComponent(parts.slice(1).join('/'));}catch{}html=search(q);break;}case 'article':if(manualArticles[arg]){if(currentArticle!==arg){currentStep=0;imageState={};allSteps=false;}currentArticle=arg;html=article(arg);break;}default:html=home();}
+function renderRoute(focus=true){let parts=location.hash.slice(1).split('/');let [page,arg]=parts;if(page==='article'&&arg==='child-new-family')arg='parent-qr';document.getElementById('sidebar').classList.remove('open');document.getElementById('menu-toggle').setAttribute('aria-expanded','false');setManualAudience(page,arg);let html;switch(page){case 'screen':html=screenGuide(parts.slice(1));break;case 'parents':html=parentHome();break;case 'parent-app':html=parentAppHome();break;case 'parent-help':html=parentHelp();break;case 'chapters':html=chapters();break;case 'chapter':html=manualChapters[+arg]?chapter(+arg):chapters();break;case 'issues':html=issues();break;case 'help':html=helpOptions[arg]?help(arg):issues();break;case 'answer':html=answers[arg]?answer(arg):issues();break;case 'search':{let q='';try{q=decodeURIComponent(parts.slice(1).join('/'));}catch{}html=search(q);break;}case 'article':if(manualArticles[arg]){if(currentArticle!==arg){currentStep=0;imageState={};allSteps=false;}currentArticle=arg;html=article(arg);break;}default:html=home();}
 main.innerHTML=html;document.querySelectorAll('#sidebar nav a').forEach(a=>{const active=a.getAttribute('href')===(location.hash||'#home');a.classList.toggle('current',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
 if(page==='search'){try{main.querySelector('#search-input').value=decodeURIComponent(parts.slice(1).join('/'));}catch{}}
 bind();document.title=(main.querySelector('h1')?.textContent||'使い方ガイド')+'｜オープン保育ICT・使い方ガイド';if(focus){window.scrollTo(0,0);main.focus({preventScroll:true});}}
@@ -2765,4 +3320,668 @@ document.getElementById('close-image').addEventListener('click',()=>document.get
 document.getElementById('font-toggle').addEventListener('click',e=>{const large=document.body.classList.toggle('large-text');e.currentTarget.setAttribute('aria-pressed',String(large));e.currentTarget.textContent=large?'文字を標準に':'文字を大きく';});
 document.getElementById('menu-toggle').addEventListener('click',e=>{e.currentTarget.setAttribute('aria-expanded',String(document.getElementById('sidebar').classList.toggle('open')));});
 document.querySelector('.skip').addEventListener('click',e=>{e.preventDefault();main.focus();main.scrollIntoView();});
+/* ============================================================
+   v0.8 MANUAL UPGRADE
+   ============================================================ */
+function mockWindow(title,sub,body,cls){
+  return `<div class="mock-window ${cls||''}"><div class="mock-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="mock-bar-title">${esc(title)}</span>${sub?`<span class="mock-bar-sub">${esc(sub)}</span>`:''}</div><div class="mock-body">${body}</div></div>`;
+}
+
+const SHIFT_DAYS = [['月','11/2'],['火','11/3'],['水','11/4'],['木','11/5'],['金','11/6'],['土','11/7'],['日','11/8']];
+const SHIFT_ROWS = [
+  {name:'山田 花子', sub:'主任・少林', cells:['early','early','off','early','early','early','off']},
+  {name:'佐藤 健太', sub:'少林', cells:['day','day','early','day','day','off','off']},
+  {name:'鈴木 美咲', sub:'2歳児', cells:['late','early','day','late','early','early','off']},
+  {name:'高橋 直樹', sub:'3歳児', cells:['early','early','early','off','early','day','off']},
+  {name:'田中 由紀', sub:'4歳児', cells:['off','late','early','early','early','early','off']},
+  {name:'伊藤 翔平', sub:'5歳児', cells:['pin','early','early','early','early','early','off']},
+  {name:'渡辺 彩', sub:'フリー', cells:['gap','early','early','early','early','off','off']}
+];
+const SHIFT_LABEL = {early:'早',day:'日',late:'遅',off:'休',leave:'有',pin:'早',gap:'早'};
+function mockShift(variant){
+  const pinned = variant==='pin';
+  const gap = variant==='gap';
+  const rows = SHIFT_ROWS.map(r=>`<tr><th scope="row">${esc(r.name)}<small>${esc(r.sub)}</small></th>${r.cells.map(c=>{
+    const cls = c==='pin'?'cell--pin':c==='gap'?'cell--gap':`cell--${c}`;
+    const label = SHIFT_LABEL[c]||'';
+    const pin = c==='pin'?'<span class="pin">留</span>':'';
+    const alert = c==='gap'?'<span class="pin">!</span>':'';
+    return `<td><div class="cell ${cls}">${label}${pin}${alert}</div></td>`;
+  }).join('')}</tr>`).join('');
+  const meters = [
+    ['早朝 6:30-8:00','92%','8 / 8','ok'],
+    ['午前 8:00-11:00','100%','12 / 12','ok'],
+    ['午睡 11:00-15:00','88%','11 / 12','warn'],
+    ['延長 15:00-19:00','76%','9 / 12','gap']
+  ].map(([t,p,v,s])=>`<div class="meter ${s==='warn'?'meter--warn':s==='gap'?'meter--gap':''}"><div class="meter-top"><span>${t}</span><b>${p}</b></div><div class="meter-bar"><i style="width:${parseInt(p,10)}%"></i></div><small>必要 ${v.split(' / ')[1]} ／ 配置 ${v.split(' / ')[0]}</small></div>`).join('');
+  return mockWindow('NuShift シフト表','2026年11月',`
+    <div class="shift-head">
+      <div><h4>2026年11月 職員シフト</h4><p>さくら・もも・ひよこ組 ｜ 作成者 施設長 ｜ 下書き</p></div>
+      <div class="shift-legend"><span><i style="background:#e7f1ff"></i>早番</span><span><i style="background:#e9f6ea"></i>日番</span><span><i style="background:#fdeee2"></i>遅番</span><span><i style="background:#f2f3f1"></i>休日</span><span><i style="background:#f3eefa"></i>有給</span></div>
+    </div>
+    <div class="shift-scroll"><span class="shift-table-label"><span class="m-num">②</span>シフト表・時間帯別の充足メーター</span><table class="shift-table"><thead><tr><th scope="col">職員</th>${SHIFT_DAYS.map(([d,n])=>`<th scope="col" class="day-head">${d}<small>${n}</small></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="shift-meter">${meters}</div>
+    <div class="mock-actions">
+      ${pinned?'<span class="m-chip m-chip--ok">留 ピン留め1件を固定</span>':''}
+      ${gap?'<span class="m-chip m-chip--warn">! 延長時間帯に1名不足</span>':'<span class="m-chip m-chip--ok">BLOCKER 0件</span>'}
+      <span class="m-btn m-btn--primary"><span class="m-num">①</span>自動求解を実行</span>
+      <span class="m-btn"><span class="m-num">③</span>シフトを確定・公開</span>
+    </div>
+  `,'shift-mock');
+}
+
+function mockBillingList(variant){
+  const locked = variant==='locked';
+  const rows = [
+    ['見本 あおい','さくら','18,000','4,500','4,000','-2,000','24,500','下書き'],
+    ['見本 いろは','さくら','18,000','3,200','4,000','-2,000','23,200','下書き'],
+    ['見本 このみ','もも','16,000','6,800','4,000','0','26,800','下書き'],
+    ['見本 さくら','ひよこ','16,000','2,400','4,000','-1,600','20,800','下書き']
+  ];
+  return mockWindow('月次請求','2026年10月分',`
+    <div class="queue-head"><div><h4>2026年10月分 月次請求</h4><p class="mock-sub">対象 42世帯 ｜ 打刻漏れ 0件 ｜ ${locked?'確定済み（読み取り専用）':'下書き'}</p></div><span class="m-chip ${locked?'m-chip--info':'m-chip--ok'}">${locked?'確定済み・ロック中':'料金再計算 済み'}</span></div>
+    <div class="shift-scroll"><table class="shift-table" style="min-width:640px"><thead><tr><th scope="col" style="text-align:left;padding-left:10px">園児</th><th scope="col">基本</th><th scope="col">延長</th><th scope="col">給食</th><th scope="col">兄弟割引</th><th scope="col">合計</th><th scope="col">状態</th></tr></thead><tbody>
+      ${rows.map(([n,c,a,b,d,e,f,s])=>`<tr><th scope="row" style="font-size:.72rem">${n}<small>${c}</small></th><td style="font-size:.72rem">${a}</td><td style="font-size:.72rem">${b}</td><td style="font-size:.72rem">${d}</td><td style="font-size:.72rem;color:#9a3f17">${e}</td><td style="font-size:.72rem;font-weight:700">${f}</td><td><span class="m-chip ${s==='確定'?'m-chip--ok':'m-chip--pending'}">${s}</span></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="mock-actions"><span class="m-btn ${locked?'m-btn--ghost':'m-btn--primary'}">${locked?'<span class="m-num">①</span>締め解除（管理者）':'<span class="m-num">①</span>料金再計算'}</span><span class="m-btn">${locked?'<span class="m-num">②</span>再締め切り':'<span class="m-num">②</span>全銀データ出力'}</span>${locked?'':'<span class="m-btn"><span class="m-num">③</span>請求締め切り</span>'}</div>
+  `,'billing-mock');
+}
+
+function mockZengin(variant){
+  const reopen = variant==='reopen';
+  return mockWindow('全銀協フォーマット出力','2026年10月分',`
+    <div class="zengin-head"><div><h4>${reopen?'請求締め解除（再オープン）':'全銀協フォーマット（Zengin）出力'}</h4><p class="mock-sub">2026年10月分・口座振替 ｜ ${reopen?'解除理由の記録が必須です':'引落指定日 2026/11/27（金）'}</p></div><span class="m-chip ${reopen?'m-chip--warn':'m-chip--ok'}">${reopen?'管理者操作':'打刻確定済み'}</span></div>
+    <div class="zengin-grid">
+      <div class="zengin-field"><span>委託者コード</span><b>00012345</b></div>
+      <div class="zengin-field"><span>振替指定日</span><b>2026/11/27（金）</b></div>
+      <div class="zengin-field"><span>対象件数</span><b>42件</b></div>
+      <div class="zengin-field"><span>合計金額</span><b>¥486,300</b></div>
+      ${reopen?'<div class="zengin-field" style="grid-column:1/-1;border-color:#e6c7b8;background:#fdf7f3"><span>解除理由（監査ログに記録）</span><b style="font-size:.8rem">10/18の打刻修正に伴う延長保育料の再計算</b></div>':''}
+    </div>
+    ${reopen?'':`<div class="zengin-files">
+      <div class="zengin-file"><span class="fi">CSV</span><div><b>zengin_202610.csv</b><small>全銀協 固定長 / Shift_JIS</small></div><span class="sz">18.4 KB<br>42件</span></div>
+      <div class="zengin-file"><span class="fi">PDF</span><div><b>請求明細_202610.pdf</b><small>保護者配布用・施設控え</small></div><span class="sz">2.1 MB<br>42頁</span></div>
+    </div>`}
+    <div class="mock-actions">
+      ${reopen?'<span class="m-btn m-btn--primary"><span class="m-num">①</span>解除理由を確認</span><span class="m-btn m-btn--danger"><span class="m-num">②</span>締め解除を実行</span><span class="m-chip m-chip--warn">解除後は再締め切りが必要</span>':'<span class="m-btn m-btn--primary"><span class="m-num">①</span>全銀フォーマット出力</span><span class="m-btn"><span class="m-num">②</span>ダウンロード</span><span class="m-chip m-chip--info">引落の3営業日前までに提出</span>'}
+    </div>
+  `,'zengin-mock');
+}
+
+function mockContact(variant){
+  const done = variant==='done';
+  const submitted = variant==='submitted';
+  const items = [
+    ['見本 あおい','さくら組・担任 山田','36.6℃ ・ 食欲 普通 ・ 午睡 1時間20分',done?'公開済み':'承認待ち'],
+    ['見本 いろは','さくら組・担任 山田','37.1℃ ・ 食欲 やや少なめ ・ 午睡 50分',done?'公開済み':'承認待ち'],
+    ['見本 このみ','もも組・担任 佐藤','36.8℃ ・ 食欲 完食 ・ 午睡 1時間40分',done?'公開済み':'承認待ち']
+  ];
+  return mockWindow('日次連絡帳・ダブルチェック','2026年11月20日（金）',`
+    <div class="queue-head"><div><h4>連絡帳・承認待ち一覧</h4><p class="mock-sub">${done?'公開済み':'承認待ち'} ${done?'28':'12'}件 ｜ 担任からの提出を主任・園長が確認します</p></div><span class="m-chip ${done?'m-chip--ok':'m-chip--pending'}">${done?'公開済み':'承認待ち 12'}</span></div>
+    <div class="queue-tabs"><span class="queue-tab" aria-selected="${done?'false':'true'}">承認待ち 12</span><span class="queue-tab" aria-selected="false">差し戻し 1</span><span class="queue-tab" aria-selected="${done?'true':'false'}">公開済み 28</span></div>
+    <div class="queue">
+      ${items.map(([n,m,t,s])=>`<div class="queue-item ${done?'queue-item--done':''}"><span class="avatar">${n.replace('見本 ','').slice(0,1)}</span><div class="qi-body"><div class="qi-top"><b>${n}</b><span class="m-chip ${done?'m-chip--ok':submitted?'m-chip--info':'m-chip--pending'}">${s}</span></div><div class="qi-meta">${m} ｜ ${t}</div></div><div class="qi-actions">${done?'<span class="m-chip m-chip--ok">公開済み</span>':'<span class="m-btn m-btn--sm m-btn--primary"><span class="m-num">①</span>承認して公開</span><span class="m-btn m-btn--sm"><span class="m-num">②</span>差し戻し</span>'}</div></div>`).join('')}
+    </div>
+    <div class="mock-actions"><span class="m-btn m-btn--primary"><span class="m-num">③</span>一括承認（12件）</span><span class="m-chip m-chip--info">公開と同時に保護者へ通知</span></div>
+  `,'queue-mock');
+}
+
+function mockMedical(variant){
+  const home = variant==='home';
+  const sent = variant==='sent';
+  if(home){
+    return mockWindow('保護者アプリ・基本医療情報','スマートフォン',`
+      <div class="phone-mock"><div class="phone"><div class="phone-notch"></div><div class="phone-screen">
+        <h4>基本医療情報</h4><p class="mock-sub">見本 あおい さん ｜ さくら組</p>
+        <div class="phone-card"><div class="fake-input"><span>かかりつけ医</span><b>みなと小児科</b></div><div class="fake-input"><span>緊急搬送先</span><b>市中央病院</b></div><div class="fake-input"><span>既往歴</span><b>気管支喘息</b></div><div class="fake-input"><span>平熱</span><b>36.5℃</b></div></div>
+        <div class="mock-actions"><span class="m-btn m-btn--primary phone-cta">医療同意へ進む</span></div>
+      </div></div></div>
+    `,'');
+  }
+  return mockWindow('保護者アプリ・医療同意',sent?'送信完了':'スマートフォン',`
+    <div class="phone-mock"><div class="phone"><div class="phone-notch"></div><div class="phone-screen">
+      <h4>${sent?'同意を送信しました':'救急搬送時の医療同意'}</h4><p class="mock-sub">見本 あおい さん ｜ 保護者 見本 花子</p>
+      ${sent?'<div class="phone-agree"><div class="agree-line">✓ 同意済み</div><small>同意日 2026/11/01 ・ 園の健康サマリーに反映されました</small></div>':`<div class="phone-card">
+        <div class="fake-input"><span>かかりつけ医</span><b>みなと小児科 03-1234-5678</b></div>
+        <div class="fake-input"><span>既往歴</span><b>気管支喘息（2025年3月診断）</b></div>
+        <div class="phone-agree"><div class="agree-line"><input type="checkbox" checked> <span class="m-num">①</span>救急搬送時のレントゲン撮影・処置に同意します</div><small>同意日 2026/11/01 ・ 保護者 見本 花子</small></div>
+        <div class="phone-card"><label><input type="checkbox" checked> 搬送先の希望を取り消す</label><small style="color:#6d8276">希望があれば医療機関名を入力</small></div>
+      </div><div class="mock-actions"><span class="m-btn m-btn--primary phone-cta"><span class="m-num">②</span>同意して送信</span></div>`}
+    </div></div></div>
+  `,'');
+}
+
+function mockRender(kind,variant){
+  switch(kind){
+    case 'shift': return mockShift(variant);
+    case 'billing-list': return mockBillingList(variant);
+    case 'zengin': return mockZengin(variant);
+    case 'contact': return mockContact(variant);
+    case 'medical': return mockMedical(variant);
+    default: return '';
+  }
+}
+
+function useMock(id,index,kind,variant){
+  const s=manualArticles[id].steps[index];
+  if(!s) return;
+  s.mock=kind;
+  s.mockData=variant||'';
+  delete s.image;
+}
+useMock('shift-auto',0,'shift');
+useMock('shift-auto',1,'shift');
+useMock('shift-auto',2,'shift','gap');
+useMock('shift-auto',3,'shift');
+useMock('shift-pinning',0,'shift');
+useMock('shift-pinning',1,'shift','pin');
+useMock('shift-pinning',2,'shift','gap');
+useMock('shift-pinning',3,'shift');
+useMock('billing-zengin',0,'billing-list');
+useMock('billing-zengin',1,'billing-list');
+useMock('billing-zengin',2,'zengin');
+useMock('billing-zengin',3,'zengin');
+useMock('billing-reopen',0,'billing-list','locked');
+useMock('billing-reopen',1,'zengin','reopen');
+useMock('billing-reopen',2,'zengin','reopen');
+useMock('billing-reopen',3,'billing-list');
+useMock('contact-approval',0,'contact');
+useMock('contact-approval',1,'contact','submitted');
+useMock('contact-approval',2,'contact');
+useMock('contact-approval',3,'contact','done');
+useMock('medical-consent',0,'medical','home');
+useMock('medical-consent',1,'medical','home');
+useMock('medical-consent',2,'medical','consent');
+useMock('medical-consent',3,'medical','sent');
+
+const __renderStep = renderStep;
+renderStep = function(a,i,print=false){
+  const s=a.steps[i];
+  if(!s.mock) return __renderStep(a,i,print);
+  const calls=s.calls||[];
+  const mock=mockRender(s.mock,s.mockData);
+  return `<section class="step-body" id="${print?'print-':''}step-${i}"><div class="step-heading"><span class="number">${i+1}</span><h2>${s.title}</h2></div><p>${prose(s.text)}</p><figure class="screen mock-screen" data-mock="${s.mock}">${mock}<figcaption><span>画面をHTMLで再現したイメージ（実機のスクリーンショットではありません）</span><span>①②③は操作の順番</span></figcaption></figure>${calls.length?`<ol class="callouts">${calls.map((c,k)=>`<li><span class="number">${k+1}</span><span>${prose(c)}</span></li>`).join('')}</ol>`:''}${s.note?`<div class="notice">${prose(s.note)}</div>`:''}</section>`;
+};
+
+function extrasHtml(a){
+  let h='';
+  if(a.examples&&a.examples.length){
+    h+=`<section class="know-how"><h2><span class="kh-icon">◆</span>入力例・判断のポイント</h2><dl class="example-list">${a.examples.map(([t,b])=>`<div><dt>${esc(t)}</dt><dd>${prose(b)}</dd></div>`).join('')}</dl></section>`;
+  }
+  if(a.pitfalls&&a.pitfalls.length){
+    h+=`<section class="know-how"><h2><span class="kh-icon">▲</span>よくあるミス・トラブル</h2><ul class="pitfall-list">${a.pitfalls.map(([t,b])=>`<li><b>${esc(t)}</b>${prose(b)}</li>`).join('')}</ul></section>`;
+  }
+  if(a.audit&&a.audit.length){
+    h+=`<section class="know-how"><h2><span class="kh-icon">■</span>監査・銀行提出・園内ルールの注意点</h2>${a.audit.map(p=>`<div class="audit-note">${prose(p)}</div>`).join('')}</section>`;
+  }
+  if(a.schedule&&a.schedule.length){
+    h+=`<section class="know-how"><h2><span class="kh-icon">●</span>現場のタイムスケジュール</h2><table class="schedule-table"><tbody>${a.schedule.map(([t,b])=>`<tr><td>${esc(t)}</td><td>${prose(b)}</td></tr>`).join('')}</tbody></table></section>`;
+  }
+  return h;
+}
+
+const __article = article;
+article = function(id){
+  const a=manualArticles[id];
+  let html=__article(id);
+  if(!a.source) html=html.replace(/<details class="source-note">[\s\S]*?<\/details>/,'');
+  const extras=extrasHtml(a);
+  if(extras) html=html.replace('<section class="checklist"', extras+'<section class="checklist"');
+  if(a.audience!=='parents'){
+    const cover=`<div class="print-cover"><p class="pc-kicker">OPEN HOIKUICT 公式操作ガイド v0.8</p><h1>${esc(a.title)}</h1><p class="pc-sub">第${a.chapter+1}章「${esc(titles[a.chapter])}」 ｜ ${esc(a.role)}</p><div class="pc-meta"><span>対象</span><span>${esc(a.role)}</span><span>手順数</span><span>全${a.steps.length}ステップ</span><span>版</span><span>v0.8（2026-11-20）</span><span>用途</span><span>新任保育士研修・主任/園長業務マニュアル</span></div><p class="pc-note">本資料は架空データで再現した画面イメージを含みます。実際の画面・文言は園の配備環境により異なります。</p></div>`;
+    const signoff=`<div class="print-signoff"><h2>研修・配布用 確認欄</h2><p>この手順を印刷し、研修や引き継ぎ時に利用します。</p><div class="signoff-grid"><div class="signoff-line"><span>確認日</span><i></i></div><div class="signoff-line"><span>確認者（氏名）</span><i></i></div><div class="signoff-line"><span>所属・クラス</span><i></i></div><div class="signoff-line"><span>園長・主任確認</span><i></i></div></div><p class="signoff-note">※ このページは操作手順の教材です。実際の児童・保護者データは入力しないでください。</p></div>`;
+    html=cover+html+signoff;
+  }
+  return html;
+};
+
+/* ---------- practical know-how (v0.8) ---------- */
+Object.assign(manualArticles['shift-auto'],{
+  examples:[
+    ['希望休の書き方（例）','「11/3（火）私用のため終日休。11/12（木）は通院のため15:00から出勤可」のように、日付・理由・出勤可能な時刻まで書くと、 最適化ソルバーが正確に扱えます。'],
+    ['動かせない日のピン留め（例）','主任会（11/18 18:00-19:00）、避難訓練（11/20 10:00-11:00）、健診（11/25 終日）は、先に該当職員のセルをピン留めしてから自動求解します。'],
+    ['ギャップが出たときの調整（例）','延長18:00-19:00に1名不足。非常勤の渡辺さんを18:30-19:00で1時間追加し、再求解します。それでも埋まらない場合は園長へ報告します。']
+  ],
+  pitfalls:[
+    ['「解なし（実行不可能）」と出る','希望休が特定日に集中しているか、非常勤の勤務可能時間を超えていないか確認します。希望休の重複を外すか、制約を一時的に緩めて再実行します。'],
+    ['再求解したら手動で直した部分が消えた','ピン留めしていないセルはソルバーが最適化して上書きします。維持したい枠は必ず「ピン留め」を入れてください。'],
+    ['公開前に氏名・クラス・早遅の並びを確認していない','確定後の修正は再公開が必要です。公開前にシフト表を印刷し、職員本人とクラス配置を照合します。']
+  ],
+  audit:[
+    '労働基準の確認：連続勤務日数、休憩時間、遅番翌日の早番制限、週の労働時間をBLOCKERチェックで確認します。BLOCKERが1件でもあると「シフトを確定・公開」はできません。',
+    '配置加算の証跡：加算要件の時間帯・人数を充足メーターで確認し、確定したシフト表と求解結果（実行日時・パラメータ）を園の保管フォルダに保存します。監査時は「いつ・どの条件で」作ったシフトかの説明が必要です。'
+  ],
+  schedule:[
+    ['7:00','早番の職員が出勤・鍵開け。前日の申し送りを確認。'],
+    ['8:30','日番・遅番が出勤。職員全員で当日の配置と欠勤を確認。'],
+    ['11:00','午睡準備。休憩の交代時間を守り、配置が割れないか確認。'],
+    ['15:00','延長保育の開始。延長担当の人数と名簿を照合。'],
+    ['19:00','延長終了・施錠。当日の保育日誌を記録。'],
+    ['20:00','翌日のシフトと非常勤職員への連絡を確定。']
+  ]
+});
+
+Object.assign(manualArticles['shift-pinning'],{
+  examples:[
+    ['研修・会議（例）','11/18（水）18:00-19:00 主任会に出席する山田主任の水曜日を早番でピン留め。'],
+    ['通院・家庭の事情（例）','11/12（木）通院のため15:00出勤可。高橋さんの木曜日を遅番に手動変更し、ピン留め。'],
+    ['冠婚葬祭・特別休暇（例）','11/22（日）に用事がある伊藤さんの日曜日を休みに変更し、ピン留めを立てて再求解。']
+  ],
+  pitfalls:[
+    ['ピン留めの解除を忘れる','固定した日が過ぎてもピン留めが残ると、翌月以降の求解で不要な制約になります。月次で解除漏れを確認します。'],
+    ['範囲選択の押し間違い','Shiftキー＋クリックで範囲選択できます。選択後に「選択解除」を押し、対象日を確認してから変更します。'],
+    ['変更理由を記録していない','手動変更は監査時に理由を聞かれます。備考欄に「研修」「通院」など簡潔に残します。']
+  ],
+  audit:[
+    '手動変更の履歴はシステムに残ります。変更日時・変更者・変更前後のシフト区分を確認できるように、月次でシフト表と変更履歴を併せて保管します。'
+  ]
+});
+
+Object.assign(manualArticles['billing-zengin'],{
+  examples:[
+    ['兄弟割引の自動判定（例）','同一世帯で第2子は基本保育料を半額、第3子以降は無料（園の設定による）。年度途中の入退園は在籍日数で日割り計算します。判定に使う「家族の紐付け」が未完了だと割引が漏れるため、請求前に確認します。'],
+    ['延長保育料の計算（例）','打刻実績を15分単位で集計。18:30以降は30分単位の加算。お迎え予定ではなく、実際の降園打刻で計算します。'],
+    ['備考欄の記載例（例）','「兄弟割引適用（第2子）」「非課税世帯 副食費免除」「自治体加算 〇〇」「延長 18:45 帰宅」など、判定根拠が分かるように残します。']
+  ],
+  pitfalls:[
+    ['銀行提出の締切を過ぎている','口座振替は引落日の3営業日前までに金融機関へ提出が必要です。27日引落なら24日（土日祝を考慮）が目安。遅れると振替できません。'],
+    ['口座名義が全角になっている','全銀データの名義は半角カナ必須です。「ヤマダ タロウ」のように姓と名の間はスペース、濁音・半濁音も半角カナで入力します。'],
+    ['兄弟割引が適用されていない','家族アカウントの紐付け漏れ、年度途中の入園、世帯分離の可能性があります。請求確定前に台帳で家族関係を確認します。'],
+    ['全額免除世帯を0件として扱った','0円でも口座振替の対象件数は1件として出力します。件数が合わない場合は免除世帯の扱いを確認します。']
+  ],
+  audit:[
+    '全銀協フォーマット：固定長テキスト、Shift_JIS、委託者コード・振替指定日・口座情報・金額・名義（半角カナ）を規定の桁数で出力します。出力前に「対象件数」「合計金額」を請求一覧と照合します。',
+    '金融機関への提出：法人向けインターネットバンキング（EBサービス）にファイルをアップロードし、受付完了メッセージと受付番号を必ず保存します。',
+    '証跡の保管：全銀ファイル、請求明細PDF、出力日時、提出時の受付番号を園の保管フォルダに保存します（自治体の指定に従い、通常7年）。'
+  ],
+  schedule:[
+    ['25日','月次締め。対象月の打刻を確定し、以降の変更をロック。'],
+    ['26日','料金再計算。兄弟割引・延長料・実費・免除を請求一覧で確認。'],
+    ['27日','全銀データを出力し、銀行へ提出（引落日の3営業日前が目安）。'],
+    ['月末','引落結果を取り込み、消込。未引落・残高不足を保護者へ連絡。'],
+    ['翌月5日','保護者へ請求明細を配布・Web通知。']
+  ]
+});
+
+Object.assign(manualArticles['billing-reopen'],{
+  examples:[
+    ['解除理由の例（打刻修正）','「10/18の打刻修正（登園 8:55→8:40）に伴う延長保育料の再計算」'],
+    ['解除理由の例（監査指摘）','「自治体監査による認定区分の遡及変更（第2子→第1子）に伴う基本保育料の再計算」'],
+    ['解除理由の例（割引の修正）','「兄弟割引の世帯判定誤り（同一世帯の紐付け漏れ）を修正するため」']
+  ],
+  pitfalls:[
+    ['解除理由が空欄・曖昧','「修正」「調整」だけでは監査で理由の説明ができません。日付・対象者・変更内容・根拠を具体的に書きます。'],
+    ['再締め切りを忘れる','再オープン中は編集可能な状態が続きます。修正後に必ず「請求締め切り」を行い、ロックを戻します。'],
+    ['銀行引落後の修正','すでに引き落とし済みの場合は、翌月で相殺（過誤調整）します。保護者への連絡と、園の会計帳簿の修正も必要です。']
+  ],
+  audit:[
+    '締め解除・再締め切りの日時、操作者、解除理由は監査ログに永久保存されます。修正前のデータも残り、改ざんはできません。',
+    '解除は施設長・管理者のみ実行できます。一般職員アカウントにはボタンは表示されません。'
+  ]
+});
+
+Object.assign(manualArticles['contact-approval'],{
+  examples:[
+    ['記入例（例）','「食欲：完食。おひるね：13:00-14:20。うんち：10:30 普通。みんなと粘土遊びを楽しみ、友だちと形を見せ合っていました。」'],
+    ['差し戻しコメントの例（例）','「『おやつ』の誤字を修正してください。保護者への説明も一文追加をお願いします。」'],
+    ['前日コピーの使い方（例）','生活リズム（起床・午睡・排便）だけをコピーし、本日の様子・活動・エピソードは必ず書き換えます。前日の文章がそのまま残らないようにします。']
+  ],
+  pitfalls:[
+    ['園児を間違えている','名前とクラスを2回確認します。前日コピーや園児の切り替え時、前の園児の内容が残っていないか確認します。'],
+    ['誤字・不適切な表現','「おやつ」「うんち」などの言い回し、担任の主観が強い表現はダブルチェックで直します。保護者が読んで安心できる文にします。'],
+    ['公開後の修正','保護者にはすでに通知されています。修正した内容と理由を保護者へ直接伝え、必要なら電話で補足します。'],
+    ['体温の桁・単位の誤り','36.8℃と37.1℃を間違えると一大事です。単位（℃）と桁を声に出して確認します。']
+  ],
+  audit:[
+    '承認者・承認日時・差し戻し理由はシステムに記録されます。ダブルチェックを実施した証跡として、承認待ち一覧の操作履歴を月次で確認します。',
+    'アレルギー・既往症・服薬の記載は、健康サマリーやアレルギー管理の内容と突き合わせます。食中毒・感染症の疑いがある場合は、園長へ報告し、保健所への届出要否を確認します。'
+  ],
+  schedule:[
+    ['8:30','朝の連絡帳を記入。前日記録をコピーし、本日の体調・食欲・睡眠を追記。'],
+    ['12:00','午前中の様子と給食の食べ方、排便を追記。'],
+    ['14:00','午睡の開始・経過を記録。'],
+    ['16:30','担任が全園児分の内容を確認し、承認依頼を提出。'],
+    ['17:00','主任・園長がダブルチェック。問題なければ承認して公開。'],
+    ['18:00','保護者へ公開通知。降園時に口頭で補足。']
+  ]
+});
+
+Object.assign(manualArticles['medical-consent'],{
+  examples:[
+    ['同意欄の記載例（例）','「救急搬送時のレントゲン撮影・処置に同意します。かかりつけ医：みなと小児科（03-1234-5678）。既往歴：気管支喘息（2025年3月診断）。」'],
+    ['既往歴の書き方（例）','「2025年3月 気管支喘息。発作時は冷気を避け、必要に応じて吸入。常用薬：〇〇」のように、症状・時期・対処・薬を残します。'],
+    ['搬送先の希望（例）','「市中央病院を希望。ただし症状により医師の判断に従う。」']
+  ],
+  pitfalls:[
+    ['同意が取れていない','緊急時は園長判断で救急搬送し、同意は後日取得します。搬送の事実・時刻・同乗者・病院への引き継ぎ内容を記録します。'],
+    ['紙の同意書が必要か迷う','本システムの電子同意は通常、紙の再提出は不要です。ただし自治体独自の様式がある場合は園へ確認します。'],
+    ['年度更新を忘れる','毎年4月に同意内容と緊急連絡先を再確認します。保護者アプリからいつでも更新できます。']
+  ],
+  audit:[
+    '同意日時・保護者氏名・同意内容は電子記録として保存され、改ざんはできません。年度更新時の再同意も履歴として残ります。',
+    '救急隊・搬送先病院への提示が必要な場合は、園側端末から同意証明画面を表示・印刷します。個人情報の取り扱いに注意し、撮影・SNS投稿は行いません。'
+  ],
+  schedule:[
+    ['入園時','基本医療情報と医療同意を取得。かかりつけ医・既往歴を確認。'],
+    ['4月','年度更新。同意内容・緊急連絡先・アレルギーを再確認。'],
+    ['緊急時','30分以内に保護者へ連絡。同意内容を確認し、必要なら同意証明を印刷。'],
+    ['事後','当日中に搬送時刻・病院・対応・保護者連絡の時刻を記録。']
+  ]
+});
+
+/* ============================================================
+   v0.8 SPA screen guides (health / plans)
+   ============================================================ */
+const sgImg=(src,alt,caption)=>({src,alt,caption});
+const screenGuideData={
+  'health':{
+    chapter:2, title:'健康管理で園児を探す',
+    intro:'クラスの健康情報を見たいときや、記録を確かめたい園児を探すときに使います。画面は架空の園児の記録です。',
+    sections:[
+      {title:'健康管理一覧を開く',paras:[
+        '職員メニューの「健康管理」を押します。最初は在園している園児が表示されます。',
+        '上の数字は、今の条件で表示している園児の人数です。「対応が必要」は、健診の記録や期限などに確認項目がある園児の人数です。'
+      ],images:[sgImg('health/images/menu.jpg','職員メニューで押す「健康管理」','職員メニューで押す「健康管理」'),sgImg('health/images/overview.jpg','健康管理一覧の人数','健康管理一覧の人数。右上の「印刷」で一覧を印刷できます。')]},
+      {title:'クラスや名前で絞り込む',paras:[
+        '「クラス」を選ぶか、「検索」に園児の名前を入れて「絞り込む」を押します。家族名やクラス名でも探せます。',
+        '確認項目がある園児だけを見るときは、「アラート」で「対応が必要のみ」を選びます。卒園・退園した園児を探すときは「在籍状況」を変えます。'
+      ],images:[sgImg('health/images/filter.jpg','絞り込みの例','ひよこ組で「あおい」と入力し、「対応が必要のみ」を選んだ例。右下の「絞り込む」を押します。')]},
+      {title:'園児の行を見て、次の画面を選ぶ',paras:[
+        '園児の名前とクラスを確かめます。「健康フラグ」には確認したい項目が並びます。アレルギーや園児の情報をまとめて見るには、その行の「健康サマリー」を押します。',
+        '身長・体重の記録や訂正に進むときは、同じ行の「健診記録」を押します。スマートフォンなどの狭い画面では、園児ごとの情報の下に「操作」が表示されます。'
+      ],images:[sgImg('health/images/filtered-row.jpg','園児の行','「見本 あおい」の行。右端に「健康サマリー」と「健診記録」があります。')],help:'身長と体重を別々の日に記録したときは、「健康サマリー」を開き、それぞれの数字の下の日付を確かめます。'},
+      {title:'名前が見つからないとき',paras:[
+        '「該当する園児がありません。」と出たら、「リセット」を押します。在園のみの一覧に戻るので、必要に応じて在籍状況を選び直すか、名前の一部で探します。'
+      ],images:[sgImg('health/images/empty.jpg','0件の画面','0件の画面。「リセット」は「絞り込む」の左にあります。')]}
+    ]
+  },
+  'health/summary':{
+    chapter:2, title:'園児ひとりの健康情報を見る',
+    intro:'見るだけのときは、この画面で名前、測定日、登録されている内容を確かめます。',
+    sections:[
+      {title:'名前を確かめる',paras:[
+        '「健康管理一覧」で、見たい園児の「健康サマリー」を押します。画面の一番上に、園児の名前とクラスが出ます。別の園児を探すときは「健康一覧へ」を押します。'
+      ],images:[sgImg('health/images/summary-links.jpg','健康サマリーの上部','「見本 あおい」の健康サマリーの上部。右側に各画面への入口があります。')]},
+      {title:'身長・体重と、測った日を見る',paras:[
+        '「最新身長」「最新体重」の数字の下に、それぞれの日付が出ます。「健診アラート」に確認が必要と出たら、「健診記録とグラフ」を開き、「測定一覧」の日付と種別を確かめます。'
+      ],images:[sgImg('health/images/summary-status.jpg','最新の測定値と日付','最新身長・最新体重の日付と、「アレルギー」「健診アラート」が並ぶところ。')],help:'「記録は最新です」には「入所時」の記録も含まれます。定期健診を受けた日を調べるときは、「測定一覧」で種別が「定期健診」の行を見ます。'},
+      {title:'知りたい内容の画面を開く',paras:[
+        'かかりつけ医や園で気をつけることは「健康プロフィール」を開きます。アレルギーの登録内容と有効期限は「アレルギー情報」で確認できます。詳しく見るときは「管理画面へ」を押します。',
+        '健診の記録や測定値の推移を見るときは、上にある「健診記録とグラフ」を押します。'
+      ],images:[sgImg('health/images/summary-allergy.jpg','アレルギー情報','「アレルギー情報」で対象と期限を確認する例。右上の「管理画面へ」で登録内容を開けます。')]}
+    ]
+  },
+  'health/profile':{
+    chapter:2, title:'かかりつけ医や園で気をつけることを記録する',
+    intro:'健康サマリーで園児の名前を確かめ、「健康プロフィール」を押します。保存は編集できる職員が行います。',
+    sections:[
+      {title:'連絡先を書く',paras:[
+        '「基本医療情報」に、園で確認した内容を入れます。「かかりつけ医」と「緊急搬送先」には、それぞれに対応する電話番号の欄があります。'
+      ],images:[sgImg('health/images/profile-basic.jpg','基本医療情報','「基本医療情報」の「かかりつけ医」に医院の名前を入れた例。')]},
+      {title:'園で共有する項目を選ぶ',paras:[
+        '「重点管理項目」で該当する項目にチェックを付けます。欄にないことは「その他の管理事項」に書きます。続く「記録メモ」では、既往歴や服薬、保管場所などを記録できます。'
+      ],images:[sgImg('health/images/profile-flags.jpg','重点管理項目','「アレルギーあり」にチェックを付け、「その他の管理事項」を書いた例。')],help:'アレルギーの品目や有効期限は、健康サマリーの「アレルギー管理」で記録します。'},
+      {title:'保存して確かめる',paras:[
+        '画面の一番下にある「保存する」を押します。「健康プロフィールを更新しました。」と出たら保存できています。あとから直すときも、同じ欄を書き直して「保存する」を押します。'
+      ],images:[sgImg('health/images/profile-save.jpg','保存ボタン','入力欄の一番下にある「保存する」。'),sgImg('health/images/profile-saved.jpg','保存完了','保存すると「健康プロフィールを更新しました。」と表示されます。')],help:'閲覧のみの職員には「保存する」が出ません。内容の変更は編集できる職員に依頼してください。'}
+    ]
+  },
+  'health/allergies':{
+    chapter:2, title:'アレルギーを登録する・直す・解除する',
+    intro:'健康サマリーで「アレルギー管理」を押します。園で確認した資料を手元に置き、園児の名前を確かめて入力します。',
+    sections:[
+      {title:'品目と有効期限を入れる',paras:[
+        '「新しいアレルギーを追加」で「カテゴリー」「重症度」を確かめ、「アレルゲン名」に品目などの名前を書きます。症状や除去対応は、資料の内容に合わせて入力します。',
+        '期限があるときは「有効期限」に日付を入れます。「根拠文書」には園で確認した資料の名前を書けます。'
+      ],images:[sgImg('health/images/allergy-form.jpg','アレルゲン名','「アレルゲン名」に「卵」を入れた見本。'),sgImg('health/images/allergy-date.jpg','診断日と有効期限','「診断日」と「有効期限」は別々の欄です。')]},
+      {title:'追加した内容を確かめる',paras:[
+        '「追加する」を押し、「登録済みアレルギー」に品目が出たことを確かめます。「アレルゲン名は必須です。」と出たら、品目を入れてもう一度「追加する」を押します。'
+      ],images:[sgImg('health/images/allergy-add.jpg','追加する','新しい品目を登録するときの「追加する」。'),sgImg('health/images/allergy-active.jpg','登録済みアレルギー','登録した「卵」が「有効」と表示された例。品目ごとに編集と解除ができます。'),sgImg('health/images/allergy-error.jpg','入力エラー','名前が空欄のときに表示されるメッセージ。')],help:'「有効期限」を過ぎても「有効」の登録に残ります。期限の日付と園で確認した資料を見合わせてください。'},
+      {title:'同じ品目の内容を直す',paras:[
+        '「登録済みアレルギー」で、直したい品目の「編集する」を押します。内容を直して「更新する」を押します。変更をやめるときは「キャンセル」を押します。'
+      ],images:[sgImg('health/images/allergy-update.jpg','編集画面','編集しているときは、右下の表示が「更新する」になります。')]},
+      {title:'解除した品目を確認する',paras:[
+        '園で解除が決まったら、品目を確かめて「解除する」を押します。その品目は「解除済み」として登録一覧に残ります。もう一度有効にする必要があるときは、その品目の「再有効化する」を押します。'
+      ],images:[sgImg('health/images/allergy-inactive.jpg','解除済み','「解除済み」になった品目と「再有効化する」の位置。')]}
+    ]
+  },
+  'health/checks':{
+    chapter:2, title:'健診を記録する・測定値を訂正する',
+    intro:'健康管理一覧で園児の「健診記録」を押します。健康サマリーの「健診記録とグラフ」からも同じ画面に進めます。',
+    sections:[
+      {title:'種別と測定日を確かめて入力する',paras:[
+        '園児の名前を確かめて「健診記録を追加」まで進みます。「種別」を選び、「測定日」に実際に測った日を入れます。身長はcm、体重はkgの欄に数字を入れます。',
+        '記録者や所見を残すときは、続きの欄に書きます。'
+      ],images:[sgImg('health/images/record-form.jpg','健診記録の入力','「定期健診」を選び、測定日・身長・体重を入れた例。')],help:'測定日が空欄のまま送ると「checked_at」を含むエラー画面が出ることがあります。ブラウザーで戻り、測定日とほかの入力を確かめてから保存してください。'},
+      {title:'追加した記録を一覧で見る',paras:[
+        '「記録を追加する」を押します。「健康診断記録を追加しました。」と出たら、「測定一覧」で日付と数字を確かめます。'
+      ],images:[sgImg('health/images/record-save.jpg','記録を追加する','入力を終えたら「記録を追加する」を押します。'),sgImg('health/images/record-list.jpg','測定一覧','「測定一覧」に、11月9日の体重が15.2kgで追加された例。')]},
+      {title:'入力を間違えたとき',paras:[
+        '「測定一覧」で該当する日付の「訂正」を押します。「健診記録を訂正」と出たら、訂正理由を書き、間違えた欄を直します。',
+        '「訂正を保存する」を押します。「訂正履歴」で該当する行を押すと、項目ごとに「訂正前」「訂正後」が開きます。保存前にやめるときは「訂正をやめる」を押します。'
+      ],images:[sgImg('health/images/correction.jpg','訂正画面','測定票を確かめ、理由を書いて体重を15.0kgに直した例。'),sgImg('health/images/correction-save.jpg','訂正を保存する','訂正の最後は「訂正を保存する」を押します。'),sgImg('health/images/history.jpg','訂正履歴','訂正履歴の行を開き、体重が15.2から15.0に変わったことを確かめます。')],help:'「訂正」が見えないときは、編集できる職員に依頼してください。'},
+      {title:'前の測定値と比べる',paras:[
+        '「身長・体重グラフ」で「直近1年」または「在籍期間すべて」を押します。身長と体重は別々のグラフで見ます。',
+        'グラフに使うのは「入所時」「定期健診」の記録です。「日常観察」「病後登園」の記録は「測定一覧」で確かめます。'
+      ],images:[sgImg('health/images/chart-period.jpg','表示期間','「身長・体重グラフ」の右側で表示する期間を選びます。'),sgImg('health/images/chart.jpg','身長・体重グラフ','期間を「在籍期間すべて」にしたときの「身長推移」と「体重推移」の見本。')]}
+    ]
+  },
+  'plans':{
+    chapter:3, title:'指導計画の画面を開く',
+    intro:'これから書くときは「自園の帳票」から、前に書いたものを探すときは「最近の帳票」から始めます。画像は架空のクラスの例です。',
+    sections:[
+      {title:'職員ホームから開く',paras:[
+        '職員メニューの「指導計画」を押します。スマートフォンでは、先に画面左上の「メニュー」を押します。',
+        'ホームの「よく使う機能」にある「指導計画」からも、同じ画面を開けます。'
+      ],images:[sgImg('plans/plan-menu.jpg','職員メニュー','職員メニューの「児童票作成状況」と「健康管理」の間にある「指導計画」。')]},
+      {title:'園の様式で計画を書く',paras:[
+        '画面の上にある「自園の帳票」で、書きたい期間を選びます。年案・月案・週案・日案の4つの入口が並びます。'
+      ],images:[sgImg('plans/plan-standard.jpg','自園の帳票','「自園の帳票」の下に、年案・月案・週案・日案の4つの入口が並ぶ。')],help:'月案や週案では、選んだ期間に園の帳票があると「自園の帳票を開く」と出ます。続きを書くときは、その帳票を開きます。'},
+      {title:'最近書いた帳票を開く',paras:[
+        '画面を下へ動かすと「最近の帳票」があります。日付とクラスを確かめて、読みたい行を押します。見つからなければ、見出しの横の「すべて見る」を押します。'
+      ],images:[sgImg('plans/plan-recent.jpg','最近の帳票','「最近の帳票」に日案・週案・月案が並び、見出しの右に「すべて見る」がある。')]},
+      {title:'以前の様式を使う',paras:[
+        '以前の様式で書いた年案・月案・週案を見るときは、4つの入口の下にある「旧式の帳票」を押します。'
+      ],images:[sgImg('plans/plan-legacy-entry.jpg','旧式の帳票','「旧式の帳票」の入口。以前の帳票を探す・旧式で年案や月案を作ると表示される。')]},
+      {title:'通知や振り返りの案内が出たとき',paras:[
+        '確認を頼んだ帳票に返事が届くと、「帳票通知」に結果が出ます。帳票の名前を見て、「帳票を確認」を押します。結果を読み終えたら「確認済みにして消す」で片づけられます。'
+      ],images:[sgImg('plans/plan-notice.jpg','帳票通知','月案が承認された例。「帳票通知」に「帳票を確認」と「確認済みにして消す」が並ぶ。')],details:[{summary:'「振り返りが未提出です」と出たとき',paras:['日付とクラスを確かめて「入力する」を押します。その日の日案の振り返り欄が開きます。'],images:[sgImg('plans/plan-reminder.jpg','振り返りのお知らせ','「振り返りが未提出です」に該当の日案と「入力する」が表示される。')]}]}
+    ]
+  },
+  'plans/annual':{
+    chapter:3, title:'年案を引き継いで書く',
+    intro:'1年間の計画を作ります。園にある年案を開き、今年のクラスに合わせて書き直します。見本はさくら組の1歳児です。',
+    sections:[
+      {title:'年度とクラスを選ぶ',paras:[
+        '職員メニューで「指導計画」を開きます。「自園の帳票」の「年案」を押します。',
+        '「年度」と「クラス」を確かめます。帳票が出ていないときは、「引き継ぐ年案」から使いたい年案を選び、「選択した年案を表示」を押します。'
+      ],images:[sgImg('plans/annual/annual-choose.jpg','年度とクラス','年度、クラス、引き継ぐ年案を選ぶところ。')],help:'使いたい年案が選べないときは、クラスと年度をもう一度見てください。「取り込み元が未登録です」と出たら、園の管理者に伝えましょう。'},
+      {title:'今年のねらいを書く',paras:[
+        '表の上でクラスと担任名を確かめます。「年間のねらい」の文章を押して、今年の子どもたちに合わせて書き直します。各期の計画も、直したい欄に直接書けます。',
+        '開始時期が「推定」と出る欄では、その表示を押します。元の年案と照らして「開始目安」を選び、「時期を確認」にチェックを入れます。'
+      ],images:[sgImg('plans/annual/annual-goal.jpg','年間のねらい','「年間のねらい」に書き込んだ例。'),sgImg('plans/annual/annual-timing.jpg','開始時期','開始目安を選び、時期を確認にチェックを入れた欄。')]},
+      {title:'下書きを保存して、続きを開く',paras:[
+        '年案の上にある「下書きを保存」を押します。保存した年案には「下書き」と表示されます。',
+        '続きを書くときは「指導計画」から「年案」を開き、同じ年度とクラスを選びます。前に書いた文章が出ていることを確かめます。'
+      ],images:[sgImg('plans/annual/annual-save.jpg','下書きを保存','年案本文の「下書きを保存」。'),sgImg('plans/annual/annual-saved.jpg','保存後の表示','保存した年間指導計画の「下書き」表示。')]},
+      {title:'あとから各期の反省を書く',paras:[
+        '年案の「年間指導計画反省へ」を押し、振り返りたい期の欄に書きます。反省欄の「下書き保存」を押します。',
+        '管理者に見てもらうときは「承認を依頼する期」を選び、「承認確認へ進む」を押して依頼内容を確かめます。'
+      ],images:[sgImg('plans/annual/annual-reflection.jpg','年間指導計画反省','年間指導計画反省の下書き保存。'),sgImg('plans/annual/annual-review.jpg','承認の依頼','承認を依頼する期と、承認確認へ進むボタン。')]}
+    ]
+  },
+  'plans/monthly':{
+    chapter:3, title:'月案を書く・印刷する',
+    intro:'1か月のねらいと保育の内容を書きます。0〜2歳は園児ごとの欄、3〜5歳はクラス全体の欄を使います。',
+    sections:[
+      {title:'書きたい月を開く',paras:[
+        '「指導計画」の「自園の帳票」で「月案」を押します。カレンダーの「クラス」「年齢」「年度」を選び、「表示」を押します。',
+        '書きたい月の「自園の帳票で作成」を押します。その月の帳票があるときは「自園の帳票を開く」を押します。'
+      ],images:[sgImg('plans/monthly/monthly-choose.jpg','月案を選ぶ','11月の「自園の帳票で作成」。')]},
+      {title:'クラスのねらいを書く',paras:[
+        '帳票の上でクラス・対象月・年齢クラスを確かめます。表の「ねらい」の白い欄を押し、今月大切にしたいことを書きます。',
+        '「家庭との連携」にはご家庭と一緒に取り組みたいことを、「評価・反省」には振り返って気づいたことを書けます。'
+      ],images:[sgImg('plans/monthly/monthly-goal.jpg','クラスのねらい','クラス共通のねらい、家庭との連携、評価・反省。')]},
+      {title:'0〜2歳は、お子さんの名前を確かめて書く',paras:[
+        '「入力する園児」で名前を選び、表でそのお子さんの行を見ます。「生活・健康」「あそび」など、書きたい欄を押して入力します。',
+        '文例を使うときは、書きたい欄を先に押します。「過去の原文」に出た文章を押すと、その欄に入ります。お子さんに合う言葉に直して使えます。'
+      ],images:[sgImg('plans/monthly/monthly-person.jpg','個人別保育計画','個人別保育計画に園児の名前と生活・健康、あそびなどの欄が並ぶ。'),sgImg('plans/monthly/monthly-example.jpg','文例','「生活・健康」の欄を選ぶと表示される文例。')]},
+      {title:'3〜5歳は、クラス全体の計画を書く',paras:[
+        '「養護」「教育」の表で、書きたい行と欄を選びます。活動のねらいや準備する環境などを、欄に直接書きます。「行事・活動」は該当する日の欄に書けます。'
+      ],images:[sgImg('plans/monthly/monthly-group.jpg','3〜5歳の計画','3〜5歳の表で養護のねらいを入力したところ。')]},
+      {title:'保存して、同じ月を開く',paras:[
+        '担任名を確かめます。書きかけの計画も「下書きを保存」で残せます。担任名が空の場合は、ボタンの近くに出る「担任名を入力してください」を押して記入し、もう一度保存します。',
+        '別の日に続きを書くときは、カレンダーで同じクラス・年齢・月を選び、「自園の帳票を開く」を押します。'
+      ],images:[sgImg('plans/monthly/monthly-save-review.jpg','下書きを保存とレビュー依頼','月案の「下書きを保存」と「レビュー依頼」。'),sgImg('plans/monthly/monthly-saved.jpg','保存後の月案','同じ11月に「下書き」と、先ほど書いたねらいが出ています。')],help:'「同じ欄の変更を確認」と出たら、ほかの職員もその欄を保存しています。2つの文章を読み、残す内容を選んで「選んだ内容で保存する」を押します。'},
+      {title:'書いた月案をレビュー依頼する',paras:[
+        '月案を確認してもらうときは、「下書きを保存」の右にある「レビュー依頼」を押します。依頼すると、今の入力が保存され、文書の詳細画面が開きます。「レビュー待ち」と出れば依頼できています。',
+        '依頼前に、担任名と次の計画欄を埋めます。'
+      ],list:['共通：「ねらい」「家庭との連携」','0〜2歳：全ページの全園児の「生活・健康」「あそび」「環境構成・援助活動」','3〜5歳：「生命・情緒」「健康」「人間関係」「環境」「言葉」「表現」の各行の「ねらい」「環境設定」「予想される子どもの姿」「配慮事項」と、「食育」'],images:[sgImg('plans/monthly/monthly-review-pending.jpg','レビュー待ち','依頼後に開いた月案の詳細画面とレビュー待ち表示。')],help:'「評価・反省」と「行事・活動」は空欄でも依頼できます。「未記入」と出たときは、次の手順で該当欄を直します。'},
+      {title:'「未記入」と出た欄を直す',paras:[
+        'ボタンの近くに、未記入の件数と欄の名前が出ます。下線のある名前を押すと、その入力欄へ移動します。別ページのお子さんも、該当する帳票ページが開きます。',
+        '書くと未記入の件数が減ります。「入力がそろいました」と出たら、内容を確かめて、もう一度「レビュー依頼」を押します。'
+      ],images:[sgImg('plans/monthly/monthly-review-missing.jpg','未記入の案内','見本いろはさんの未記入2件とレビュー依頼ボタン。'),sgImg('plans/monthly/monthly-review-child.jpg','園児の行に記入','名前を押して開いた園児の行に計画を入力したところ。'),sgImg('plans/monthly/monthly-review-ready.jpg','入力がそろった状態','入力がそろった案内と、もう一度押すレビュー依頼ボタン。')],help:'記入漏れを直しただけでは依頼されません。ボタンを押して完了します。'},
+      {title:'レビュー待ちの月案を直す',paras:[
+        '「レビュー待ち」の間は本文を編集できません。承認前に直すときは、文書の詳細画面で「レビューを取り下げる」を押します。「下書き」に戻ったことを確かめ、月案を開いて直します。修正後は、もう一度レビュー依頼します。'
+      ],images:[sgImg('plans/monthly/monthly-review-withdraw.jpg','レビューの取り下げ','月案の詳細画面にあるレビューを取り下げるボタン。')]},
+      {title:'月案を印刷する・ファイルにする',paras:[
+        '帳票の上で「印刷用PDF」を押すと、別のタブに「月案の印刷確認」が開きます。画面に出た月とクラスを確かめます。「この帳票を印刷」を押すと印刷できます。ファイルで残したいときは「PDFをダウンロード」を押します。',
+        'Excelで使うときは、元の月案で「Excel出力」を押します。'
+      ],images:[sgImg('plans/monthly/monthly-export.jpg','印刷用PDFとExcel出力','月案の上に並ぶ「印刷用PDF」と「Excel出力」。'),sgImg('plans/monthly/monthly-print.jpg','印刷確認','月案の印刷確認にある「この帳票を印刷」と「PDFをダウンロード」。')],help:'編集中の画面から出力すると、保存前の入力も含まれます。月案に残すには「下書きを保存」を押します。'}
+    ]
+  },
+  'plans/weekly':{
+    chapter:3, title:'週案を書く',
+    intro:'書きたい週を選び、ねらいと活動を書きます。0〜2歳は週ごと、3〜5歳は曜日ごとに書きます。',
+    sections:[
+      {title:'書きたい週を開く',paras:[
+        '「指導計画」の「自園の帳票」で「週案」を押します。「クラス」「年齢」「表示月」を選び、「表示」を押します。',
+        '週の始まりと終わりの日付を見て、その週の「自園の帳票で作成」を押します。開いたら「基本情報」で対象週と作成者を確かめます。'
+      ],images:[sgImg('plans/weekly/weekly-choose.jpg','週案を選ぶ','11月2日から8日までの週の作成ボタン。')]},
+      {title:'参考にしたい週案があるとき',paras:[
+        'そのまま自分で書くときは、下の「週日指導計画（週案）」に進みます。例を使うときは「参考になる週案例を探す」で活動名を押します。内容を読み、「この候補を選択中の週へコピー」を押します。'
+      ],images:[sgImg('plans/weekly/weekly-copy.jpg','週案の候補をコピー','参考にした活動を選択中の週へコピーするボタン。')]},
+      {title:'0〜2歳は、その週の行に書く',paras:[
+        '月の中の週が縦に並びます。左に「選択中」と出ている行の日付を見ます。別の週を使うときは「この週を選ぶ」を押します。',
+        'その行の「ねらい」「活動」「配慮・援助すること／準備」を書きます。「評価・反省」はその週を振り返って書けます。'
+      ],images:[sgImg('plans/weekly/weekly-infant.jpg','0〜2歳の週別表','0〜2歳の週別表で11月2日の週にねらいと活動を入力したところ。')]},
+      {title:'3〜5歳は、曜日ごとに書く',paras:[
+        '「今週のねらい」を書き、曜日の行に「子どもの主な活動」「援助・配慮事項」「準備」を入れます。土曜日も書くときは「基本情報」の「土曜を含める」にチェックを入れます。'
+      ],images:[sgImg('plans/weekly/weekly-days.jpg','曜日別の週案','3〜5歳の曜日別の表、月曜日の主な活動の入力例。')]},
+      {title:'月案とつなげたいとき',paras:[
+        '「月案との接続」で「接続する月案」を開き、同じクラスの月案を選びます。月案をつながずに書くときは「接続しない」のまま進みます。'
+      ],images:[sgImg('plans/weekly/weekly-month.jpg','月案との接続','接続する月案から11月のさくら組の月案を選んだところ。')]},
+      {title:'保存して、同じ週を開く',paras:[
+        '画面下の「下書きを保存」を押します。「週案1件を保存しました」のように件数が出ます。同じ月・年齢の別の週も書き換えた場合は、一緒に保存されます。',
+        '続きを書くときは「週案カレンダー」で同じ週の「自園の帳票を開く」を押します。'
+      ],images:[sgImg('plans/weekly/weekly-save-review.jpg','保存とレビュー依頼','画面下に固定表示される対象週、下書きを保存、レビュー依頼。'),sgImg('plans/weekly/weekly-saved.jpg','保存後の週案','下書きになった週に「自園の帳票を開く」が出ている。')]},
+      {title:'選択中の週をレビュー依頼する',paras:[
+        '画面下の「レビュー対象」の日付を確かめ、「レビュー依頼」を押します。選択中の1週間の入力が保存され、その週のレビューを依頼します。',
+        '依頼後も同じ編集画面に残ります。「レビューを依頼しました」と、対象週の「レビュー待ち」を確かめます。'
+      ],images:[sgImg('plans/weekly/weekly-review-pending.jpg','レビュー待ち','11月2日から8日の週だけを依頼し、レビュー待ちになった表示。')],help:'週案は対象月・対象週・作成者を確かめて依頼します。計画本文は空欄があっても保存・レビュー依頼できます。'},
+      {title:'「まだレビュー依頼できません」と出たら',paras:[
+        'ボタンの近くに、確認が必要な項目が出ます。下線のある項目を押すと、その週や記入欄に移動できます。修正すると案内が更新されます。内容を確かめ、もう一度「レビュー依頼」を押します。'
+      ],images:[sgImg('plans/weekly/weekly-review-missing.jpg','確認が必要な項目','対象週の作成者を入力するよう案内された画面。')],help:'通信などで完了を確認できないときは、画面の案内に従って保存・依頼の状態を確かめます。「下書きは保存しました」と出ても、レビュー依頼が完了したとは限りません。'},
+      {title:'レビュー待ちの週案を直す',paras:[
+        '「レビュー待ち」の週は本文を編集できません。承認前に直すときは「保存した文書・承認状況」を開き、「レビューを取り下げる」を押します。修正後は、対象週を確かめてもう一度レビュー依頼します。'
+      ],images:[sgImg('plans/weekly/weekly-review-detail.jpg','文書の詳細を開く','週案から保存した文書・承認状況を開くリンク。'),sgImg('plans/weekly/weekly-review-withdraw.jpg','レビューの取り下げ','週案の詳細画面にあるレビューを取り下げるボタン。')]}
+    ]
+  },
+  'plans/daily':{
+    chapter:3, title:'日案を書く・文例を使う・振り返る',
+    intro:'その日のねらいと、1日の流れを書きます。日にちとクラスを選んでから始めます。',
+    sections:[
+      {title:'書きたい日とクラスを選ぶ',paras:[
+        '「指導計画」の「自園の帳票」で「日案」を押します。「日案カレンダー」で年・月・クラスを選び、「表示」を押します。',
+        '書きたい日付の中にあるクラス名を押します。「未作成」と出ていれば、その日の日案を書き始められます。'
+      ],images:[sgImg('plans/daily/daily-choose.jpg','日案カレンダー','日案カレンダーの11日の「そら組　未作成」。')],help:'同じ日・クラスの日案がすでにあるときは、その日案を開いて「修正」を押します。'},
+      {title:'文例を選んで、書きかけの日案に足す',paras:[
+        '「日案例を検索」を押し、見たい活動名を押します。中身を読んで「この候補を下書きへコピー」を押します。',
+        '書きかけの日案には「この文例をどう使いますか？」と出ます。「文末に追加する」を押すと、今の年齢と書いた文章が残ります。'
+      ],images:[sgImg('plans/daily/daily-copy.jpg','日案例をコピー','日案例の詳細にある「この候補を下書きへコピー」。'),sgImg('plans/daily/daily-copy-choice.jpg','文例の使い方','書きかけの日案で選べる「文末に追加する」「置き換える」「入力を続ける」。')],help:'年齢・文章・活動がすべて空のときは、そのまま文例が入ります。内容を確かめ、最後に「下書きを保存」を押します。'},
+      {title:'基本情報とねらいを書く',paras:[
+        '「下書きの基本情報」で対象日・クラス・年齢・作成者を確かめます。「ねらい」にはその日に大切にしたいことを、「内容」には予定している活動を書きます。'
+      ],images:[sgImg('plans/daily/daily-basics.jpg','基本情報','対象日、クラス、年齢、作成者の欄。'),sgImg('plans/daily/daily-aims.jpg','ねらいと内容','ねらいと内容の欄に粘土遊びの計画が入っている。')]},
+      {title:'1日の流れを書く',paras:[
+        '「1日の流れ」に少なくとも1行書きます。左から「時間」「子どもの様子」「保育士の援助」「配慮事項」です。',
+        '続きの活動を書くときは「行を追加」を押します。途中に入れるときは「下に行を追加」を押します。'
+      ],images:[sgImg('plans/daily/daily-flow.jpg','1日の流れ','10時の活動を時間、子どもの様子、保育士の援助、配慮事項の4欄に書いた例。')]},
+      {title:'保存して、書いた日案を確かめる',paras:[
+        '一番下の「下書きを保存」を押します。日付とクラスが入った日案が開き、「下書き」と出れば保存できています。',
+        'あとから書き足すときは、カレンダーで同じ日・クラスの日案を開き、「修正」を押します。書き終えたら「修正を保存」を押します。'
+      ],images:[sgImg('plans/daily/daily-save.jpg','下書きを保存','日案の末尾にある「下書きを保存」。'),sgImg('plans/daily/daily-saved.jpg','保存後の日案','保存した11月11日そら組の日案のタイトルと「下書き」「修正」。')]},
+      {title:'「まだ保存できません」と出たら',paras:[
+        '新しい日案を保存するときに入力が足りないと、「下書きを保存」のすぐ上に、確認が必要な件数と項目が出ます。書いた内容は残っています。',
+        '下線のある項目を押すと、該当する記入欄へ移動します。対象日・年齢を選び、「1日の流れ」に少なくとも1行入力します。「記入漏れは解消しました。」と出たら、もう一度「下書きを保存」を押します。'
+      ],images:[sgImg('plans/daily/daily-save-missing.jpg','入力不足の案内','日案の保存ボタンの直前に、年齢と1日の流れの不足が表示された画面。'),sgImg('plans/daily/daily-save-ready.jpg','入力がそろった状態','記入漏れを直した案内と、もう一度押す下書きを保存ボタン。')]},
+      {title:'その日の振り返りを書く',paras:[
+        '保存した日案を開き、「その日の振り返り」まで下に進みます。「振り返り」に、今日の子どもの様子や、次に試したいことを書きます。入力すると自動で下書き保存されます。'
+      ],images:[sgImg('plans/daily/daily-reflection.jpg','振り返り','日案の振り返りの入力例と下書きを保存した表示。')]},
+      {title:'振り返りを管理者に見てもらう',paras:[
+        '「承認確認へ進む」を押します。日付・クラス・文章を読み、直したいところがあれば「入力へ戻る」を押します。これでよければ「管理者へ承認を依頼」を押します。',
+        '「承認待ち」と出たら依頼は完了です。自分が依頼した文章を承認前に直すときは、承認状況の画面で「依頼を取り下げる」を押します。'
+      ],images:[sgImg('plans/daily/daily-confirm.jpg','承認確認','振り返りの承認確認。本文の下に「入力へ戻る」と「管理者へ承認を依頼」が並ぶ。'),sgImg('plans/daily/daily-pending.jpg','承認待ち','振り返りが「承認待ち」になり「依頼を取り下げる」が表示された画面。')]}
+    ]
+  },
+  'plans/search':{
+    chapter:3, title:'帳票一覧で書きかけを探す',
+    intro:'「指導計画」を開き、「最近の帳票」の横にある「すべて見る」を押します。ここでは、さくら組の書きかけの日案を例に探します。',
+    sections:[
+      {title:'クラスや状態で絞る',paras:[
+        '「帳票の種類」で日案、「クラス」でさくら組を選びます。書きかけだけを見たいので、「状態」は下書きにします。最後に「検索する」を押します。',
+        '全部の欄を埋める必要はありません。以前の様式だけを探すときは、「様式」で「旧式」を選びます。'
+      ],images:[sgImg('plans/plan-query.jpg','検索条件','帳票の種類は日案、クラスはさくら組、状態は下書き。下に「検索する」がある。')],help:'名前が分かるときは「キーワード」に帳票名・園児名・作成者名の一部を入れて「検索する」を押します。'},
+      {title:'見つかった帳票を開く',paras:[
+        '検索欄の下に件数と帳票が出ます。日付・クラス・状態が合っていたら、その行を押します。'
+      ],images:[sgImg('plans/plan-match.jpg','検索結果','検索に合った11月11日の日案が1行表示され、クラスはさくら組、状態は下書き。')]},
+      {title:'続きを書く・検索結果に戻る',paras:[
+        '帳票が開いたら、日付とクラスをもう一度見ます。続きを書くときは、「修正」が表示されていれば押します。',
+        'ほかの帳票を見たいときは、画面上の「帳票一覧に戻る」を押します。'
+      ],images:[sgImg('plans/plan-detail.jpg','帳票の詳細','11月11日の日案の詳細。上に「帳票一覧に戻る」、下書きの横に「修正」がある。')]},
+      {title:'見つからないとき',paras:[
+        '条件を1つ「すべて」に戻すか、名前を短くして、もう一度「検索する」を押します。最初から探すときは「条件をクリア」を押します。'
+      ],images:[sgImg('plans/plan-empty.jpg','0件の検索結果','「条件に合う帳票が見つかりません。」の下に「すべての帳票を表示」がある。')]}
+    ]
+  },
+  'plans/legacy':{
+    chapter:3, title:'旧式の帳票を開く',
+    intro:'前に使っていた様式で書いた帳票は、「指導計画」→「旧式の帳票」から開けます。',
+    sections:[
+      {title:'前に書いた年案・月案・週案を見る',paras:[
+        '「保存した帳票を開く」から、日付とクラスが合う行を押します。数が多いときは、帳票一覧の「様式」で「旧式」を選ぶと、クラスや状態も指定できます。'
+      ],images:[sgImg('plans/plan-legacy-list.jpg','保存した帳票','「保存した帳票を開く」に、下書きの週案と承認済みの月案がある。')]},
+      {title:'同じ帳票に書き足す',paras:[
+        '開いた帳票に「修正」があれば、押して続きを書けます。日付とクラスを確かめてから書き始めてください。'
+      ],images:[sgImg('plans/plan-legacy-detail.jpg','旧式の帳票の詳細','さくら組の11月2日の週案。下書きの横に「修正」が表示されている。')]},
+      {title:'旧式で新しく作る必要があるとき',paras:[
+        '普段の計画は、「指導計画」の「自園の帳票」から始めます。旧式で新しく年案や月案を作るときは、この画面の「旧式で新しく作る」へ進みます。'
+      ],images:[sgImg('plans/plan-legacy-new.jpg','旧式で新しく作る','「旧式で新しく作る」の中に、年案と月案の手入力・文例から作成の入口がある。')]}
+    ]
+  }
+};
+
+function sgSection(key,i,s){
+  const id=`sg-${key.replace(/\//g,'-')}-${i}`;
+  const paras=(s.paras||[]).map(p=>`<p>${prose(p)}</p>`).join('');
+  const list=(s.list||[]).length?`<ol class="sg-list">${s.list.map((t,k)=>`<li><span class="number">${k+1}</span>${prose(t)}</li>`).join('')}</ol>`:'';
+  const imgs=(s.images||[]).map(im=>`<figure class="sg-shot"><a href="${im.src}" target="_blank" rel="noopener" aria-label="${esc(im.alt)}（画像を拡大）"><img src="${im.src}" alt="${esc(im.alt)}" loading="lazy"></a>${im.caption?`<figcaption>${esc(im.caption)}</figcaption>`:''}</figure>`).join('');
+  const help=s.help?`<p class="sg-help">${prose(s.help)}</p>`:'';
+  const details=(s.details||[]).map(d=>`<details class="sg-details"><summary>${esc(d.summary)}</summary>${(d.paras||[]).map(p=>`<p>${prose(p)}</p>`).join('')}${(d.images||[]).map(im=>`<figure class="sg-shot"><a href="${im.src}" target="_blank" rel="noopener" aria-label="${esc(im.alt)}（画像を拡大）"><img src="${im.src}" alt="${esc(im.alt)}" loading="lazy"></a>${im.caption?`<figcaption>${esc(im.caption)}</figcaption>`:''}</figure>`).join('')}</details>`).join('');
+  return `<section class="sg-section" id="${id}"><h2><span class="number">${i+1}</span>${esc(s.title)}</h2>${paras}${list}${imgs}${help}${details}</section>`;
+}
+
+function screenGuide(parts){
+  const key=parts.join('/');
+  const g=screenGuideData[key];
+  if(!g) return home();
+  const secs=g.sections.map((s,i)=>sgSection(key,i,s)).join('');
+  const toc=g.sections.map((s,i)=>`<li><a href="#sg-${key.replace(/\//g,'-')}-${i}">${esc(s.title)}</a></li>`).join('');
+  return `${crumb(g.title,g.chapter)}<p class="eyebrow">画面ガイド</p><h1>${esc(g.title)}</h1><p class="lead">${prose(g.intro)}</p><nav class="sg-toc" aria-label="このページの目次"><strong>このページでできること</strong><ul>${toc}</ul></nav>${secs}<div class="sg-nav"><a href="#chapter/${g.chapter}">← ${esc(titles[g.chapter])}の目次</a><a href="#issues">こんなときどうする？</a><a href="#home">ホームへ</a></div>`;
+}
+
+/* route existing screen-guide links into the SPA */
+healthGuides.forEach(g=>{g.href='#screen/'+g.href.replace(/\/$/,'');});
+planningGuides.forEach(g=>{g.href='#screen/'+g.href.replace(/\/$/,'');});
+planningForms.forEach(g=>{g.href='#screen/'+g.href.replace(/\/$/,'');});
+
 window.addEventListener('hashchange',()=>renderRoute());renderRoute(false);

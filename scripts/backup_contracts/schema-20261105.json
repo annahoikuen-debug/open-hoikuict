@@ -83,6 +83,7 @@
       "child_id",
       "created_at",
       "id",
+      "lock_version",
       "note",
       "pickup_person",
       "pickup_snack_confirmed",
@@ -186,6 +187,21 @@
       "updated_at",
       "withdrawal_date",
       "year_month"
+    ],
+    "billing_exemptions": [
+      "child_id",
+      "created_at",
+      "discount_amount",
+      "discount_rate",
+      "exemption_type",
+      "fee_item_id",
+      "id",
+      "is_active",
+      "name",
+      "reason",
+      "updated_at",
+      "valid_from",
+      "valid_to"
     ],
     "billing_settings": [
       "code_type",
@@ -318,6 +334,19 @@
       "other_reason_detail",
       "reason",
       "relationship_snapshot"
+    ],
+    "child_emergency_orders": [
+      "actor_id",
+      "child_id",
+      "contacts",
+      "family_key",
+      "informant",
+      "mode",
+      "revision",
+      "scope",
+      "source",
+      "updated_at",
+      "updated_by"
     ],
     "child_health_profiles": [
       "blood_type",
@@ -517,6 +546,10 @@
       "message",
       "pending_draft",
       "published_at",
+      "rejection_reason",
+      "reviewed_at",
+      "reviewed_by_name",
+      "reviewed_by_staff_id",
       "staff_name",
       "staff_user_id",
       "status",
@@ -734,6 +767,7 @@
       "valid_to"
     ],
     "facility_settings": [
+      "contact_reply_review_required",
       "fever_caution_c",
       "fever_return_days",
       "fever_review_c",
@@ -804,6 +838,15 @@
       "note",
       "payment_method",
       "updated_at"
+    ],
+    "family_emergency_orders": [
+      "contacts",
+      "family_id",
+      "mode",
+      "revision",
+      "scope",
+      "updated_at",
+      "updated_by"
     ],
     "fee_items": [
       "category",
@@ -1216,6 +1259,23 @@
       "status",
       "subject"
     ],
+    "parent_medical_responses": [
+      "answers",
+      "before",
+      "child_id",
+      "created_at",
+      "id",
+      "parent_account_id",
+      "parent_name",
+      "requested_by",
+      "review_note",
+      "reviewed_at",
+      "reviewed_by",
+      "status",
+      "submitted_at",
+      "xray_answer",
+      "xray_question"
+    ],
     "parent_mfa_pending": [
       "attempt_count",
       "code_hash",
@@ -1410,6 +1470,17 @@
       "document_id",
       "document_type",
       "id"
+    ],
+    "plan_document_attachments": [
+      "caption",
+      "content",
+      "content_type",
+      "created_at",
+      "file_name",
+      "file_size",
+      "id",
+      "layout_position",
+      "plan_document_id"
     ],
     "plan_document_heads": [
       "approved_revision_id",
@@ -1927,6 +1998,14 @@
       "updated_at",
       "updated_by"
     ],
+    "user_onboarding_states": [
+      "completed_at",
+      "id",
+      "is_completed",
+      "staff_name",
+      "tour_key",
+      "user_id"
+    ],
     "users": [
       "can_export_documents",
       "can_export_zengin",
@@ -1974,6 +2053,8 @@
     ],
     "zengin_exports": [
       "billing_cycle_id",
+      "canceled_at",
+      "canceled_by",
       "canceled_reason",
       "content_hash",
       "created_at",

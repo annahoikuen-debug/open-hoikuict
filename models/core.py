@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 from sqlalchemy import JSON, CheckConstraint, Index, LargeBinary, UniqueConstraint
 from sqlmodel import Column, Field, Relationship, SQLModel
 
+from security.crypto import EncryptedString, mask_account_number, mask_name_kana
 from time_utils import ensure_utc, local_naive_now, local_today, utc_now
 
 if TYPE_CHECKING:  # 領域別分割モジュールとの循環 import を避ける（文字列注釈用）
@@ -808,12 +809,20 @@ class ChildHealthProfile(SQLModel, table=True):
     has_medication: bool = Field(default=False)
     other_management_items: Optional[str] = None
     requires_medical_care: bool = Field(default=False)
-    medical_care_details: Optional[str] = None
+    medical_care_details: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString(1024), nullable=True)
+    )
     epipen_required: bool = Field(default=False)
     epipen_storage_location: Optional[str] = None
-    medical_history: Optional[str] = None
-    disability_info: Optional[str] = None
-    current_medications: Optional[str] = None
+    medical_history: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString(2048), nullable=True)
+    )
+    disability_info: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString(1024), nullable=True)
+    )
+    current_medications: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString(1024), nullable=True)
+    )
     sids_risk_flag: bool = Field(default=False)
     sids_notes: Optional[str] = None
     breastfed: Optional[bool] = None
@@ -1027,6 +1036,7 @@ class AttendanceRecord(SQLModel, table=True):
     actual_pickup_person: Optional[str] = None
     note: Optional[str] = None
     lock_version: int = Field(default=1, nullable=False)
+    idempotency_key: Optional[str] = Field(default=None, index=True, nullable=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -1783,13 +1793,18 @@ class BillingSetting(SQLModel, table=True):
         default_factory=lambda: ["1", "2"],
         sa_column=Column(JSON),
     )
-    collector_account_number: str
+    collector_account_number: str = Field(sa_column=Column(EncryptedString(128), nullable=False))
     code_type: str = Field(default="0", max_length=1)
     file_encoding: str = Field(default="cp932")
     line_separator: str = Field(default="CRLF")
     content_hash_algorithm: str = Field(default="sha256")
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+    @property
+    def collector_account_number_masked(self) -> str:
+        """回収元口座番号のマスク表示（下4桁以外を * 表示）"""
+        return mask_account_number(self.collector_account_number)
 
 
 class FamilyBillingProfile(SQLModel, table=True):
@@ -1808,7 +1823,9 @@ class FamilyBillingProfile(SQLModel, table=True):
     branch_code: Optional[str] = None
     branch_name_kana: Optional[str] = None
     account_type: Optional[str] = None
-    account_number: Optional[str] = None
+    account_number: Optional[str] = Field(
+        default=None, sa_column=Column(EncryptedString(128), nullable=True)
+    )
     account_holder_kana: Optional[str] = None
     customer_number: str = Field(index=True)
     new_code: str = Field(default="0", max_length=1)
@@ -1821,6 +1838,16 @@ class FamilyBillingProfile(SQLModel, table=True):
     note: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+    @property
+    def account_number_masked(self) -> str:
+        """保護者口座番号のマスク表示（下4桁以外を * 表示）"""
+        return mask_account_number(self.account_number)
+
+    @property
+    def account_holder_kana_masked(self) -> str:
+        """口座名義人カナのマスク表示（先頭・末尾以外を * 表示）"""
+        return mask_name_kana(self.account_holder_kana)
 
 
 class FeeItem(SQLModel, table=True):

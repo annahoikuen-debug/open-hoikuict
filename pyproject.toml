@@ -30,5 +30,5 @@ ignore = [
 testpaths = ["tests"]
 pythonpath = ["vendor/nushift", ".", "tests", "tests/routers", "tests/services", "tests/system", "tests/auth"]
 python_files = ["test_*.py"]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-n", "auto"]
 norecursedirs = [".*", "venv", ".venv", ".demo-port", "gen_bunnrei", "tmp*", "storage"]

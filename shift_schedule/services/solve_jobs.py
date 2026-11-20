@@ -552,7 +552,9 @@ def schedule_solve(
     finally:
         session.close()
 
-    _solve_executor.submit(process_next_solve_job)
+    from tasks.queue import enqueue_solve_job
+
+    enqueue_solve_job(job_id)
     return job_id
 
 

@@ -31,6 +31,7 @@ class RestoreFixture(unittest.TestCase):
     def setUp(self):
         import child_records.models  # noqa: F401
         import plan_docs.db_models  # noqa: F401
+        import shift_schedule.db_models  # noqa: F401
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name).resolve()
         self.data, self.storage = self.root / "data", self.root / "storage"

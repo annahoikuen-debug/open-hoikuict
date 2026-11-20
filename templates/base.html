@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}open-hoikuict{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
   <script src="/static/js/tailwindcss.js"></script>
   <script src="/static/js/htmx.min.js"></script>
   <link rel="stylesheet" href="/static/css/htmx-indicator.css">
@@ -909,7 +912,10 @@ current_path.startswith('/parent-accounts/registration-qr') %}
   <div class="min-h-screen">
     <nav class="no-print bg-indigo-700 px-4 py-3 text-white shadow sm:px-6">
       <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-4">
-        <span class="text-lg font-bold">open-hoikuict</span>
+        <span class="flex items-center gap-2 text-lg font-bold">
+          <img src="/static/icon-192.png" alt="Nusoft" class="h-7 w-7 rounded-lg bg-white p-0.5 shadow-sm">
+          <span>open-hoikuict</span>
+        </span>
         <a href="/parent-portal/" class="text-sm hover:underline">保護者ホーム</a>
         <details class="relative ml-auto">
           <summary class="cursor-pointer rounded border border-indigo-300 px-4 py-2 text-sm">メニュー</summary>
@@ -951,7 +957,10 @@ current_path.startswith('/parent-accounts/registration-qr') %}
           class="no-print fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:static lg:w-auto lg:translate-x-0 lg:shadow-none">
           <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
-              <a href="/" class="text-lg font-bold text-slate-900">open-hoikuict</a>
+              <a href="/" class="flex items-center gap-2 text-lg font-bold text-slate-900">
+                <img src="/static/icon-192.png" alt="Nusoft" class="h-8 w-8 rounded-lg shadow-sm">
+                <span>open-hoikuict</span>
+              </a>
               <p class="mt-1 text-xs font-medium uppercase tracking-[0.2em] text-indigo-600">Staff Console</p>
             </div>
             <button type="button"

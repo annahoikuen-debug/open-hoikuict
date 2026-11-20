@@ -6,7 +6,9 @@
   <title>nusoft (NuShift) — 保育のすべてをつなぎ、先生の時間をこどもたちへ | 次世代保育ICTプラットフォーム</title>
   <meta name="description" content="厚労省配置基準連動型 数理最適化シフト自動作成エンジン「NuShift」と、園児台帳・登降園・連絡帳・全銀Zengin請求・MFAセキュリティを完全統合した次世代保育総合ICTソリューション。">
   <link rel="canonical" href="https://open.hoikuict.net/">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧸</text></svg>">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://open.hoikuict.net/">
   <meta property="og:title" content="nusoft (NuShift) — 次世代保育ICTプラットフォーム">
@@ -44,7 +46,8 @@
   <header class="navbar" id="navbar">
     <div class="container nav-container">
       <a href="#hero" class="logo-wrap" id="brandLogo">
-        <span>🧸 nusoft</span>
+        <img src="logo.png" alt="Nusoft" style="width: 32px; height: 32px; border-radius: 8px; object-fit: contain;">
+        <span>nusoft</span>
         <span class="logo-badge">v0.7.1</span>
       </a>
 
@@ -397,6 +400,8 @@
             <ul class="feature-bullet-list">
               <li><span class="bullet-icon">✓</span><span><strong>スマホQRかざし打刻:</strong> 端末カメラにかざすだけで兄弟全員を1秒で同時打刻（打刻音＆自動リセット付き）</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>きょうだい一括連絡入力:</strong> お迎え予定や朝食内容を1度入力するだけで兄弟全員に自動反映</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>📞 緊急連絡先優先順位指定:</strong> 平常時の連絡順に加え、当日の日次指定や園側での口頭受付代行に対応</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>🥣 朝夕の食欲・献立 ＆ 閉園時刻チェック:</strong> 4段階食欲・献立入力と、閉園時間を考慮した安全なお迎え時間バリデーション</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>前回の内容をコピー:</strong> 直近の連絡内容をワンタップで複写し、朝の入力を大幅時短</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>誤打刻の即時Undo & ガード:</strong> 押し間違いを即座に取り消し、二重打刻も自動防止</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>PIMS標準連携:</strong> こども家庭庁標準の保育情報共有システム（PIMS）に完全準拠</span></li>
@@ -476,9 +481,10 @@
             <h3>独自項目UUID & 楽観ロックで安全な児童記録</h3>
             <p>日常の観察記録や発達段階のチェック、指導要録をデジタル化。独自項目UUIDにより園独自の評価項目を自在に設計でき、複数担任による同時編集の上書き事故も完全に防ぎます。</p>
             <ul class="feature-bullet-list">
-              <li><span class="bullet-icon">✓</span><span>設定版楽観ロック (lock_version) による同時編集保護</span></li>
-              <li><span class="bullet-icon">✓</span><span>園独自の観察軸を追加できる独自項目UUID</span></li>
-              <li><span class="bullet-icon">✓</span><span>アレルギー情報・身体測定グラフの自動連携</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>設定版楽観ロック (lock_version):</strong> 複数担任による同時編集の上書き事故を完全防止</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>独自項目UUID:</strong> 園独自の観察軸や評価項目を柔軟に追加設計可能</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>アレルギー情報 & 身体測定:</strong> 乳幼児発育曲線グラフの自動プロット</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>🩺 保護者医療同意・レントゲン承諾:</strong> かかりつけ医・希望搬送先病院および、緊急受診時のレントゲン撮影事前同意（事前承諾/都度確認）をポータルで安全に収集・園承認</span></li>
             </ul>
           </div>
           <div class="tab-visual">
@@ -503,6 +509,7 @@
             <ul class="feature-bullet-list">
               <li><span class="bullet-icon">✓</span><span><strong>当月延長料金リアルタイム速報:</strong> 打刻から即時算出し保護者へ開示（月末の疑義を防止）</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>確定請求書 ＆ A4印刷:</strong> 兄弟別の小計付き明細と口座振替予定を清潔なA4用紙に印刷可能</span></li>
+              <li><span class="bullet-icon">✓</span><span><strong>確定後請求締め解除（安全な再オープン）:</strong> 確定後の打刻漏れ修正や急な免除変更に管理者が安全に対応（構造化監査ログ付き）</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>施設別ON/OFFオプトイン:</strong> 自治体徴収園や別ソフト管理園向けにワンクリックで非表示（404完全ガード）</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>全銀協標準フォーマット (Zengin):</strong> 国内ほぼ全行に対応した口座振替データ出力（5MB上限保護）& 結果自動消込</span></li>
             </ul>
@@ -804,6 +811,26 @@
           </div>
           <div class="faq-answer">
             いいえ、不要です。登録されたメールアドレス宛に6桁の認証コード（メールOTP）が送信される仕組みのため、スマホやPCでメールが受信できれば特別なアプリなしで安全にログインできます。
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>請求確定後に打刻漏れや変更が見つかった場合、修正できますか？</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            はい、管理者が安全に修正できます。管理者メニューから「請求締め解除」を実行することで、確定したサイクルを一時的に再オープンし、打刻修正や再計算を行えます。解除日時や実行者、解除理由はすべて監査ログに記録されるため、改ざんや不正操作の心配もありません。
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <div class="faq-question">
+            <span>園児の緊急連絡先順位や受診時のレントゲン撮影同意は管理できますか？</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            はい、標準機能で管理できます。保護者ポータルから平常時の連絡順（母の職場→父の携帯など）を登録できるほか、当日の日次連絡や電話での口頭受付による一時的な順位変更にも対応しています。また、保育中のけがで受診した際の「レントゲン撮影事前同意」もポータル上で安全に収集・園承認が可能です。
           </div>
         </div>
       </div>

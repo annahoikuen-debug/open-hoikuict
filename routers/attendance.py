@@ -956,11 +956,22 @@ def check_in(
     child_id: int,
     target_date: str = Form(..., alias="date"),
     expected_version: Optional[int] = Form(default=None),
+    idempotency_key: Optional[str] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_can_edit(current_user)
+
+    day = _parse_target_date(target_date)
+
+    # 冪等性チェック（同一キーによる再送・二重打刻を安全にパス）
+    if idempotency_key:
+        existing_idempotent = session.exec(
+            select(AttendanceRecord).where(AttendanceRecord.idempotency_key == idempotency_key)
+        ).first()
+        if existing_idempotent:
+            return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
 
     child = session.get(Child, child_id)
     if not child:
@@ -968,7 +979,6 @@ def check_in(
     if child.status != ChildStatus.enrolled:
         raise HTTPException(status_code=400, detail="在園児のみ打刻できます")
 
-    day = _parse_target_date(target_date)
     record = session.exec(
         select(AttendanceRecord).where(
             AttendanceRecord.child_id == child_id,
@@ -984,12 +994,22 @@ def check_in(
     if record and record.check_out_at:
         raise HTTPException(409, "降園済みです。打刻の取消・履歴から記録を確認してください。")
     if not record:
-        record = AttendanceRecord(child_id=child_id, attendance_date=day, check_in_at=now, lock_version=1)
+        record = AttendanceRecord(
+            child_id=child_id,
+            attendance_date=day,
+            check_in_at=now,
+            lock_version=1,
+            idempotency_key=idempotency_key,
+        )
     elif record.check_in_at is None:
         record.check_in_at = now
         record.lock_version += 1
+        if idempotency_key:
+            record.idempotency_key = idempotency_key
     else:
         record.lock_version += 1
+        if idempotency_key:
+            record.idempotency_key = idempotency_key
 
     record.updated_at = audit_now
     session.add(record)
@@ -1005,11 +1025,25 @@ def check_out(
     child_id: int,
     target_date: str = Form(..., alias="date"),
     expected_version: Optional[int] = Form(default=None),
+    idempotency_key: Optional[str] = Form(default=None),
     return_query: Optional[str] = Form(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_can_edit(current_user)
+
+    day = _parse_target_date(target_date)
+
+    # 冪等性チェック（降園打刻の再送防御）
+    if idempotency_key:
+        existing_idempotent = session.exec(
+            select(AttendanceRecord).where(
+                AttendanceRecord.idempotency_key == idempotency_key,
+                AttendanceRecord.check_out_at.is_not(None),
+            )
+        ).first()
+        if existing_idempotent:
+            return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
 
     child = session.get(Child, child_id)
     if not child:
@@ -1017,7 +1051,6 @@ def check_out(
     if child.status != ChildStatus.enrolled:
         raise HTTPException(status_code=400, detail="在園児のみ打刻できます")
 
-    day = _parse_target_date(target_date)
     record = session.exec(
         select(AttendanceRecord).where(
             AttendanceRecord.child_id == child_id,
@@ -1035,6 +1068,8 @@ def check_out(
     audit_now = utc_now()
     if record.check_out_at is None:
         record.check_out_at = now
+    if idempotency_key:
+        record.idempotency_key = idempotency_key
     record.lock_version += 1
     record.updated_at = audit_now
 

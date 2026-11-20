@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import HTTPConnection
 
 from csrf import rotate_csrf_token
+from models.organization import DEFAULT_FACILITY_ID, DEFAULT_ORGANIZATION_ID
 from security_config import parent_auth_mode, secure_cookie_enabled, staff_auth_mode
 
 
@@ -57,6 +58,9 @@ class StaffUser:
     name: str = "モック職員"
     user_id: Optional[UUID] = None
     can_manage_child_records: bool = False
+    organization_id: UUID = DEFAULT_ORGANIZATION_ID
+    facility_id: UUID = DEFAULT_FACILITY_ID
+    is_corporate_admin: bool = False
 
     def __post_init__(self) -> None:
         if self.role == Role.ADMIN:
@@ -86,6 +90,12 @@ class StaffUser:
     def can_manage_attendance_checks(self) -> bool:
         return self.can_edit
 
+    def can_access_facility(self, target_facility_id: UUID) -> bool:
+        """指定した施設にアクセス可能かを判定する（法人統括管理者は全園可、一般は自園のみ）。"""
+        if self.is_corporate_admin:
+            return True
+        return self.facility_id == target_facility_id
+
 
 @dataclass(frozen=True, slots=True)
 class StaffSessionSubject:
@@ -93,6 +103,9 @@ class StaffSessionSubject:
     display_name: str
     role: Role
     can_manage_child_records: bool = False
+    organization_id: UUID = DEFAULT_ORGANIZATION_ID
+    facility_id: UUID = DEFAULT_FACILITY_ID
+    is_corporate_admin: bool = False
 
 
 class StaffAuthBackend(Protocol):
@@ -503,7 +516,11 @@ async def staff_auth_http_exception_handler(
 
 
 def resolve_staff_principal(connection: HTTPConnection) -> StaffUser | None:
-    return _staff_auth_backend.resolve_principal(connection)
+    principal = _staff_auth_backend.resolve_principal(connection)
+    if principal is not None:
+        from security.tenant import set_tenant_context
+        set_tenant_context(principal.organization_id, principal.facility_id)
+    return principal
 
 
 def get_optional_current_staff_user(request: Request) -> StaffUser | None:
@@ -638,3 +655,13 @@ def require_child_record_manager(user: CurrentUser) -> None:
 def require_attendance_check_editor(user: CurrentUser) -> None:
     if not user.can_manage_attendance_checks:
         raise HTTPException(status_code=403, detail="出欠確認を更新できる権限がありません")
+
+
+def check_facility_access(user: StaffUser, target_facility_id: UUID) -> None:
+    """指定された施設へのアクセス権限を検証する。権限がない場合は 403 Forbidden を送出する。"""
+    if not user.can_access_facility(target_facility_id):
+        raise HTTPException(
+            status_code=403,
+            detail=f"指定された施設（ID: {target_facility_id}）へのアクセス権限がありません",
+        )
+

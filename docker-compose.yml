@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hoikuict-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hoikuict}
+      POSTGRES_USER: ${POSTGRES_USER:-hoikuict}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hoikuict_secret}
+      TZ: Asia/Tokyo
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hoikuict} -d ${POSTGRES_DB:-hoikuict}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: hoikuict-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    container_name: hoikuict-worker
+    restart: unless-stopped
+    command: ["python", "worker.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      HOIKUICT_DATABASE_URL: postgresql://hoikuict:hoikuict_secret@db:5432/hoikuict
+      REDIS_URL: redis://redis:6379/0
+      HOIKUICT_ENV: production
+      TZ: Asia/Tokyo
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+
+
+volumes:
+  pgdata:
+  redisdata:

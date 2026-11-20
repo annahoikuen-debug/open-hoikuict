@@ -3,42 +3,77 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <meta name="robots" content="noindex,follow">
-  <meta name="description" content="保護者・保育園職員向けのスクリーンショット付きマニュアルの試作版。業務別の目次と、困りごとから手順を探せます。">
-  <title>職員のための使い方ガイド｜オープン保育ICT・モック</title>
-  <link rel="stylesheet" href="style.css?v=20261103-v15">
-  <script src="catalog.js?v=20261103-v15" defer></script>
-  <script src="app.js?v=20261116-plan-review" defer></script>
+  <meta name="description" content="オープン保育ICTの総合操作マニュアル・ビジュアルガイド。保育現場、施設長・管理者、保護者の各業務をステップ解説と画面例でサポートします。">
+  <title>オープン保育ICT 総合操作マニュアル・ビジュアルガイド (v0.7.1)</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css?v=20261120-v071">
+  <script src="catalog.js?v=20261120-v071" defer></script>
+  <script src="app.js?v=20261120-v071" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">本文へ進む</a>
-  <div class="preview-bar"><span class="preview-tag">試作版 v1.11</span> マニュアルの見せ方を試すための案です。 <span>画面内の人物・記録はすべて架空です。</span></div>
+  <div class="preview-bar">
+    <span class="preview-tag">公式操作ガイド v0.7.1</span>
+    <span>園内LANおよび完全オフライン環境で利用可能です。</span>
+    <span class="preview-note">※マニュアル内の人物名・児童名・記録データは見本用の架空データです。</span>
+  </div>
   <header class="site-head">
-    <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true">ひ</span><span><small>オープン保育ICT</small><strong>職員のための使い方ガイド</strong></span></a>
-    <div class="head-actions"><a class="site-return" href="https://open.hoikuict.net/">HPへ戻る</a><button id="font-toggle" aria-pressed="false">文字を大きく</button><button id="menu-toggle" aria-expanded="false" aria-controls="sidebar">目次</button></div>
+    <a class="brand" href="#home">
+      <img src="assets/nusoft-icon.png" alt="Nusoft" style="width: 42px; height: 42px; border-radius: 11px; object-fit: contain; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+      <span>
+        <small>オープン保育ICT</small>
+        <strong>総合操作マニュアル</strong>
+      </span>
+    </a>
+    <div class="head-actions">
+      <a class="site-return" href="/" title="保育ICT業務システムへ戻ります">← 業務システムへ戻る</a>
+      <button id="font-toggle" aria-pressed="false">文字を大きく</button>
+      <button id="menu-toggle" aria-expanded="false" aria-controls="sidebar">目次</button>
+    </div>
   </header>
   <div class="layout">
     <aside id="sidebar">
       <nav aria-label="マニュアルの目次">
         <a class="nav-home" href="#home">ガイドのホーム</a>
-        <a href="#parents" class="nav-main">保護者用のマニュアル →</a><p class="nav-label">探し方を選ぶ</p>
-        <a href="#issues" class="nav-main">こんなときどうする？ <span>→</span></a>
-        <a href="#chapters" class="nav-main">仕事の流れから読む <span>→</span></a>
-        <a href="#help/admission" class="nav-main">新入園児を登録する <span>→</span></a>
-        <a href="health/" class="nav-main">健康管理の使い方 <span>→</span></a>
-        <a href="plans/" class="nav-main">指導計画の使い方 <span>→</span></a>
-        <a href="#article/parent-qr" class="nav-main">共通QRで受付する <span>→</span></a>
-        <p class="nav-label">業務別の目次</p>
+        <a href="#parents" class="nav-main">📱 保護者向けマニュアル →</a>
+        
+        <p class="nav-label">探し方を選ぶ</p>
+        <a href="#issues" class="nav-main">❓ こんなときどうする？ <span>→</span></a>
+        <a href="#chapters" class="nav-main">📚 業務の流れから探す <span>→</span></a>
+        
+        <p class="nav-label">主要機能クイックアクセス</p>
+        <a href="#article/shift-auto" class="nav-main">🗓️ 職員シフト自動作成 (NuShift) <span>→</span></a>
+        <a href="#article/billing-zengin" class="nav-main">💴 請求管理・全銀口座振替 <span>→</span></a>
+        <a href="#article/contact-approval" class="nav-main">📝 連絡帳ダブルチェック承認 <span>→</span></a>
+        <a href="#screen/health" class="nav-main">🩺 健康管理・アレルギー <span>→</span></a>
+        <a href="#screen/plans" class="nav-main">📋 指導計画（年案・月案・週案） <span>→</span></a>
+        <a href="#article/parent-qr" class="nav-main">📷 共通QR・新入園児受付 <span>→</span></a>
+        
+        <p class="nav-label">業務別の全目次</p>
         <div id="chapter-nav"></div>
       </nav>
-      <div class="sidebar-note"><strong>初めての方へ</strong><p>まずは職員登録とログインから。必要なところだけ、少しずつ確認できます。</p><a href="#chapter/0">利用を始める →</a></div>
-      <p class="sidebar-foot">読み方の試作 · 2026.11.09<br>画面付きの手順：職員向け21例・保護者向け11例</p>
+      <div class="sidebar-note">
+        <strong>はじめての方へ</strong>
+        <p>職員登録・ログインから、日常の登降園打刻、月末の請求締めまで、必要な手順を画面付きでステップ解説しています。</p>
+        <a href="#chapter/0">利用開始ガイド →</a>
+      </div>
+      <p class="sidebar-foot">オープン保育ICT 公式操作ガイド v0.7.1<br>A4印刷・研修資料配布対応</p>
     </aside>
     <main id="main" tabindex="-1"></main>
   </div>
-  <dialog id="image-dialog" aria-labelledby="image-title"><div class="dialog-bar"><h2 id="image-title">画面を拡大</h2><button id="close-image">閉じる ×</button></div><p>見本の画像です。画像内のボタンは操作できません。</p><div class="zoom-scroll"><img id="zoom-image" alt=""></div></dialog>
+  <dialog id="image-dialog" aria-labelledby="image-title">
+    <div class="dialog-bar">
+      <h2 id="image-title">画面を拡大</h2>
+      <button id="close-image">閉じる ×</button>
+    </div>
+    <p>画面の見本画像です。実際の操作は業務システムで行ってください。</p>
+    <div class="zoom-scroll"><img id="zoom-image" alt=""></div>
+  </dialog>
   <div id="live-status" class="sr-only" role="status" aria-live="polite"></div>
-  <noscript>このモックの検索や目次にはJavaScriptが必要です。</noscript>
+  <noscript>マニュアルの目次表示と検索にはJavaScriptが必要です。</noscript>
 </body>
 </html>

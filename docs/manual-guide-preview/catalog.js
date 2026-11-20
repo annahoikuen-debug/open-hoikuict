@@ -1,274 +1,281 @@
 const manualChapters = [
   {
     "name": "導入・利用開始",
-    "description": "登録からログインまで、使い始める準備をする。",
+    "description": "初期台帳の準備、職員・保護者の登録からログインまで。",
     "topics": [
       {
-        "title": "導入から利用開始まで",
-        "url": "https://open.hoikuict.net/start-manual/",
+        "title": "利用開始から初期設定の流れ",
+        "url": "#chapter/0",
         "role": "管理者・導入担当",
-        "kind": "操作手順",
-        "source": "start-manual.md"
+        "kind": "概要",
+        "source": "MANUAL.md 第1章"
       },
       {
-        "title": "Windowsの園内LAN・園外利用",
-        "url": "https://open.hoikuict.net/windows-server-setup/",
-        "role": "導入担当",
-        "kind": "操作手順",
-        "source": "windows-server-setup.md"
-      },
-      {
-        "title": "TrueNASへの導入",
-        "url": "https://open.hoikuict.net/truenas-beginner-installation-guide/",
-        "role": "導入担当",
-        "kind": "操作手順",
-        "source": "truenas-beginner-installation-guide.md"
-      },
-      {
-        "title": "初期台帳のExcel準備・登録",
-        "url": "https://open.hoikuict.net/initial-ledger-guide/",
-        "role": "台帳担当",
-        "kind": "操作手順",
-        "source": "initial-ledger-guide.md"
-      },
-      {
-        "title": "職員登録・QR案内・再設定",
-        "url": "https://open.hoikuict.net/staff-registration-manual/",
+        "title": "職員登録・QR案内・パスワード再設定",
+        "url": "#article/staff",
         "role": "管理者・職員本人",
         "kind": "操作手順",
-        "source": "staff-registration-manual.md"
+        "source": "MANUAL.md 第2章"
       },
       {
-        "title": "保護者登録・招待・承認",
-        "url": "https://open.hoikuict.net/parent-registration-manual/",
+        "title": "パスワードを忘れてログインできないとき",
+        "url": "#article/password",
+        "role": "職員本人・管理者",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第2章"
+      },
+      {
+        "title": "共通QRで保護者の初回登録・新入園児受付",
+        "url": "#article/parent-qr",
         "role": "管理者・保護者本人",
         "kind": "操作手順",
-        "source": "parent-registration-manual.md"
+        "source": "MANUAL.md 第2章"
       },
       {
-        "title": "保護者の利用停止・再開",
-        "url": "https://open.hoikuict.net/parent-account-lifecycle/",
+        "title": "兄弟姉妹の追加・家族アカウントの紐付け",
+        "url": "#article/child-sibling",
+        "role": "管理者・保護者本人",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第2章"
+      },
+      {
+        "title": "在園児の保護者を個別に招待する",
+        "url": "#article/parent",
         "role": "管理者",
         "kind": "操作手順",
-        "source": "parent-account-lifecycle.md"
+        "source": "MANUAL.md 第2章"
+      },
+      {
+        "title": "Windows園内LAN・外部アクセス設定",
+        "url": "#chapter/0",
+        "role": "システム担当",
+        "kind": "環境構築",
+        "source": "MANUAL.md 第1章"
       }
     ]
   },
   {
-    "name": "日々の業務",
-    "description": "朝の出欠、保護者の連絡、登園・降園を確かめる。",
+    "name": "日々の業務・登降園",
+    "description": "朝の出欠、玄関キオスク打刻、連絡帳、お迎え予定。",
     "topics": [
       {
-        "title": "朝の出欠・登降園確認",
-        "url": "https://open.hoikuict.net/daily-work/",
-        "role": "職員",
-        "kind": "概要",
-        "source": "daily-work.md"
-      },
-      {
-        "title": "月間の登降園時刻を一括補完",
-        "url": "https://open.hoikuict.net/daily-work/#bulk-attendance",
-        "role": "管理者",
+        "title": "玄関キオスク：登園打刻（共通QRかざし）",
+        "url": "#article/parent-arrival",
+        "role": "保護者・現場職員",
         "kind": "操作手順",
-        "source": "daily-work.md#bulk-attendance"
+        "source": "MANUAL.md 第3章"
       },
       {
-        "title": "キオスクでの登降園受付",
-        "url": "https://open.hoikuict.net/chromebook-guardian-kiosk/",
-        "role": "職員・端末担当",
+        "title": "玄関キオスク：降園打刻とお迎え者確認",
+        "url": "#article/parent-departure",
+        "role": "保護者・現場職員",
         "kind": "操作手順",
-        "source": "chromebook-guardian-kiosk.md"
+        "source": "MANUAL.md 第3章"
       },
       {
-        "title": "保護者の日次連絡と園からの返信",
-        "url": "https://open.hoikuict.net/daily-work/",
-        "role": "職員・保護者本人",
-        "kind": "概要",
-        "source": "daily-work.md"
-      },
-      {
-        "title": "お知らせ・アンケート",
-        "url": "https://open.hoikuict.net/screen-transition-list/",
-        "role": "職員・保護者本人",
-        "kind": "概要",
-        "source": "screen-transition-list.md"
-      },
-      {
-        "title": "通知の登録と届かないとき",
-        "url": "https://open.hoikuict.net/notifications/",
-        "role": "職員・保護者本人",
+        "title": "打刻漏れ・空欄時刻の一括補完",
+        "url": "#article/clock",
+        "role": "管理者・現場職員",
         "kind": "操作手順",
-        "source": "notifications.md"
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "電話での欠席・遅刻連絡の受付入力",
+        "url": "#article/phone",
+        "role": "現場職員",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "連絡帳のダブルチェック承認と公開フロー",
+        "url": "#article/contact-approval",
+        "role": "担任保育士・承認主任",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第3章 4.6"
+      },
+      {
+        "title": "お迎え予定の変更と閉園前チェック",
+        "url": "#article/parent-app-pickup",
+        "role": "保護者・現場職員",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第3章 4.8"
       }
     ]
   },
   {
-    "name": "園児・家庭・記録",
-    "description": "園児と家庭の情報、健康や育ちの記録を残す。",
+    "name": "園児・家庭・健康記録",
+    "description": "園児台帳、緊急連絡先順位、医療同意、アレルギー管理。",
     "topics": [
       {
-        "title": "園児・家庭・保護者の台帳編集",
-        "url": "https://open.hoikuict.net/guardian-account-sync/",
-        "role": "台帳担当",
-        "kind": "概要",
-        "source": "guardian-account-sync.md"
-      },
-      {
-        "title": "園児・保護者の写真",
-        "url": "https://open.hoikuict.net/profile-photos/",
-        "role": "職員・保護者本人",
-        "kind": "操作手順",
-        "source": "profile-photos.md"
-      },
-      {
-        "title": "家庭・園児CSVの取り込み",
-        "url": "https://open.hoikuict.net/family-guardian-csv-guide/",
+        "title": "園児台帳の直接登録・修正",
+        "url": "#article/child",
         "role": "台帳担当",
         "kind": "操作手順",
-        "source": "family-guardian-csv-guide.md"
+        "source": "MANUAL.md 第2章"
       },
       {
-        "title": "健康・アレルギー・健診記録",
-        "url": "https://open.hoikuict.net/health-record-spec-review/",
-        "role": "職員",
-        "kind": "仕様",
-        "source": "health-record-spec-review.md"
-      },
-      {
-        "title": "子どもの観察記録",
-        "url": "https://open.hoikuict.net/child-records-spec/",
-        "role": "職員",
-        "kind": "仕様",
-        "source": "child-records-spec.md"
-      },
-      {
-        "title": "児童票の期間選択・修正",
-        "url": "https://open.hoikuict.net/child-records-spec/",
-        "role": "職員・確認担当",
-        "kind": "仕様",
-        "source": "child-records-spec.md"
-      }
-    ]
-  },
-  {
-    "name": "指導計画",
-    "description": "年・月・週・日の計画を順番に確認する。",
-    "topics": [
-      {
-        "title": "年案",
-        "url": "https://open.hoikuict.net/specifications/#plans",
-        "role": "職員・確認担当",
-        "kind": "仕様",
-        "source": "specifications.md#plans"
-      },
-      {
-        "title": "月案",
-        "url": "https://open.hoikuict.net/monthly-print-export-proposal-2026-09-27/",
-        "role": "職員・確認担当",
-        "kind": "仕様",
-        "source": "monthly-print-export-proposal-2026-09-27.md"
-      },
-      {
-        "title": "週案",
-        "url": "https://open.hoikuict.net/spec-weekly-daily-plans/",
-        "role": "職員・確認担当",
-        "kind": "仕様",
-        "source": "spec-weekly-daily-plans.md"
-      },
-      {
-        "title": "日案・文例・振返り",
-        "url": "https://open.hoikuict.net/spec-daily-plan-v1/",
-        "role": "職員・確認担当",
-        "kind": "仕様",
-        "source": "spec-daily-plan-v1.md"
-      }
-    ]
-  },
-  {
-    "name": "職員間の共有",
-    "description": "予定、議事録、確認してほしい文書を共有する。",
-    "topics": [
-      {
-        "title": "カレンダーの表示・作成",
-        "url": "https://open.hoikuict.net/calendar-display/",
-        "role": "職員・管理者",
+        "title": "緊急連絡先の優先順位設定（第1〜第3連絡先）",
+        "url": "#article/emergency-priority",
+        "role": "台帳担当・保護者",
         "kind": "操作手順",
-        "source": "calendar-display.md"
+        "source": "MANUAL.md 第3章 4.2"
       },
       {
-        "title": "職員ルーム・議事録",
-        "url": "https://open.hoikuict.net/daily-work/",
-        "role": "職員",
-        "kind": "概要",
-        "source": "daily-work.md"
-      },
-      {
-        "title": "文書の確認依頼",
-        "url": "https://open.hoikuict.net/daily-work/",
-        "role": "職員・管理者",
-        "kind": "概要",
-        "source": "daily-work.md"
-      },
-      {
-        "title": "職員ホームと要確認",
-        "url": "https://open.hoikuict.net/home-return-notifications/",
-        "role": "職員・管理者",
-        "kind": "概要",
-        "source": "home-return-notifications.md"
-      }
-    ]
-  },
-  {
-    "name": "料金・請求",
-    "description": "認定から延長料金、月末の請求まで確認する。",
-    "topics": [
-      {
-        "title": "保育認定・保育必要量",
-        "url": "https://open.hoikuict.net/care-need-certification-spec/",
-        "role": "台帳担当・料金担当",
-        "kind": "仕様",
-        "source": "care-need-certification-spec.md"
-      },
-      {
-        "title": "延長保育料金の設定・月次確認",
-        "url": "https://open.hoikuict.net/extended-care-fee-spec/",
-        "role": "料金担当",
-        "kind": "仕様",
-        "source": "extended-care-fee-spec.md"
-      },
-      {
-        "title": "請求への転送・口座情報",
-        "url": "https://open.hoikuict.net/extended-care-billing-transfer-spec/",
-        "role": "請求担当",
-        "kind": "仕様",
-        "source": "extended-care-billing-transfer-spec.md"
-      }
-    ]
-  },
-  {
-    "name": "運用・困ったとき",
-    "description": "日々の点検、バックアップ、困ったときの対応。",
-    "topics": [
-      {
-        "title": "バックアップ取得・確認",
-        "url": "https://open.hoikuict.net/backup-verification-guide/",
-        "role": "運用担当",
+        "title": "救急搬送・レントゲン撮影の医療同意",
+        "url": "#article/medical-consent",
+        "role": "保護者・現場職員",
         "kind": "操作手順",
-        "source": "backup-verification-guide.md"
+        "source": "MANUAL.md 第3章 4.5"
       },
       {
-        "title": "バックアップからの復元",
-        "url": "https://open.hoikuict.net/restore-from-app/",
-        "role": "運用担当",
-        "kind": "概要",
-        "source": "restore-from-app.md"
+        "title": "健康管理一覧・園児サマリー・身体測定",
+        "url": "health/",
+        "role": "看護師・現場職員",
+        "kind": "画面ガイド",
+        "source": "health/index.html"
       },
       {
-        "title": "毎日の点検・障害時の対応",
-        "url": "https://open.hoikuict.net/operations/",
-        "role": "運用担当",
-        "kind": "概要",
-        "source": "operations.md"
+        "title": "アレルギー管理（品目・生活管理指導表）",
+        "url": "health/allergies/",
+        "role": "栄養士・看護師・担任",
+        "kind": "画面ガイド",
+        "source": "health/allergies/index.html"
+      },
+      {
+        "title": "定期健康診断記録と成長曲線グラフ",
+        "url": "health/checks/",
+        "role": "看護師・現場職員",
+        "kind": "画面ガイド",
+        "source": "health/checks/index.html"
+      }
+    ]
+  },
+  {
+    "name": "指導計画（年案・月案・週案・日案）",
+    "description": "指導計画の作成、文例アシスト、レビュー依頼・承認。",
+    "topics": [
+      {
+        "title": "指導計画ホーム・帳票一覧",
+        "url": "plans/",
+        "role": "担任・主任・施設長",
+        "kind": "画面ガイド",
+        "source": "plans/index.html"
+      },
+      {
+        "title": "月案の作成・保存・レビュー依頼・印刷",
+        "url": "plans/monthly/",
+        "role": "クラス担任・承認者",
+        "kind": "画面ガイド",
+        "source": "plans/monthly/index.html"
+      },
+      {
+        "title": "週案の作成・曜日別活動・下書き保存",
+        "url": "plans/weekly/",
+        "role": "クラス担任・承認者",
+        "kind": "画面ガイド",
+        "source": "plans/weekly/index.html"
+      },
+      {
+        "title": "帳票検索（書きかけ・下書きの絞り込み）",
+        "url": "plans/search/",
+        "role": "担任・施設長",
+        "kind": "画面ガイド",
+        "source": "plans/search/index.html"
+      }
+    ]
+  },
+  {
+    "name": "職員管理 & シフト自動作成 (NuShift)",
+    "description": "希望休受付、配置基準ソルバー求解、ピン留め調整、確定公開。",
+    "topics": [
+      {
+        "title": "NuShift シフト自動作成・ギャップ検知",
+        "url": "#article/shift-auto",
+        "role": "シフト作成担当・園長",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第4章"
+      },
+      {
+        "title": "シフトの手動調整とピン留め固定",
+        "url": "#article/shift-pinning",
+        "role": "シフト作成担当",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第4章"
+      },
+      {
+        "title": "職員権限・担当クラス・カレンダー共有",
+        "url": "#chapter/4",
+        "role": "施設長・管理者",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第4章"
+      }
+    ]
+  },
+  {
+    "name": "料金・請求 & 全銀口座振替",
+    "description": "月次保育料・延長保育料の計算、兄弟割引、全銀振替、締め解除。",
+    "topics": [
+      {
+        "title": "月次請求計算と全銀協（Zengin）振替データ出力",
+        "url": "#article/billing-zengin",
+        "role": "請求担当・園長",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第5章"
+      },
+      {
+        "title": "確定済み請求の締め解除（再オープン）",
+        "url": "#article/billing-reopen",
+        "role": "管理者・施設長",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第5章 6.7"
+      },
+      {
+        "title": "保育認定・延長料金マスタ設定",
+        "url": "#chapter/5",
+        "role": "施設長・事務担当",
+        "kind": "マスタ設定",
+        "source": "MANUAL.md 第5章"
+      }
+    ]
+  },
+  {
+    "name": "保護者アプリ & 困りごと対応",
+    "description": "保護者スマホポータル、プッシュ通知、バックアップと保守。",
+    "topics": [
+      {
+        "title": "保護者アプリ：ホーム画面と主要機能",
+        "url": "#article/parent-app-home",
+        "role": "保護者",
+        "kind": "画面ガイド",
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "保護者アプリ：朝の体調連絡・検温",
+        "url": "#article/parent-app-contact",
+        "role": "保護者",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "保護者アプリ：お休み（欠席）連絡",
+        "url": "#article/parent-app-absence",
+        "role": "保護者",
+        "kind": "操作手順",
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "プッシュ通知設定（iPhone / Android）",
+        "url": "#article/parent-app-notifications-iphone",
+        "role": "保護者",
+        "kind": "設定手順",
+        "source": "MANUAL.md 第3章"
+      },
+      {
+        "title": "バックアップの取得・復元と日常点検",
+        "url": "#chapter/6",
+        "role": "運用担当・管理者",
+        "kind": "運用手順",
+        "source": "MANUAL.md 第6章"
       }
     ]
   }

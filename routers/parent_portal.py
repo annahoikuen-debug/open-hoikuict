@@ -1963,14 +1963,14 @@ def parent_contact_history(
             answer = family_answers.get(entry.target_date.isoformat())
         if not contact and answer.mode == "withdraw":
             continue
-        child_id = contact.child_id if contact else answer.child_id
+        c_id = contact.child_id if contact else answer.child_id
         target_date = contact.target_date if contact else date.fromisoformat(answer.scope)
         history_items.append(
             {
                 "entry": entry,
                 "reply": reply,
-                "child": children_by_id.get(child_id),
-                "child_id": child_id,
+                "child": children_by_id.get(c_id),
+                "child_id": c_id,
                 "target_date": target_date,
                 "emergency_answer": answer if answer and answer.mode != "withdraw" else None,
                 "legacy_answer": isinstance(answer, FamilyEmergencyOrder),
