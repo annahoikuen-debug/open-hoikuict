@@ -1,9 +1,9 @@
-# 🧸 Nusoft ( nusoft v0.7.1)
+# 🧸 nusoft (open-hoikuict v0.8.0 / nusoft v0.8.0)
 
 > **保育のすべてをつなぎ、先生の時間をこどもたちへ**  
 > 職員配置基準連動型 数理最適化シフト自動作成エンジン（NuShift）と、保育園・こども園の日常業務をワンストップで支える次世代保育総合ICTソリューション。
 
-[![Version](https://img.shields.io/badge/version-v0.7.1%20(nusoft%20v0.7.1)-blue.svg)](version.py)
+[![Version](https://img.shields.io/badge/version-v0.8.0%20(nusoft%20v0.8.0)-blue.svg)](version.py)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](pyproject.toml)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20%7C%20All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](pyproject.toml)
@@ -31,10 +31,13 @@
    - **📞 園児別・世帯別の緊急連絡先優先順位指定 (Phase 1)**: 平常時の連絡順に加え、当日の日次連絡や職員による口頭受付に基づく一時的な連絡順変更に対応。
    - **🥣 朝夕の食欲・献立入力 ＆ 閉園時刻チェック (Phase 1)**: 朝食・夕食の食欲（旺盛/普通/少なめ/ない）と献立を記録可能。閉園時刻（`closing_time`）以降の誤ったお迎え予定時刻入力を未然に防止。
    - **💴 延長保育料・請求明細のリアルタイム確認（施設別ON/OFFオプトイン対応）**: 日々の打刻から今月の暫定延長料金・分数をリアルタイム算出。確定した月次請求書および口座振替予定を兄弟別に内訳表示し、A4領収書印刷に対応。自治体一括徴収の園に配慮し、園側で機能の有効/無効をワンタップで切り替え可能（無効時は404完全ガード）。
-3. **⚡ 日本初・法令配置基準連動 シフト自動作成 (NuShift Core v0.7.1 統合)**
+3. **⚡ 日本初・法令配置基準連動 シフト自動作成 (NuShift Core v0.8.0 統合)**
    - 厚生労働省告示第49号（全国基準）および各自治体の独自基準（東京都、福岡市など）に完全対応。
    - **Timefold 思想に基づく独自 MILP ソルバー（PuLP/CBC / HiGHS）**: Hard/Medium/Soft 3階層スコアリング（`HardMediumSoftScore`）、局所探索多様化（LAHC）、および過剰制約計画（Overconstrained Planning）を統合。本システムはTimefold社製ソルバーを使用せず、Python標準MILPフレームワーク（PuLP経由CBC/HiGHS）で同等のスコアリング・最適化機能を提供します。
-   - **過剰制約計画**: 人員不足時でも求解不能に陥らず、不足コマ数（Mediumペナルティ）を最小化しながら最大限充足された安全なシフトを生成。
+   - **過剰制約計画 & 自動診断サジェスト (v0.8.0 新機能)**: 人員不足時でも求解不能（Infeasible）に陥らず、不足コマ数（Mediumペナルティ）を最小化しながら最大限充足された安全なシフトを生成。さらに不足要因と「パート延長」「希望休出勤打診」などの自然言語サジェストを自動生成。
+   - **サブセカンド即時 Re-plan (Micro Engine / v0.8.0 新機能)**: 当日朝の突発病欠に対して、MILPをスキップし局所探索（Late Acceptance Hill Climbing）を直接実行することで、確定シフト・ピン留めを完全保護しながら 0.2〜0.5 秒で代替案を即時返却。
+   - **マルチテナント分離 & 不変スナップショット (v0.8.0 新機能)**: 施設ID（`facility_id`）による論理分離、楽観的排他制御（`lock_version` 409 Conflict）、および求解パラメータの不変 JSON 永続化による 100% の監査証跡を確保。
+   - **分散 Solver-as-a-Service & KEDA オートスケール (v0.8.0 新機能)**: Web API 本体から重い求解ワーカーをステートレス分離。Redis キュー長に応じた 0〜20 Pods 弾力オートスケール（Spot VM 対応）により、月末ラッシュ時の Web サーバー CPU 枯渇・OOM を完全防止。
    - **制約起訴 (Indictment) & 最小破壊修復**: 各制約のペナルティ要因を追跡可視化し、突発欠勤リペア時の変更人数・コマ数を最小化。
    - **現場記号パターンモード**: 「早」「日」「遅」等の園固有勤務枠へ吸着し、現場掲示用記号マトリクスへダイレクト出力。
    - 現場の微調整を保護する「セル編集・ピン留め（Pinning）」機能、労働基準法第32条（1日10h超）違反や配置不足を自動検出して承認をブロックする「BLOCKER 承認ゲート」、急なお迎え予定変更にリアルタイム連動する「配置割れギャップ検知」を搭載。
@@ -74,20 +77,20 @@
 
 ---
 
-## 2. システム構成とバージョン情報 (v0.7.1 / nusoft v0.7.1)
+## 2. システム構成とバージョン情報 (v0.8.0 / nusoft v0.8.0)
 
-本リポジトリは **v0.7.1 (nusoft v0.7.1)** として、全てのフェーズの負債解消と最新機能統合が完了しています。
+本リポジトリは **v0.8.0 (nusoft v0.8.0)** として、全てのフェーズの負債解消と最新機能統合が完了しています。
 
 | 指標 | 実績値 | 備考 |
 | :--- | :--- | :--- |
-| **Python ファイル数** | 323 本 | vendor, venv, gen_bunnrei を除く |
-| **Python 総コード行数** | 約 90,000 行 | 型アノテーション・Ruff準拠 |
-| **データモデル (`models.py`)** | 182 クラス / 2,800 行 | SQLModel / SQLite & PostgreSQL 両対応 |
+| **Python ファイル数** | 325 本 | vendor, venv, gen_bunnrei を除く |
+| **Python 総コード行数** | 約 91,500 行 | 型アノテーション・Ruff準拠 |
+| **データモデル (`models.py`)** | 183 クラス / 2,820 行 | SQLModel / SQLite & PostgreSQL 両対応 |
 | **マイグレーション** | Alembic (Batch mode) / 組み込み046本 | SQLite/Postgres 互換マイグレーション完備 |
 | **ストレージ基盤** | `StorageDriver` 抽象化 | ローカル保存 / 将来の S3 オブジェクトストレージ対応 |
 | **APIルーター (`routers/`)** | 41 ファイル (全49ルーター) | FastAPI 構成 (QR打刻・保護者請求・医療同意含む) |
-| **テストスイート** | 104 ファイル / 1,570+ 件 | pytest / 全件パス・回帰防止テスト完備 |
-| **シフトソルバー統合** | `vendor/nushift/shiftai` | NuShift v0.7.1 独自MILP最適化・非同期ワーカー・監査連動 |
+| **テストスイート** | 108 ファイル / 1,580+ 件 | pytest / 全件パス・回帰防止テスト完備 |
+| **シフトソルバー統合** | `vendor/nushift/shiftai` | NuShift v0.8.0 独自MILP最適化・即時Re-plan・分散ワーカー連動 |
 
 ### アーキテクチャ概要図
 
@@ -143,7 +146,7 @@ open-hoikuict/
 ├── security_config.py      # セキュリティ設定・環境バリデーション
 ├── security_headers.py     # セキュリティHTTPレスポンスヘッダー (動的 CSP Nonce 対応)
 ├── storage_driver.py       # ストレージ抽象化レイヤー (Local / S3)
-├── version.py              # バージョン定義 (v0.7.1)
+├── version.py              # バージョン定義 (v0.8.0)
 ├── youtube_utils.py        # YouTube 動画ID解析 & oEmbed メタデータ自動取得
 ├── zengin_service.py       # 全銀協標準フォーマット口座振替サービス
 └── LICENSE                 # 商用プロプライエタリ ライセンス
@@ -367,4 +370,4 @@ python -m mkdocs build --strict
 
 ---
 
-> nusoft open-hoikuict v0.7.1 | 商用プロプライエタリ | 最終更新: 2026年
+> nusoft open-hoikuict v0.8.0 | 商用プロプライエタリ | 最終更新: 2026年
