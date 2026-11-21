@@ -83,6 +83,7 @@
       "child_id",
       "created_at",
       "id",
+      "idempotency_key",
       "lock_version",
       "note",
       "pickup_person",
@@ -2070,6 +2071,28 @@
       "total_amount",
       "total_count",
       "withdrawal_date"
+    ],
+    "facilities": [
+      "address",
+      "code",
+      "created_at",
+      "facility_type",
+      "id",
+      "is_active",
+      "name",
+      "organization_id",
+      "phone_number",
+      "postal_code",
+      "updated_at"
+    ],
+    "organizations": [
+      "code",
+      "created_at",
+      "description",
+      "id",
+      "is_active",
+      "name",
+      "updated_at"
     ]
   },
   "photos": true

@@ -1,0 +1,27 @@
+# Dockerfile.solver - NuShift Serverless Solver Container
+# GCP Cloud Run / AWS Lambda Container / 独立コンテナ用
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+# C++共有ライブラリ (HiGHS OpenMP) を最小限インストール
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 依存パッケージのインストール
+COPY serverless_solver/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# NuShift ソルバーコアとサーバーレスAPIコードのコピー
+COPY vendor/nushift/shiftai /app/shiftai
+COPY serverless_solver /app/serverless_solver
+
+ENV PYTHONPATH="/app"
+ENV PORT=8080
+
+EXPOSE 8080
+
+# Uvicorn 単一プロセス起動（コンテナオーケストレーション側でスケール）
+CMD ["uvicorn", "serverless_solver.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

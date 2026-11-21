@@ -423,23 +423,34 @@ def _run_solve_sync(
         def _on_solve_progress(p: dict) -> None:
             solver_manager.update_progress(job_id, p)
 
-        try:
-            result = solve_monthly_hierarchical(
-                session=session,
-                context=context,
-                time_limit_sec=time_limit_sec,
-                solver_name=get_configured_solver_name(),
-                progress_callback=_on_solve_progress,
-                cancellation_token=token,
-                parallel_workers=min(4, os.cpu_count() or 1),
-                weights=runtime_weights,
-            )
-        except Exception as exc:  # noqa: BLE001
-            job.status = SolveJobStatus.FAILED
-            job.error_message = str(exc)
-            job.finished_at = utc_now()
-            repo.save_job(job)
-            return
+        # サーバーレス・ソルバーAPIが設定されている場合は外部オフロードを優先試行
+        from .serverless_client import execute_via_serverless_if_available
+        result = execute_via_serverless_if_available(
+            context=context,
+            facility_id=getattr(plan, "facility_id", 1),
+            staffing_standard_key=staffing_standard_key,
+            time_limit_sec=time_limit_sec,
+        )
+
+        if result is None:
+            # 外部未設定または通信エラー時は、安全にローカル内蔵ソルバーへフォールバック
+            try:
+                result = solve_monthly_hierarchical(
+                    session=session,
+                    context=context,
+                    time_limit_sec=time_limit_sec,
+                    solver_name=get_configured_solver_name(),
+                    progress_callback=_on_solve_progress,
+                    cancellation_token=token,
+                    parallel_workers=min(4, os.cpu_count() or 1),
+                    weights=runtime_weights,
+                )
+            except Exception as exc:  # noqa: BLE001
+                job.status = SolveJobStatus.FAILED
+                job.error_message = str(exc)
+                job.finished_at = utc_now()
+                repo.save_job(job)
+                return
 
         is_job_cancelled = solver_manager.is_cancelled(job_id) or getattr(result, "stats", {}).get("cancelled", False)
 

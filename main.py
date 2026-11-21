@@ -120,6 +120,13 @@ def initialize_application() -> None:
     _cleanup_stale_previews()
     ensure_runtime_files()
     create_db_and_tables()
+    if os.getenv("HOIKUICT_TENANT_DB_MODE", "").lower() in ("multi", "1", "true", "enabled"):
+        from database_tenants.migration import (
+            ensure_tenant_template_initialized,
+            migrate_all_tenants_parallel,
+        )
+        ensure_tenant_template_initialized()
+        migrate_all_tenants_parallel()
     apply_parent_push_retention()
     from shift_schedule.services.solve_jobs import recover_stale_jobs
     recover_stale_jobs()

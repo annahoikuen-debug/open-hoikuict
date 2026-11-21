@@ -1285,9 +1285,6 @@ class ParentPortalTests(unittest.TestCase):
         for url in ("/daily-contacts/?view=content", f"/daily-contacts/{self.child_id}", "/parent-portal/history"):
             page = self.client.get(url)
             self.assertEqual(page.status_code, 200)
-            if url == "/parent-portal/history":
-                print(f"DEBUG: page_items count in history. text has {len(page.text)} chars")
-                print(f"DEBUG text: {page.text[:500]}")
             for expected in ("食欲：旺盛", "焼き魚", "食欲：普通", "トースト"):
                 self.assertIn(expected, page.text)
         page = self.client.get(f"/children/{self.child_id}")

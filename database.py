@@ -83,6 +83,19 @@ DEFAULT_CLASSROOMS = [
 ]
 
 def get_session():
+    """DBセッションプロバイダ。
+
+    HOIKUICT_TENANT_DB_MODE=multi（または enabled/1/true）の場合、
+    各園の物理独立DB（storage/tenants/{facility_id}.db）へ透過的にルーティングする。
+    未設定・単一DBモード時は従来のグローバル engine セッションを提供する。
+    """
+    mode = os.getenv("HOIKUICT_TENANT_DB_MODE", "").lower()
+    if mode in ("multi", "1", "true", "enabled"):
+        from database_tenants.dispatcher import get_tenant_session
+
+        yield from get_tenant_session()
+        return
+
     with Session(engine) as session:
         yield session
 

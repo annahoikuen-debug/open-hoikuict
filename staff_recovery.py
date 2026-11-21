@@ -73,7 +73,11 @@ def _take_rate_slot(session, value, kind, *, limit, cooldown=timedelta(0)):
             updated_at=now,
         ).execution_options(synchronize_session=False)
     )
-    return result.rowcount == 1
+    if result.rowcount != 1:
+        throttle = session.get(LoginThrottle, key)
+        print(f"DEBUG RECOVERY: rowcount {result.rowcount}! key={kind}, now={now}, updated_at={throttle.updated_at if throttle else 'none'}, failure_count={throttle.failure_count if throttle else 'none'}")
+        return False
+    return True
 
 
 def _admin_conditions():
@@ -103,13 +107,16 @@ def _recovery_subject(session, recovery):
 def request_admin_password_recovery(session: Session, email: str, request: Request) -> None:
     # All callers receive the same response, including unknown/disabled accounts.
     if not _take_rate_slot(session, _request_network(request), "recovery_network", limit=20):
+        print("DEBUG RECOVERY: hit network limit")
         session.commit()
         return
     email = email.strip()
     if len(email) > 255 or not re.fullmatch(r"[^\s<>@]+@[^\s<>@]+", email):
+        print("DEBUG RECOVERY: bad email format")
         session.commit()
         return
     if not _take_rate_slot(session, email.lower(), "recovery_email", limit=5, cooldown=timedelta(minutes=1)):
+        print("DEBUG RECOVERY: hit email cooldown/limit")
         session.commit()
         return
     users = session.exec(select(User).where(func.lower(func.trim(User.email)) == email.lower()).limit(2)).all()
@@ -122,6 +129,7 @@ def request_admin_password_recovery(session: Session, email: str, request: Reque
             .where(User.id == users[0].id, *_admin_conditions())
         ).first()
     if subject is None or mail_transport() not in {"smtp", "capture"}:
+        print(f"DEBUG RECOVERY: subject is {subject}, mail_transport is {mail_transport()}")
         session.commit()
         return
     try:

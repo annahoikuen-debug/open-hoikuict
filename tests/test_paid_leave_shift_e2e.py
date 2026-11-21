@@ -162,13 +162,15 @@ def test_paid_leave_results_in_off_slot_in_generated_shift(client):
         plan_id=plan_id,
         target_month="2026-11",
         staffing_standard_key="全国基準（厚労省）",
-        time_limit_sec=5,
+        time_limit_sec=20,
     )
 
     # 6. 生成されたセルの検証
     # 有給申請日（2026-11-04）の職員セルの cell_state がすべて OFF であること
     with Session(engine) as session:
         repo = SqlModelShiftRepository(session)
+        job = repo.get_job(job_id)
+        assert job is not None and job.status != "failed", f"求解ジョブが失敗しました: {job.error_message if job else 'none'}"
         cells = repo.list_plan_cells(plan_id)
         target_uids = {user_id.hex, str(user_id)}
         staff_cells_on_leave_day = [

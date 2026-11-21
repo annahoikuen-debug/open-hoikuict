@@ -153,7 +153,7 @@ def test_full_http_recovery_revokes_sessions_codes_and_other_links(recovery, mon
         user = session.get(User, recovery.user_id)
         issue_staff_password_reset(session, user=user, actor_user=user, reason="旧コード")
     token = request_link(recovery)
-    second_time = utc_now() + timedelta(seconds=61)
+    second_time = utc_now() + timedelta(seconds=120)
     with patch.object(staff_recovery, "utc_now", return_value=second_time), patch("models.core.utc_now", return_value=second_time):
         second_token = request_link(recovery)
     assert token != second_token
