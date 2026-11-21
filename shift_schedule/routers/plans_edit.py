@@ -6,6 +6,7 @@ POST /shifts/plans/{id}/cells - セルのピン留め・手動修正。
 from __future__ import annotations
 
 from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import RedirectResponse
@@ -25,9 +26,11 @@ def plans_edit_cell(
     slot_label: str = Form(...),
     cell_state: str = Form("specified"),
     is_pinned: bool = Form(False),
+    lock_version: Optional[int] = Form(None),
     repo: ShiftRepository = Depends(ShiftRepositoryDep),
 ) -> RedirectResponse:
     from sqlmodel import select
+    from time_utils import utc_now
     from ..contracts import SolveJobStatus
     from ..db_models import ShiftDutyPatterns, ShiftSolveJobs
     from ..services.solve_inputs import resolve_slot_to_time_window
@@ -38,6 +41,13 @@ def plans_edit_cell(
 
     if plan.status == PlanStatus.APPROVED:
         raise HTTPException(status_code=409, detail="Approved plan cannot be edited")
+
+    # 楽観的ロック（Optimistic Lock）検証: 他者による同時更新の検知
+    if lock_version is not None and lock_version != plan.lock_version:
+        raise HTTPException(
+            status_code=409,
+            detail="他のユーザーによってシフト計画が更新されました。画面を再読み込みしてください。",
+        )
 
     # 求解中のセル編集競合を防止
     active_job = repo.session.exec(
@@ -88,5 +98,8 @@ def plans_edit_cell(
             is_pinned=pinned_flag,
         )
         repo.create_plan_cell(new_cell)
+
+    plan.updated_at = utc_now()
+    repo.save_plan(plan)
 
     return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)

@@ -421,16 +421,18 @@ class RealtimeReplanBody(BaseModel):
     absent_staff_user_ids: list[str] = []
     time_limit_sec: int = 5
     direct_apply: bool = False
+    fast_heuristic: bool = True
 
 
 @router.post("/plans/{plan_id}/realtime-replan", dependencies=[Depends(require_can_edit)])
+@router.post("/plans/{plan_id}/replan-instant", dependencies=[Depends(require_can_edit)])
 def realtime_replan(
     plan_id: int,
     body: RealtimeReplanBody,
     request: Request,
     repo: ShiftRepository = Depends(ShiftRepositoryDep),
 ):
-    """突発欠勤に対応する部分再計画を高速（1〜3秒）に実行し、提案を生成する。"""
+    """突発欠勤に対応する部分再計画を高速（1秒未満〜3秒）に実行し、提案を生成する。"""
     from datetime import datetime as dtt
     from ..services.replan import execute_realtime_replan
 
@@ -443,10 +445,23 @@ def realtime_replan(
             absent_staff_user_ids=body.absent_staff_user_ids,
             time_limit_sec=body.time_limit_sec,
             direct_apply=body.direct_apply,
+            fast_heuristic=body.fast_heuristic,
         )
         return res
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/plans/{plan_id}/diagnostics")
+def get_plan_diagnostics_endpoint(
+    plan_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """プランの過剰制約診断レポートおよびAIサジェストを取得する。"""
+    from ..services.diagnostics_service import get_plan_diagnostics
+
+    return get_plan_diagnostics(repo.session, plan_id)
+
 
 

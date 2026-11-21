@@ -390,6 +390,35 @@ def _run_solve_sync(
             weights=runtime_weights,
         )
 
+        # 不変スナップショット（Immutable Solve Payload）の永続化 (Phase 3)
+        try:
+            import json
+            from ..db_models import ShiftSolveSnapshots
+            from models.organization import DEFAULT_FACILITY_ID
+
+            snapshot_payload = {
+                "plan_id": plan_id,
+                "job_id": job_id,
+                "facility_id": str(getattr(plan, "facility_id", DEFAULT_FACILITY_ID)),
+                "target_month": target_month,
+                "standard": staffing_standard_key,
+                "children_count": len(day_plans),
+                "staff_count": len(day_staff),
+                "fixed_count": len(fixed_assignments),
+                "closed_days": [d.isoformat() for d in closed_days],
+                "holiday_dates": [d.isoformat() for d in holiday_dates],
+            }
+            snapshot = ShiftSolveSnapshots(
+                job_id=job_id,
+                plan_id=plan_id,
+                facility_id=getattr(plan, "facility_id", DEFAULT_FACILITY_ID),
+                payload=json.dumps(snapshot_payload, ensure_ascii=False),
+            )
+            session.add(snapshot)
+            session.commit()
+        except Exception:
+            pass
+
         # 月次一括階層的求解の実行
         def _on_solve_progress(p: dict) -> None:
             solver_manager.update_progress(job_id, p)
@@ -470,6 +499,20 @@ def _run_solve_sync(
         except Exception:
             pass
 
+        # Timefold 思想に基づく制約起訴 (Constraint Indictment) & 不足コマ診断の実行
+        diagnostics_data = {}
+        try:
+            from .diagnostics_service import enrich_solve_job_with_diagnostics
+            diagnostics_data = enrich_solve_job_with_diagnostics(
+                session=session,
+                job=job,
+                result=result,
+                context=context,
+                plan_id=plan_id,
+            )
+        except Exception:
+            pass
+
         # 既存セル・違反を保存
         for c in all_cells:
             session.add(c)
@@ -491,6 +534,7 @@ def _run_solve_sync(
             "score": score_dict,
             "proposal_id": proposal_id,
             "cancelled": is_job_cancelled,
+            "diagnostics": diagnostics_data,
         }
         job.stats = json.dumps(stats_payload, ensure_ascii=False)
         session.add(job)

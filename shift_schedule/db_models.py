@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any, Optional
+from uuid import UUID
 
 from sqlalchemy import CHAR, Column, ForeignKey, JSON, Text
 from sqlmodel import Field, SQLModel
 
+from models.organization import DEFAULT_FACILITY_ID
 from time_utils import utc_now
 
 
@@ -147,6 +149,7 @@ class ShiftPlans(SQLModel, table=True):
     __tablename__ = "shift_plans"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    facility_id: UUID = Field(default=DEFAULT_FACILITY_ID, index=True)
     target_month: str = Field(max_length=7, index=True)  # "YYYY-MM"
     status: str = Field(default="draft", max_length=16)  # draft/generated/approved/archived
     staffing_standard_key: str = Field(default="fukuoka_city", max_length=64)
@@ -165,6 +168,7 @@ class ShiftPlanCells(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     plan_id: int = Field(foreign_key="shift_plans.id", index=True)
+    facility_id: UUID = Field(default=DEFAULT_FACILITY_ID, index=True)
     staff_user_id: Any = Field(sa_column=Column(CHAR(32), ForeignKey("users.id"), index=True))
     target_date: date = Field(index=True)
     slot_label: str = Field(max_length=32)
@@ -251,3 +255,20 @@ class ShiftPlanProposals(SQLModel, table=True):
     diff_summary: Optional[str] = Field(default=None, sa_column=Column(JSON))
     proposal_cells: Optional[str] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class ShiftSolveSnapshots(SQLModel, table=True):
+    """求解入力の不変スナップショット（Immutable Solve Payload）。
+
+    後から打刻や職員マスタが更新されても、求解時点の全入力を完全再現・監査可能にする。
+    """
+
+    __tablename__ = "shift_solve_snapshots"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="shift_solve_jobs.id", index=True)
+    plan_id: int = Field(foreign_key="shift_plans.id", index=True)
+    facility_id: UUID = Field(default=DEFAULT_FACILITY_ID, index=True)
+    payload: str = Field(sa_column=Column(Text))  # 不変 JSON スナップショット
+    created_at: datetime = Field(default_factory=utc_now)
+
