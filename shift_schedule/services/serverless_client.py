@@ -28,21 +28,34 @@ SERVERLESS_SOLVER_URL = os.getenv("HOIKUICT_SERVERLESS_SOLVER_URL", "").strip().
 SERVERLESS_SOLVER_TIMEOUT = int(os.getenv("HOIKUICT_SERVERLESS_SOLVER_TIMEOUT", "45"))
 
 
+def get_serverless_solver_url() -> str:
+    """サーバーレスソルバーのURLを動的に取得する。"""
+    return os.getenv("HOIKUICT_SERVERLESS_SOLVER_URL", SERVERLESS_SOLVER_URL).strip().rstrip("/")
+
+
 def is_serverless_configured() -> bool:
     """サーバーレスソルバーが設定されているかを返す。"""
-    return bool(SERVERLESS_SOLVER_URL)
+    try:
+        from profile_config import should_use_serverless_solver
+
+        if not should_use_serverless_solver():
+            return False
+    except ImportError:
+        pass
+    return bool(get_serverless_solver_url())
 
 
 def check_serverless_health() -> bool:
     """サーバーレスエンドポイントのヘルスチェックを実施する。"""
     if not is_serverless_configured():
         return False
+    url_base = get_serverless_solver_url()
     try:
-        url = f"{SERVERLESS_SOLVER_URL}/health"
+        url = f"{url_base}/health"
         res = requests.get(url, timeout=5)
         return res.status_code == 200
     except Exception as exc:
-        logger.warning("サーバーレスヘルスチェック失敗: %s (URL: %s)", exc, SERVERLESS_SOLVER_URL)
+        logger.warning("サーバーレスヘルスチェック失敗: %s (URL: %s)", exc, url_base)
         return False
 
 
@@ -52,7 +65,7 @@ def call_serverless_solve(request: ShiftSolveRequest) -> Optional[ShiftSolveResp
         logger.info("サーバーレスURL未設定のため、ローカル内蔵ソルバーへフォールバックします。")
         return None
 
-    endpoint = f"{SERVERLESS_SOLVER_URL}/api/v1/solve"
+    endpoint = f"{get_serverless_solver_url()}/api/v1/solve"
     logger.info(
         "サーバーレス求解要求送信: URL=%s, facility=%s, month=%s",
         endpoint,

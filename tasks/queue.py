@@ -41,8 +41,15 @@ def get_redis_client():
 def is_redis_available(force_check: bool = False) -> bool:
     """Redis サーバーが稼働しているかを高速に判定する。"""
     global _redis_available_cached
-    if os.getenv("HOIKUICT_USE_REDIS") == "0":
-        return False
+    try:
+        from profile_config import should_use_redis
+
+        if not should_use_redis():
+            return False
+    except ImportError:
+        if os.getenv("HOIKUICT_USE_REDIS") == "0":
+            return False
+
     if _redis_available_cached is not None and not force_check:
         return _redis_available_cached
 

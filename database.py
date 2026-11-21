@@ -89,8 +89,15 @@ def get_session():
     各園の物理独立DB（storage/tenants/{facility_id}.db）へ透過的にルーティングする。
     未設定・単一DBモード時は従来のグローバル engine セッションを提供する。
     """
-    mode = os.getenv("HOIKUICT_TENANT_DB_MODE", "").lower()
-    if mode in ("multi", "1", "true", "enabled"):
+    try:
+        from profile_config import should_enable_multi_tenant
+
+        use_multi = should_enable_multi_tenant()
+    except ImportError:
+        mode = os.getenv("HOIKUICT_TENANT_DB_MODE", "").lower()
+        use_multi = mode in ("multi", "1", "true", "enabled")
+
+    if use_multi:
         from database_tenants.dispatcher import get_tenant_session
 
         yield from get_tenant_session()

@@ -116,11 +116,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 def initialize_application() -> None:
     validate_runtime_security()
+    from profile_config import format_profile_banner, should_enable_multi_tenant
+
+    logger.info("\n" + format_profile_banner())
     configure_auth_backends_from_environment()
     _cleanup_stale_previews()
     ensure_runtime_files()
     create_db_and_tables()
-    if os.getenv("HOIKUICT_TENANT_DB_MODE", "").lower() in ("multi", "1", "true", "enabled"):
+    if should_enable_multi_tenant():
         from database_tenants.migration import (
             ensure_tenant_template_initialized,
             migrate_all_tenants_parallel,
