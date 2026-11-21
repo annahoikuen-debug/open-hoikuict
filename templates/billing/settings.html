@@ -36,6 +36,18 @@
     </div>
   </div>
 
+  <!-- P1-3: 文脈ヘルプ -->
+  {% with help_id="help-billing-settings", help_title="料金マスタ・全銀設定の確認ポイント", help_steps=[
+    {"title": "料金項目マスタ", "desc": "給食費・教材費など毎月の請求項目（FeeItem）を登録・編集します。"},
+    {"title": "全銀口座振替設定", "desc": "委託者コード・引落口座など銀行提出用電文の元となる情報を管理します。"},
+    {"title": "減免・多子軽減", "desc": "園児ごとの免除・減額と、兄弟割引の自動判定結果を確認できます。"}
+  ], help_cautions=[
+    "委託者コードが初期値（ダミー）のままでは全銀電文が銀行でエラーになります。",
+    "設定変更は保存以降の請求に適用されます。確定済み請求は自動では変更されません。"
+  ] %}
+  {% include "shared/context_help.html" %}
+  {% endwith %}
+
   {% if message %}
   <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-medium text-emerald-800">
     ✅ {{ message }}

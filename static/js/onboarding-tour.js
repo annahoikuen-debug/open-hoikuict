@@ -6,6 +6,7 @@
   "use strict";
 
   var STORAGE_KEY = "hoikuict_onboarding_completed";
+  var PROGRESS_KEY = "hoikuict_onboarding_progress";
 
   var TOUR_STEPS = [
     {
@@ -149,6 +150,7 @@
     document.getElementById("tour-badge").textContent = "Step " + (idx + 1) + "/" + TOUR_STEPS.length;
     document.getElementById("tour-title").textContent = step.title;
     document.getElementById("tour-desc").textContent = step.desc;
+    try { localStorage.setItem(PROGRESS_KEY, String(idx + 1)); } catch (e) {}
 
     document.getElementById("tour-prev-btn").style.visibility = idx === 0 ? "hidden" : "visible";
     document.getElementById("tour-next-btn").textContent =
@@ -195,7 +197,7 @@
     } catch (e) {}
   }
 
-  window.restartOnboardingTour = function () {
+  window.restartOnboardingTour = function (startStep) {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
@@ -212,10 +214,45 @@
     } catch (e) {}
 
     createTourElements();
-    showStep(0);
+    showStep(startStep == null ? 0 : Math.max(0, Math.min(TOUR_STEPS.length - 1, Number(startStep) || 0)));
   };
 
+  window.startOnboardingTourFrom = function (stepIdx) {
+    createTourElements();
+    showStep(Math.max(0, Math.min(TOUR_STEPS.length - 1, Number(stepIdx) || 0)));
+  };
+
+  function initTourProgressWidget() {
+    var labelEl = document.getElementById("tour-progress-label");
+    var resumeBtn = document.getElementById("tour-resume-btn");
+    if (!labelEl) return;
+
+    fetch("/settings/tour/status?tour_key=staff_console_tour", { credentials: "same-origin" })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var completed = Boolean(data && data.is_completed);
+        var progress = 0;
+        try { progress = Math.max(0, Math.min(8, Number(localStorage.getItem(PROGRESS_KEY)) || 0)); } catch (e) {}
+
+        if (completed) {
+          labelEl.textContent = "完了済み";
+        } else {
+          labelEl.textContent = "未完了・進捗 " + progress + "/8";
+          if (resumeBtn && progress > 0) {
+            resumeBtn.hidden = false;
+            resumeBtn.dataset.step = progress;
+          }
+        }
+      })
+      .catch(function () {
+        // オフライン時など：既存の「ツアーを開始」ボタンのみでフォールバック
+      });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    // ツアー進捗ウィジェット（設定画面など）
+    initTourProgressWidget();
+
     // 職員画面かつホーム画面でのみ初回自動起動
     if (!document.getElementById("staff-sidebar")) return;
 

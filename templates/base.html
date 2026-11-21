@@ -998,7 +998,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                   {% endif %}
                   <a href="/child-records/progress"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/child-records/progress') or '/progress-records' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">児童票作成状況</a>
-                  <a href="/plans/"
+                  <a href="/plans/" data-tour-step="5"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/plans') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">指導計画</a>
                   <a href="/health"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/health') or '/health' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">健康管理</a>
@@ -1012,7 +1012,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path == '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">子どもの名前一覧</a>
                   <a href="/extended-care-fees/"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/extended-care-fees') and not settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">延長保育料金</a>
-                  <a href="/billing/"
+                  <a href="/billing/" data-tour-step="7"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/billing') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">請求入力</a>
                   <a href="/guardian/setup"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/guardian') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者キオスク</a>
@@ -1038,7 +1038,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/notices') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">お知らせ管理</a>
                   <a href="/videos"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/videos') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">動画配信管理</a>
-                  <a href="/shifts/"
+                  <a href="/shifts/" data-tour-step="6"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts') and not current_path.startswith('/shifts/staff') and not current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト</a>
                   <a href="/shifts/staff"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts/staff') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト設定</a>
@@ -1076,7 +1076,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                 </div>
               </div>
               <div class="border-t border-slate-200 pt-4">
-                <a href="/settings" data-tour-step="5" {% if settings_active %}aria-current="page" {% endif %}
+                <a href="/settings" data-tour-step="8" {% if settings_active %}aria-current="page" {% endif %}
                   class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">設定</a>
                 <a href="/manual-guide-preview/" target="_blank" rel="noopener noreferrer"
                   class="mt-1 flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">

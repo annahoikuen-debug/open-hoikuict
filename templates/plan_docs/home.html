@@ -10,6 +10,18 @@
     </div>
   </section>
 
+  <!-- P1-3: 文脈ヘルプ -->
+  {% with help_id="help-plan-docs-home", help_title="指導計画（年案・月案）の作成フロー", help_steps=[
+    {"title": "日案・月案の作成", "desc": "クラスごとの日案・月案を作成します。前日振り返りを引用して下書きを素早く作れます。"},
+    {"title": "文例・AIサジェスト", "desc": "定型文例の挿入や AI 候補生成で記入負担を減らします。"},
+    {"title": "印刷・PDF出力", "desc": "A4 帳票 PDF や印刷プレビューで、提出用のレイアウトを事前確認できます。"}
+  ], help_cautions=[
+    "添付した図表（環境構成図等）は PDF 帳票に自動で焼き込まれます。",
+    "印刷・提出前にプレビューで改ページ位置を確認してください。"
+  ] %}
+  {% include "shared/context_help.html" %}
+  {% endwith %}
+
   {% if reflection_reminders %}
     <section class="section-block reflection-reminder-panel" aria-labelledby="reflection-reminder-heading">
       <div class="section-heading">

@@ -29,6 +29,18 @@
   </div>
 </div>
 
+<!-- P1-3: 文脈ヘルプ -->
+{% with help_id="help-attendance-list", help_title="出欠一覧の使い方と朝の業務の流れ", help_steps=[
+  {"title": "当日の出欠確認", "desc": "クラス・期間・時間帯・園児名で絞り込み、時間順やクラス順で並び替えて確認します。"},
+  {"title": "一括打刻・訂正", "desc": "複数園児を選択した一括打刻や、打刻間違いの訂正をここから行います。"},
+  {"title": "お迎え予定の確認", "desc": "保護者ポータルから届いたお迎え予定時刻・お迎え担当者の変更を確認します。"}
+], help_cautions=[
+  "打刻の訂正は履歴が残ります。勝手な上書きではなく訂正機能を使ってください。",
+  "欠席・遅刻の連絡は保護者ポータルから届きます。未確認の連絡がないか毎朝確認してください。"
+] %}
+{% include "shared/context_help.html" %}
+{% endwith %}
+
 {% if notice_message %}
 <div class="no-print mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
   {{ notice_message }}

@@ -10,6 +10,18 @@
     <p class="mt-2 text-sm text-slate-600">園児のお迎え最終受付時刻や補食判定時刻、補食費用を設定します。変更は今後の受付や表示に反映されます。</p>
   </div>
 
+  <!-- P1-3: 文脈ヘルプ -->
+  {% with help_id="help-facility-settings", help_title="施設基本設定の確認ポイント", help_steps=[
+    {"title": "お迎え最終時刻", "desc": "保護者キオスクで選べるお迎え予定時刻の上限を設定します。"},
+    {"title": "補食判定・補食費", "desc": "この時刻以降のお迎え予定を補食必要と初期判定し、注記に表示する金額を設定します。"},
+    {"title": "変更履歴", "desc": "料金・請求に関わる設定変更は最新20件が履歴として記録されます。"}
+  ], help_cautions=[
+    "変更は保存以降のキオスク表示と補食判定に適用されます。過去の打刻・確定済み請求は変わりません。",
+    "補食費など料金に関わる値は変更履歴に記録されます。"
+  ] %}
+  {% include "shared/context_help.html" %}
+  {% endwith %}
+
   {% if saved %}
   <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
     施設設定を保存しました。
