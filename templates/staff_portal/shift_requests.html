@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "shared/ui_macros.html" import autosave_banner, phrase_chips, status_badge %}
 
 {% block title %}希望休申請 | open-hoikuict{% endblock %}
 
@@ -11,73 +12,111 @@
   </div>
 
   {% if request.query_params.get('msg') %}
-  <div class="rounded-md bg-emerald-50 p-4 border border-emerald-200 text-sm text-emerald-800">
+  <div class="rounded-xl bg-emerald-50 p-4 border border-emerald-200 text-sm font-medium text-emerald-800">
     {{ request.query_params.get('msg') }}
   </div>
   {% endif %}
 
   <!-- 新規申請フォーム -->
-  <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-    <h2 class="text-base font-semibold text-slate-900 mb-4">新規希望休申請</h2>
-    <form method="post" action="/staff/shift-requests" class="grid gap-4 sm:grid-cols-2">
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-bold text-slate-900">新規希望休申請</h2>
+      <span class="text-xs text-slate-500">疲れた勤務後でもワンタップで入力完了</span>
+    </div>
+
+    {{ autosave_banner("shift-request-form", "staff_shift_request") }}
+
+    <form method="post" action="/staff/shift-requests" class="grid gap-5 sm:grid-cols-2" id="shift-request-form">
       <div>
-        <label class="block text-xs font-semibold text-slate-700">対象日 <span class="text-rose-600">*</span></label>
-        <input type="date" name="target_date" required min="{{ today }}" class="mt-1 w-full rounded border border-slate-300 p-2 text-xs">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700">時間帯（終日休の場合は空欄）</label>
-        <div class="flex items-center gap-2 mt-1">
-          <input type="time" name="start_time" placeholder="開始" class="w-1/2 rounded border border-slate-300 p-2 text-xs">
-          <span class="text-slate-400">〜</span>
-          <input type="time" name="end_time" placeholder="終了" class="w-1/2 rounded border border-slate-300 p-2 text-xs">
+        <label for="shift-target-date" class="block text-xs font-semibold text-slate-700">対象日 <span class="text-rose-600">*</span></label>
+        <input type="date" id="shift-target-date" name="target_date" required min="{{ today }}" class="mt-1 w-full min-h-11 rounded-xl border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <!-- クイック日付チップ -->
+        <div class="mt-2 flex flex-wrap gap-1.5 items-center">
+          <span class="text-[11px] text-slate-400">日付目安:</span>
+          <button type="button" class="quick-date-chip rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 active:scale-95 transition" data-days-offset="1">明日</button>
+          <button type="button" class="quick-date-chip rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 active:scale-95 transition" data-days-offset="7">来週同曜日</button>
         </div>
       </div>
-      <div class="sm:col-span-2">
-        <label class="block text-xs font-semibold text-slate-700">理由・備考</label>
-        <input type="text" name="reason" placeholder="私用、通院など" class="mt-1 w-full rounded border border-slate-300 p-2 text-xs">
+
+      <div>
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-semibold text-slate-700">時間帯（終日休の場合は空欄）</label>
+          <span id="time-meter-badge" class="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700">終日休み（全休）</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <input type="time" id="shift-start-time" name="start_time" placeholder="開始" class="w-1/2 min-h-11 rounded-xl border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+          <span class="text-slate-400 font-bold">〜</span>
+          <input type="time" id="shift-end-time" name="end_time" placeholder="終了" class="w-1/2 min-h-11 rounded-xl border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        </div>
+        <!-- スマート時間セレクター（クイックプリセット） -->
+        <div class="mt-2 flex flex-wrap gap-1.5 items-center">
+          <span class="text-[11px] text-slate-400">時間指定:</span>
+          <button type="button" class="time-preset-btn rounded-lg border border-indigo-200 bg-indigo-50/70 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 active:scale-95 transition" data-start="" data-end="">終日休み</button>
+          <button type="button" class="time-preset-btn rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 active:scale-95 transition" data-start="07:00" data-end="13:00">午前不可</button>
+          <button type="button" class="time-preset-btn rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 active:scale-95 transition" data-start="13:00" data-end="19:00">午後不可</button>
+          <button type="button" class="time-preset-btn rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-100 active:scale-95 transition" data-start="16:00" data-end="19:00">夕方不可</button>
+        </div>
       </div>
-      <div class="sm:col-span-2 flex justify-end">
-        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">申請する</button>
+
+      <div class="sm:col-span-2">
+        <label for="shift-reason" class="block text-xs font-semibold text-slate-700">理由・備考</label>
+        <input type="text" id="shift-reason" name="reason" placeholder="私用、通院など" class="mt-1 w-full min-h-11 rounded-xl border border-slate-300 p-2.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <!-- 申請理由定型チップ（shared/ui_macros.html 活用） -->
+        <div class="mt-2">
+          {{ phrase_chips("reason", ["私用のため", "定期通院・受診", "家族の看護・学校行事", "研修・講習参加", "冠婚葬祭", "体調管理・休養"], "タップで理由を簡単入力:") }}
+        </div>
+      </div>
+
+      <div class="sm:col-span-2 flex justify-end pt-2">
+        <button type="submit" class="w-full sm:w-auto min-h-12 min-w-36 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-indigo-500 active:scale-98 transition flex items-center justify-center gap-2">
+          <span>希望休を申請する</span>
+          <span aria-hidden="true">→</span>
+        </button>
       </div>
     </form>
   </section>
 
   <!-- 申請履歴 -->
-  <section class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-    <div class="p-5 border-b border-slate-200">
-      <h2 class="text-base font-semibold text-slate-900">自分の申請履歴 ({{ requests|length }}件)</h2>
+  <section class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-slate-200 flex items-center justify-between">
+      <h2 class="text-base font-bold text-slate-900">自分の申請履歴 ({{ requests|length }}件)</h2>
+      <span class="text-xs text-slate-500">過去の申請一覧</span>
     </div>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
           <tr>
-            <th class="px-4 py-3">対象日</th>
-            <th class="px-4 py-3">時間帯</th>
-            <th class="px-4 py-3">理由</th>
-            <th class="px-4 py-3">承認状態</th>
+            <th class="px-4 py-3.5">対象日</th>
+            <th class="px-4 py-3.5">時間帯</th>
+            <th class="px-4 py-3.5">理由</th>
+            <th class="px-4 py-3.5">承認状態</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for r in requests %}
-          <tr>
-            <td class="px-4 py-3 font-medium text-slate-900">{{ r.target_date }}</td>
-            <td class="px-4 py-3 text-xs text-slate-600">
-              {% if r.start_time or r.end_time %}{{ r.start_time or '' }}〜{{ r.end_time or '' }}{% else %}終日休{% endif %}
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-600">{{ r.reason or '-' }}</td>
-            <td class="px-4 py-3 text-xs font-medium">
-              {% if r.status == 'approved' %}
-                <span class="inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-700">承認済み</span>
-              {% elif r.status == 'rejected' %}
-                <span class="inline-flex rounded-md bg-rose-50 px-2 py-1 text-rose-700">却下</span>
+          <tr class="hover:bg-slate-50/60 transition">
+            <td class="px-4 py-3.5 font-bold text-slate-900">{{ r.target_date }}</td>
+            <td class="px-4 py-3.5 text-xs text-slate-600">
+              {% if r.start_time or r.end_time %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono">{{ r.start_time or '' }}〜{{ r.end_time or '' }}</span>
               {% else %}
-                <span class="inline-flex rounded-md bg-amber-50 px-2 py-1 text-amber-700">承認待ち</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-semibold">終日休</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3.5 text-xs text-slate-600">{{ r.reason or '-' }}</td>
+            <td class="px-4 py-3.5 text-xs font-medium">
+              {% if r.status == 'approved' %}
+                {{ status_badge('success', '承認済み') }}
+              {% elif r.status == 'rejected' %}
+                {{ status_badge('danger', '却下') }}
+              {% else %}
+                {{ status_badge('warning', '承認待ち') }}
               {% endif %}
             </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="4" class="px-4 py-6 text-center text-xs text-slate-400">希望休の申請履歴はありません。</td>
+            <td colspan="4" class="px-4 py-8 text-center text-xs text-slate-400">希望休の申請履歴はありません。</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -85,5 +124,76 @@
     </div>
   </section>
 </div>
+
+<script>
+  // リアルタイム出勤不可時間メーター & プリセット連動
+  document.addEventListener('DOMContentLoaded', () => {
+    const startTimeInput = document.getElementById('shift-start-time');
+    const endTimeInput = document.getElementById('shift-end-time');
+    const meterBadge = document.getElementById('time-meter-badge');
+    const targetDateInput = document.getElementById('shift-target-date');
+
+    function updateTimeMeter() {
+      const start = startTimeInput.value;
+      const end = endTimeInput.value;
+
+      if (!start && !end) {
+        meterBadge.className = 'inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700';
+        meterBadge.textContent = '終日休み（全休）';
+        return;
+      }
+
+      if (!start || !end) {
+        meterBadge.className = 'inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-700';
+        meterBadge.textContent = '開始と終了を入力してください';
+        return;
+      }
+
+      const [startH, startM] = start.split(':').map(Number);
+      const [endH, endM] = end.split(':').map(Number);
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      const diffMinutes = endMinutes - startMinutes;
+
+      if (diffMinutes <= 0) {
+        meterBadge.className = 'inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700';
+        meterBadge.textContent = '終了時刻を開始時刻より後にしてください';
+      } else {
+        const hours = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        const timeStr = hours > 0 ? (mins > 0 ? `${hours}時間${mins}分` : `${hours}時間`) : `${mins}分`;
+        meterBadge.className = 'inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700';
+        meterBadge.textContent = `不可時間: ${timeStr}`;
+      }
+    }
+
+    startTimeInput?.addEventListener('input', updateTimeMeter);
+    endTimeInput?.addEventListener('input', updateTimeMeter);
+
+    // 時間プリセットボタンのバインド
+    document.querySelectorAll('.time-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        startTimeInput.value = btn.dataset.start || '';
+        endTimeInput.value = btn.dataset.end || '';
+        updateTimeMeter();
+        startTimeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+
+    // クイック日付ボタンのバインド
+    document.querySelectorAll('.quick-date-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const offset = parseInt(btn.dataset.daysOffset || '0', 10);
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        targetDateInput.value = `${yyyy}-${mm}-${dd}`;
+        targetDateInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  });
+</script>
 {% endblock %}
 

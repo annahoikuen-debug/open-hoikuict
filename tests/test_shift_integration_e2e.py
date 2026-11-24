@@ -647,6 +647,56 @@ def test_phase5_nushift_csv_export(client):
         client.app.dependency_overrides.pop(get_current_staff_user, None)
 
 
+def test_phase3_shift_requests_smart_ui_elements(client):
+    """Phase 3 UI/UX テスト:
+    (1) スマート時間セレクタープリセット (time-preset-btn)
+    (2) 申請理由定型チップ (data-phrase, shared macro)
+    (3) 自動保存バナー (data-autosave-form)
+    (4) リアルタイム時間メーターバッジ (time-meter-badge)
+    """
+    from auth import Role, StaffUser, get_current_staff_user
+
+    create_db_and_tables()
+    uid = uuid4()
+    with Session(engine) as session:
+        user = User(
+            id=uid,
+            email=f"phase3_{uid.hex[:6]}@example.com",
+            display_name="UI職員",
+            role="staff",
+            is_active=True,
+        )
+        session.add(user)
+        session.commit()
+
+    staff_principal = StaffUser(role=Role.CAN_EDIT, name="UI職員", user_id=uid)
+    client.app.dependency_overrides[get_current_staff_user] = lambda: staff_principal
+    try:
+        resp = client.get("/staff/shift-requests")
+        assert resp.status_code == 200
+        html = resp.text
+
+        # (1) スマート時間セレクタープリセット
+        assert "time-preset-btn" in html
+        assert "終日休み" in html
+        assert "午前不可" in html
+        assert "午後不可" in html
+
+        # (2) 申請理由定型チップ
+        assert 'data-insert-phrase="私用のため"' in html
+        assert 'data-insert-phrase="定期通院・受診"' in html
+        assert 'data-phrase-target="reason"' in html
+
+        # (3) 自動保存バナー
+        assert 'data-autosave-key="staff_shift_request"' in html
+
+        # (4) リアルタイム時間メーター
+        assert 'id="time-meter-badge"' in html
+    finally:
+        client.app.dependency_overrides.pop(get_current_staff_user, None)
+
+
+
 
 
 
