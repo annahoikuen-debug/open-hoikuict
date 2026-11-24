@@ -58,9 +58,14 @@
       </form>
       {% else %}
       <p class="mt-4 text-sm text-slate-500">この請求月は「{{ cycle_status_label }}」のため編集できません。</p>
-      {% if reopen_export and current_user and current_user.is_admin %}
+      {% if reopen_export and current_user and can_export_zengin %}
+      {% set req_pending = reopen_export.reopen_confirm_requested_by and not reopen_export.reopen_confirm_at %}
       <p class="my-3 text-sm leading-6 text-slate-600">銀行提出前であれば、出力を取消して同じ請求月の入力へ戻れます。</p>
-      {{ reopen_button(reopen_export, cycle.year_month) }}
+      {{ reopen_button(reopen_export, cycle.year_month, pending=req_pending,
+                       approver=current_user.is_admin,
+                       requested_by=reopen_export.reopen_confirm_requested_by,
+                       requested_at=reopen_export.reopen_confirm_requested_at,
+                       withdrawable=(reopen_export.reopen_confirm_requested_by == current_user.name or current_user.is_admin)) }}
       {% endif %}
       {% if current_user and current_user.can_edit %}
       <form method="post" action="/billing/child-charges/{{ child.id }}/new-editable-cycle" class="mt-4">

@@ -1,19 +1,56 @@
-{% macro reopen_button(export, month) -%}
+{% macro reopen_button(export, month, level="", delta_amount=none, requested_by="", requested_at=none, pending=false, approver=false, withdrawable=false) -%}
+{% if pending %}
+  {% if approver %}
+  <button type="button" data-reopen-approve="{{ export.id }}" data-reopen-month="{{ month }}"
+          data-reopen-count="{{ export.total_count }}" data-reopen-amount="{{ export.total_amount }}"
+          data-reopen-requested-by="{{ requested_by or '' }}" data-reopen-requested-at="{{ requested_at|jst_datetime('%m/%d %H:%M') if requested_at else '' }}"
+          data-reopen-payload="{{ (export.reopen_confirm_payload or {})|tojson }}"
+          class="rounded border border-amber-600 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200">⏳ 園長確認として解除</button>
+  {% else %}
+  <span class="inline-flex items-center gap-2">
+    <span class="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">園長確認待ち{% if requested_by %}（{{ requested_by }}）{% endif %}</span>
+    {% if withdrawable %}
+    <form method="post" action="/billing/zengin/exports/{{ export.id }}/reopen-request-cancel-ui" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50">申請を取り消す</button>
+    </form>
+    {% endif %}
+  </span>
+  {% endif %}
+{% else %}
 <button type="button" data-reopen-export="{{ export.id }}" data-reopen-month="{{ month }}"
         data-reopen-count="{{ export.total_count }}" data-reopen-amount="{{ export.total_amount }}"
+        data-reopen-level="{{ level }}" data-reopen-delta="{{ delta_amount if delta_amount is not none else '' }}"
         class="rounded border border-amber-600 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">取消して修正</button>
+{% endif %}
 {%- endmacro %}
-{% if current_user and (current_user.is_admin or current_user.role == 'admin') %}
+{% if current_user and (current_user.is_admin or can_export_zengin) %}
 <dialog id="billing-reopen-dialog" aria-labelledby="billing-reopen-title">
   <form id="billing-reopen-form" method="post" action="#">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <h2 id="billing-reopen-title">Zengin出力を取消して、請求を修正</h2>
     <p id="billing-reopen-summary"></p>
+    <p id="billing-reopen-level" class="billing-reopen-level" hidden></p>
+    <div id="billing-reopen-delta" class="billing-reopen-delta" hidden>
+      <strong>再計算後の請求額が変わります。</strong><span id="billing-reopen-delta-text"></span>
+      <span class="billing-reopen-delta-note">※この差額でZenginを作り直します。実行後に再計算値を必ず確認してください。</span>
+    </div>
+    <div id="billing-reopen-request-summary" class="billing-reopen-request-summary" hidden></div>
     <p>この出力を「取消済み」にし、<strong>同じ請求月の入力画面</strong>へ戻します。請求金額は保持され、修正後に「保存」してからZenginを作り直します。</p>
     <p class="billing-reopen-warning">ダウンロード済みの古いファイルは提出に使わないでください。この操作で銀行側の受付は取り消せません。</p>
-    <label class="billing-reopen-reason">取消理由（必須）
-      <textarea name="reason" rows="3" required maxlength="500" placeholder="例：写真代を訂正するため"></textarea>
-    </label>
+    <fieldset id="billing-reopen-reason-fieldset" class="billing-reopen-reason">
+      <legend>取消理由（必須）</legend>
+      <div class="billing-reopen-templates">
+        <label><input type="checkbox" name="reason_tpl" value="打刻漏れ">打刻漏れ</label>
+        <label><input type="checkbox" name="reason_tpl" value="免除・軽減の変更">免除・軽減の変更</label>
+        <label><input type="checkbox" name="reason_tpl" value="口座変更">口座変更</label>
+        <label><input type="checkbox" name="reason_tpl" value="項目誤入力">項目誤入力</label>
+        <label><input type="checkbox" name="reason_tpl" value="その他">その他（補足必須）</label>
+      </div>
+      <label class="billing-reopen-reason">補足
+        <textarea name="reason" rows="3" maxlength="500" placeholder="例：写真代を訂正するため"></textarea>
+      </label>
+    </fieldset>
     <label class="billing-reopen-check"><input name="confirmed_unsubmitted" type="checkbox" value="true" required>このファイルを銀行へ提出・アップロードしていないことを確認しました</label>
     <p id="billing-reopen-error" role="alert" hidden></p>
     <div class="billing-reopen-actions">

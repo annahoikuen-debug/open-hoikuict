@@ -38,25 +38,33 @@ from staff_permissions import (
     can_export_zengin,
     can_manage_billing_accounts,
     require_billing_account_manager,
+    require_live_admin,
     require_zengin_exporter,
 )
+from audit_logger import record_audit_event
 from time_utils import utc_now
 from zengin_service import (
     ParsedResultRecord,
     ZenginError,
+    approve_reopen_and_cancel,
     build_data_record,
     build_end_record,
     build_file_bytes,
     build_header_record,
     build_trailer_record,
     cancel_zengin_export_for_edit,
+    combine_reopen_reason,
     create_customer_number,
     create_zengin_export,
+    estimate_reopen_delta,
+    has_pending_reopen_confirm,
     import_result_file,
     lock_billing_cycle,
     mark_zengin_export_submitted,
     reopenable_export,
+    request_reopen_confirm,
     supersede_zengin_export,
+    withdraw_reopen_request,
 )
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -554,6 +562,13 @@ async def billing_dashboard(
         for cycle in cycles:
             cycle_claims = claims_by_cycle.get(cycle.id or 0, [])
             cycle_exports = exports_by_cycle.get(cycle.id or 0, [])
+            reopen_export = reopenable_export(cycle, cycle_exports)
+            reopen_estimate = {}
+            if reopen_export is not None:
+                try:
+                    reopen_estimate = estimate_reopen_delta(session, reopen_export.id)
+                except ZenginError:
+                    reopen_estimate = {}
             cycle_rows.append(
                 {
                     "cycle": cycle,
@@ -562,7 +577,10 @@ async def billing_dashboard(
                     "total_amount": sum(claim.total_amount for claim in cycle_claims),
                     "exports": cycle_exports,
                     "status_label": BILLING_CYCLE_STATUS_LABELS.get(cycle.status, cycle.status.value),
-                    "reopen_export": reopenable_export(cycle, cycle_exports),
+                    "reopen_export": reopen_export,
+                    "reopen_level": reopen_estimate.get("level", ""),
+                    "reopen_delta_amount": reopen_estimate.get("delta_amount", 0),
+                    "reopen_delta_count": reopen_estimate.get("delta_count", 0),
                 }
             )
 
@@ -591,9 +609,28 @@ async def billing_dashboard(
 
         setting = session.exec(select(BillingSetting).order_by(BillingSetting.id)).first()
 
-        return cycle_rows, export_rows, setting
+        reopen_requests = []
+        for export in exports:
+            if not has_pending_reopen_confirm(export):
+                continue
+            payload = export.reopen_confirm_payload or {}
+            reopen_requests.append(
+                {
+                    "export": export,
+                    "year_month": cycles_by_id[export.billing_cycle_id].year_month if export.billing_cycle_id in cycles_by_id else "",
+                    "requested_by": export.reopen_confirm_requested_by,
+                    "requested_at": export.reopen_confirm_requested_at,
+                    "reason_templates": payload.get("reason_templates", []),
+                    "reason_free": payload.get("reason_free", ""),
+                    "estimated_amount": payload.get("estimated_amount", export.total_amount),
+                    "estimated_count": payload.get("estimated_count", export.total_count),
+                    "delta_amount": payload.get("delta_amount", 0),
+                }
+            )
 
-    cycle_rows, export_rows, setting = await run_db_async(_fetch_dashboard_data)
+        return cycle_rows, export_rows, setting, reopen_requests
+
+    cycle_rows, export_rows, setting, reopen_requests = await run_db_async(_fetch_dashboard_data)
 
     return templates.TemplateResponse(
         request,
@@ -604,6 +641,7 @@ async def billing_dashboard(
             "cycle_rows": cycle_rows,
             "export_rows": export_rows,
             "setting": setting,
+            "reopen_requests": reopen_requests,
             "can_manage_billing_accounts": can_manage_billing_accounts(session, current_user),
             "can_export_zengin": can_export_zengin(session, current_user),
             "message": request.query_params.get("message", ""),
@@ -801,6 +839,7 @@ def child_charge_form(
             "line_rows": line_rows,
             "editable": editable,
             "reopen_export": reopenable_export(cycle, list(session.exec(select(ZenginExport).where(ZenginExport.billing_cycle_id == cycle_id)).all())),
+            "can_export_zengin": can_export_zengin(session, current_user),
             "can_manage_billing_accounts": can_manage_billing_accounts(session, current_user),
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
@@ -976,6 +1015,7 @@ def child_charge_input(
             "line_rows": line_rows,
             "editable": editable,
             "reopen_export": reopenable_export(cycle, list(session.exec(select(ZenginExport).where(ZenginExport.billing_cycle_id == cycle_id)).all())),
+            "can_export_zengin": can_export_zengin(session, current_user),
             "message": request.query_params.get("message", ""),
             "error": request.query_params.get("error", ""),
         },
@@ -1270,18 +1310,64 @@ async def cancel_zengin_export_from_ui(
     export_id: int,
     request: Request,
     reason: str = Form(default=""),
+    reason_tpl: list[str] = Form(default=[]),
     confirmed_unsubmitted: bool = Form(default=False),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
     require_zengin_exporter(session, current_user)
+    audit_detail: dict = {}
     try:
+        estimate = estimate_reopen_delta(session, export_id)
+        combined_reason = combine_reopen_reason(reason_tpl, reason) or (reason or "").strip()
+        audit_detail = {
+            "level": estimate["level"],
+            "delta_amount": estimate["delta_amount"],
+            "delta_count": estimate["delta_count"],
+            "reason": combined_reason,
+        }
+        if estimate["level"] == "L1" and not current_user.is_admin:
+            # L1: diff-bearing cancel by a non-admin exporter requires director confirmation.
+            export = request_reopen_confirm(
+                session,
+                export_id,
+                reason=reason,
+                reason_templates=list(reason_tpl),
+                confirmed_unsubmitted=confirmed_unsubmitted,
+                requested_by=current_user.name,
+                estimate=estimate,
+            )
+            record_audit_event(
+                actor_user_id=current_user.staff_id,
+                actor_role=getattr(current_user.role, "value", None),
+                target_resource="billing_reopen",
+                resource_id=str(export_id),
+                action="REQUEST",
+                detail={**audit_detail, "requested_by": current_user.name},
+            )
+            delta = estimate["delta_amount"]
+            delta_label = f"{delta:+,}円" if delta else "差額なし"
+            return _cycle_redirect(
+                export.billing_cycle_id,
+                message=f"園長確認を依頼しました（差額 {delta_label}）。承認されるまで解除は実行されません。",
+            )
         export = cancel_zengin_export_for_edit(
             session,
             export_id,
-            reason=reason,
+            reason=combined_reason or reason,
             confirmed_unsubmitted=confirmed_unsubmitted,
             canceled_by=current_user.name,
+            approved_by=current_user.name if (estimate["level"] == "L1" and current_user.is_admin) else None,
+        )
+        if estimate["level"] == "L1":
+            audit_detail["approved_by"] = current_user.name
+        record_audit_event(
+            actor_user_id=current_user.staff_id,
+            actor_role=getattr(current_user.role, "value", None),
+            target_resource="billing_reopen",
+            resource_id=str(export_id),
+            action="UPDATE",
+            detail=audit_detail,
         )
     except ZenginError as exc:
         response = await billing_dashboard(request, session, current_user)
@@ -1289,13 +1375,20 @@ async def cancel_zengin_export_from_ui(
         row = next((row for row in context.get("export_rows", []) if row["export"].id == export_id), None)
         if row and row.get("can_reopen"):
             item = row["export"]
+            try:
+                estimate = estimate_reopen_delta(session, export_id)
+            except ZenginError:
+                estimate = {}
             context["reopen_initial"] = dict(
                 id=item.id,
                 month=row.get("year_month", ""),
                 count=item.total_count,
                 amount=item.total_amount,
                 reason=reason,
+                reason_templates=list(reason_tpl),
                 checked=confirmed_unsubmitted,
+                level=estimate.get("level", ""),
+                delta_amount=estimate.get("delta_amount", 0),
                 error=str(exc),
             )
         return templates.TemplateResponse(request, "billing/index.html", context, status_code=409)
@@ -1303,6 +1396,67 @@ async def cancel_zengin_export_from_ui(
         export.billing_cycle_id,
         message=f"出力 #{export.id} を取消しました。請求金額を修正・保存し、請求一覧からZenginを再作成してください。",
     )
+
+
+@router.post("/zengin/exports/{export_id}/reopen-approve-ui")
+def approve_reopen_confirm_from_ui(
+    export_id: int,
+    confirmed_unsubmitted: bool = Form(default=False),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_live_admin(session, current_user)
+    try:
+        export = approve_reopen_and_cancel(
+            session,
+            export_id,
+            approved_by=current_user.name,
+            confirmed_unsubmitted=confirmed_unsubmitted,
+        )
+    except ZenginError as exc:
+        return _dashboard_redirect(error=str(exc))
+    record_audit_event(
+        actor_user_id=current_user.staff_id,
+        actor_role=getattr(current_user.role, "value", None),
+        target_resource="billing_reopen",
+        resource_id=str(export_id),
+        action="UPDATE",
+        detail={
+            "approved_by": current_user.name,
+            "requested_by": export.reopen_confirm_requested_by,
+            "reason": export.canceled_reason,
+        },
+    )
+    return _cycle_redirect(
+        export.billing_cycle_id,
+        message=f"園長承認により出力 #{export.id} を取消しました。請求金額を修正・保存し、請求一覧からZenginを再作成してください。",
+    )
+
+
+@router.post("/zengin/exports/{export_id}/reopen-request-cancel-ui")
+def cancel_reopen_request_from_ui(
+    export_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_zengin_exporter(session, current_user)
+    export = session.get(ZenginExport, export_id)
+    if export is None:
+        return _dashboard_redirect(error="Zengin出力が見つかりません")
+    if not has_pending_reopen_confirm(export):
+        return _dashboard_redirect(error="確認待ちの申請がありません")
+    if export.reopen_confirm_requested_by != current_user.name and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="申請者または管理者のみ申請を取り消せます")
+    withdraw_reopen_request(session, export_id)
+    record_audit_event(
+        actor_user_id=current_user.staff_id,
+        actor_role=getattr(current_user.role, "value", None),
+        target_resource="billing_reopen",
+        resource_id=str(export_id),
+        action="CANCEL",
+        detail={"withdrawn_by": current_user.name},
+    )
+    return _dashboard_redirect(message=f"出力 #{export_id} の園長確認申請を取り消しました。")
 
 
 @router.post("/zengin/exports/{export_id}/supersede-ui")

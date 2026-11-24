@@ -2002,6 +2002,15 @@ class ZenginExport(SQLModel, table=True):
     canceled_reason: Optional[str] = None
     canceled_by: Optional[str] = None
     canceled_at: Optional[datetime] = None
+    reopen_confirm_requested_by: Optional[str] = None
+    reopen_confirm_requested_at: Optional[datetime] = None
+    reopen_confirm_payload: Optional[dict[str, Any]] = Field(
+        default=None,
+        description='差額あり（L1）解除の園長確認申請。{"reason_templates": [...], "reason_free": "...", "estimated_amount": int, "estimated_count": int}',
+        sa_column=Column(JSON),
+    )
+    reopen_confirm_by: Optional[str] = None
+    reopen_confirm_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     result_imported_at: Optional[datetime] = None
     content_hash: str

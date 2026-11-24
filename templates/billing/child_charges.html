@@ -44,8 +44,13 @@
     </div>
     {% if can_edit_table %}
     <button form="child-charge-table" type="submit" class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">保存</button>
-    {% elif reopen_export and current_user and current_user.is_admin %}
-    {{ reopen_button(reopen_export, cycle.year_month) }}
+    {% elif reopen_export and current_user and can_export_zengin %}
+    {% set req_pending = reopen_export.reopen_confirm_requested_by and not reopen_export.reopen_confirm_at %}
+    {{ reopen_button(reopen_export, cycle.year_month, pending=req_pending,
+                     approver=current_user.is_admin,
+                     requested_by=reopen_export.reopen_confirm_requested_by,
+                     requested_at=reopen_export.reopen_confirm_requested_at,
+                     withdrawable=(reopen_export.reopen_confirm_requested_by == current_user.name or current_user.is_admin)) }}
     {% elif current_user and current_user.can_edit %}
     <form method="post" action="/billing/child-charges/new-editable-cycle">
       <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">入力用請求月を作成</button>

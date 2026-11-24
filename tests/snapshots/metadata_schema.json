@@ -1632,6 +1632,11 @@
     "result_imported_at",
     "content_hash",
     "settings_snapshot",
+    "reopen_confirm_requested_by",
+    "reopen_confirm_requested_at",
+    "reopen_confirm_payload",
+    "reopen_confirm_by",
+    "reopen_confirm_at",
     "created_by",
     "created_at"
   ],

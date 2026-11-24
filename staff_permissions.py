@@ -67,6 +67,11 @@ PERMISSION_GUIDANCE: dict[str, dict[str, str]] = {
         "description": "銀行伝送用Zenginデータの作成・ダウンロード・振替結果の取込には、Zengin出力の権限が必要です。",
         "contact": "園長または経理担当管理者へ権限の付与をご依頼ください。",
     },
+    "zengin_reopen_director": {
+        "title": "園長の確認が必要です",
+        "description": "再計算で請求額が変わる（差額あり・L1）締め解除は、Zengin出力権限に加えて園長の確認が必要です。確認を依頼するか、園長に承認をご依頼ください。",
+        "contact": "園長へ承認をご依頼ください。",
+    },
 }
 
 

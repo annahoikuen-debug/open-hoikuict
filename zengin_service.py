@@ -10,6 +10,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from models import (
+    BillingChargeLine,
     BillingClaim,
     BillingClaimStatus,
     BillingCycle,
@@ -331,8 +332,14 @@ def reopenable_export(cycle: BillingCycle, exports: list[ZenginExport]) -> Zengi
 
 def cancel_zengin_export_for_edit(
     session: Session, export_id: int, *, reason: str, confirmed_unsubmitted: bool, canceled_by: str,
+    approved_by: str | None = None,
 ) -> ZenginExport:
-    """Invalidate an unsubmitted snapshot and reopen its claims, atomically."""
+    """Invalidate an unsubmitted snapshot and reopen its claims, atomically.
+
+    ``approved_by`` is set when a diff-bearing (L1) cancel is executed by the
+    director (self-approved skip or approval of a pending request). The stamp
+    is kept alongside the cancel audit columns.
+    """
     reason = (reason or "").strip()
     if not reason or len(reason) > 500:
         raise ZenginError("取消理由を500文字以内で入力してください")
@@ -369,6 +376,11 @@ def cancel_zengin_export_for_edit(
         export.canceled_reason = reason
         export.canceled_by = canceled_by
         export.canceled_at = now
+        if approved_by:
+            export.reopen_confirm_by = approved_by
+            export.reopen_confirm_at = now
+            if export.reopen_confirm_payload is None:
+                export.reopen_confirm_payload = {}
         cycle.status = BillingCycleStatus.confirmed
         cycle.updated_at = now
         session.add(export)
@@ -379,6 +391,172 @@ def cancel_zengin_export_for_edit(
     except Exception:
         session.rollback()
         raise
+
+
+REOPEN_REASON_MAX = 500
+REOPEN_TEMPLATE_KEYS = ("打刻漏れ", "免除・軽減の変更", "口座変更", "項目誤入力", "その他")
+
+
+def estimate_reopen_delta(session: Session, export_id: int) -> dict[str, Any]:
+    """Dry-run: totals the re-created export would have with current data.
+
+    Classifies the cancel as L0 (no diff, exporter may run it directly) or
+    L1 (diff-bearing, director confirmation required). Submission-state
+    eligibility is decided by ``reopenable_export``; submitted exports are
+    handled by the separate supersede flow (L2).
+    """
+    export = session.get(ZenginExport, export_id)
+    if export is None:
+        raise ZenginError("Zengin出力が見つかりません")
+    claims = list(session.exec(select(BillingClaim).where(
+        BillingClaim.billing_cycle_id == export.billing_cycle_id,
+        BillingClaim.zengin_export_id == export.id,
+    ).execution_options(populate_existing=True)).all())
+    claim_ids = [claim.id for claim in claims if claim.id is not None]
+    lines_by_claim: dict[int, list[BillingChargeLine]] = {}
+    if claim_ids:
+        all_lines = session.exec(select(BillingChargeLine).where(
+            BillingChargeLine.billing_claim_id.in_(claim_ids))).all()
+        for line in all_lines:
+            lines_by_claim.setdefault(line.billing_claim_id, []).append(line)
+    estimated_count = 0
+    estimated_amount = 0
+    changed_claims = 0
+    for claim in claims:
+        new_total = sum(line.amount for line in lines_by_claim.get(claim.id or 0, []))
+        if new_total != claim.total_amount:
+            changed_claims += 1
+        # Same eligibility as _create_zengin_export_uncommitted.
+        if claim.payment_method == BillingPaymentMethod.direct_debit and new_total > 0:
+            estimated_count += 1
+            estimated_amount += new_total
+    delta_amount = estimated_amount - export.total_amount
+    delta_count = estimated_count - export.total_count
+    level = "L0" if (delta_amount == 0 and delta_count == 0 and changed_claims == 0) else "L1"
+    return {
+        "level": level,
+        "current_amount": export.total_amount,
+        "current_count": export.total_count,
+        "estimated_amount": estimated_amount,
+        "estimated_count": estimated_count,
+        "delta_amount": delta_amount,
+        "delta_count": delta_count,
+        "changed_claims": changed_claims,
+    }
+
+
+def combine_reopen_reason(reason_templates: list[str] | tuple[str, ...] | None, reason_free: str | None) -> str:
+    """Join template reasons and free text into the stored audit reason."""
+    templates = [t for t in (reason_templates or []) if t in REOPEN_TEMPLATE_KEYS]
+    free = (reason_free or "").strip()
+    parts = [t for t in REOPEN_TEMPLATE_KEYS if t in templates]
+    if free:
+        parts.append(free)
+    return "、".join(parts)
+
+
+def _validate_reopen_reason(reason_templates: list[str] | None, reason_free: str | None) -> str:
+    free = (reason_free or "").strip()
+    if not free and not reason_templates:
+        raise ZenginError("取消理由を選択または入力してください")
+    if len(free) > REOPEN_REASON_MAX:
+        raise ZenginError(f"取消理由は{REOPEN_REASON_MAX}文字以内で入力してください")
+    for template in reason_templates or []:
+        if template not in REOPEN_TEMPLATE_KEYS:
+            raise ZenginError("取消理由の選択が不正です")
+    if "その他" in (reason_templates or []) and not free:
+        raise ZenginError("「その他」を選んだ場合は補足を入力してください")
+    return combine_reopen_reason(reason_templates, free)
+
+
+def has_pending_reopen_confirm(export: ZenginExport) -> bool:
+    return bool(export.reopen_confirm_requested_by) and export.reopen_confirm_at is None
+
+
+def request_reopen_confirm(
+    session: Session,
+    export_id: int,
+    *,
+    reason: str,
+    reason_templates: list[str] | None,
+    confirmed_unsubmitted: bool,
+    requested_by: str,
+    estimate: dict[str, Any],
+) -> ZenginExport:
+    """Store a director-confirmation request for a diff-bearing (L1) cancel."""
+    if confirmed_unsubmitted is not True:
+        raise ZenginError("銀行へ提出・アップロードしていないことを確認してください")
+    combined = _validate_reopen_reason(reason_templates, reason)
+    try:
+        cycle, export = _lock_export_cycle(session, export_id)
+        exports = list(session.exec(select(ZenginExport).where(
+            ZenginExport.billing_cycle_id == cycle.id).execution_options(populate_existing=True)).all())
+        candidate = reopenable_export(cycle, exports)
+        if candidate is None or candidate.id != export.id:
+            raise ZenginError("銀行未提出の最新の作成済み出力だけを取消して修正できます。状態を確認してください")
+        now = utc_now()
+        export.reopen_confirm_requested_by = requested_by
+        export.reopen_confirm_requested_at = now
+        export.reopen_confirm_payload = {
+            "reason_templates": list(reason_templates or []),
+            "reason_free": (reason or "").strip(),
+            "estimated_amount": estimate.get("estimated_amount", 0),
+            "estimated_count": estimate.get("estimated_count", 0),
+            "delta_amount": estimate.get("delta_amount", 0),
+        }
+        session.add(export)
+        session.commit()
+        session.refresh(export)
+        return export
+    except Exception:
+        session.rollback()
+        raise
+
+
+def withdraw_reopen_request(session: Session, export_id: int) -> ZenginExport:
+    """Clear a pending director-confirmation request (requester or admin)."""
+    try:
+        cycle, export = _lock_export_cycle(session, export_id)
+        if not has_pending_reopen_confirm(export):
+            raise ZenginError("確認待ちの申請がありません")
+        export.reopen_confirm_requested_by = None
+        export.reopen_confirm_requested_at = None
+        export.reopen_confirm_payload = None
+        session.add(export)
+        session.commit()
+        session.refresh(export)
+        return export
+    except Exception:
+        session.rollback()
+        raise
+
+
+def approve_reopen_and_cancel(
+    session: Session,
+    export_id: int,
+    *,
+    approved_by: str,
+    confirmed_unsubmitted: bool,
+) -> ZenginExport:
+    """Director approval of a pending request: run the cancel with the
+    requested reason and stamp the approval columns."""
+    export = session.get(ZenginExport, export_id)
+    if export is None:
+        raise ZenginError("Zengin出力が見つかりません")
+    if not has_pending_reopen_confirm(export):
+        raise ZenginError("確認待ちの申請がありません")
+    payload = export.reopen_confirm_payload or {}
+    reason = combine_reopen_reason(payload.get("reason_templates"), payload.get("reason_free"))
+    if not reason:
+        reason = (payload.get("reason_free") or "").strip() or "園長承認により取消"
+    return cancel_zengin_export_for_edit(
+        session,
+        export_id,
+        reason=reason,
+        confirmed_unsubmitted=confirmed_unsubmitted,
+        canceled_by=export.reopen_confirm_requested_by or approved_by,
+        approved_by=approved_by,
+    )
 
 
 def _create_zengin_export_uncommitted(

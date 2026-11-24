@@ -35,6 +35,38 @@
 <div class="mb-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ error }}</div>
 {% endif %}
 
+{% if current_user and current_user.is_admin and reopen_requests %}
+<section class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
+  <h2 class="flex items-center gap-2 text-base font-semibold text-amber-900">
+    <span>⏳</span> 請求締め解除の確認待ち（{{ reopen_requests|length }}件）
+  </h2>
+  <div class="mt-3 grid gap-3">
+    {% for req in reopen_requests %}
+    <div class="rounded-lg border border-amber-200 bg-white p-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-sm">
+          <strong>{{ req.year_month }} ／ 出力 #{{ req.export.id }}</strong>
+          ／ 申請者 {{ req.requested_by }} ／ 申請 {{ req.requested_at|jst_datetime('%m/%d %H:%M') if req.requested_at else '-' }}
+          ／ 差額 <strong>{{ "%+,"|format(req.delta_amount) if req.delta_amount else 0 }}円</strong>
+        </div>
+        <div class="flex gap-2">
+          {{ reopen_button(req.export, req.year_month, pending=true, approver=true, requested_by=req.requested_by, requested_at=req.requested_at) }}
+          <form method="post" action="/billing/zengin/exports/{{ req.export.id }}/reopen-request-cancel-ui" class="m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50">申請を取り消す</button>
+          </form>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-amber-800">
+        理由: {{ (req.reason_templates|join('、')) }}{% if req.reason_free %}{{ '／' if req.reason_templates }}{{ req.reason_free }}{% endif %}
+        ／ 推定 {{ req.estimated_count }}件・{{ "{:,}".format(req.estimated_amount) }}円
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <div class="grid gap-4 lg:grid-cols-2">
   <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-base font-semibold text-slate-900">施設設定</h2>
@@ -105,8 +137,14 @@
               </div>
               {% endif %}
             {% endif %}
-            {% if current_user and current_user.is_admin and row.reopen_export %}
-            {{ reopen_button(row.reopen_export, row.cycle.year_month) }}
+            {% if can_export_zengin and row.reopen_export %}
+            {% set req_pending = row.reopen_export.reopen_confirm_requested_by and not row.reopen_export.reopen_confirm_at %}
+            {{ reopen_button(row.reopen_export, row.cycle.year_month, level=row.reopen_level, delta_amount=row.reopen_delta_amount,
+                             pending=req_pending,
+                             approver=current_user.is_admin,
+                             requested_by=row.reopen_export.reopen_confirm_requested_by,
+                             requested_at=row.reopen_export.reopen_confirm_requested_at,
+                             withdrawable=(row.reopen_export.reopen_confirm_requested_by == current_user.name or current_user.is_admin)) }}
             {% endif %}
             </div>
           </td>
@@ -145,7 +183,7 @@
           <td class="px-5 py-3 font-mono text-xs text-slate-500">{{ row.export.content_hash[:16] }}...</td>
           <td class="px-5 py-3">
             <div class="flex flex-wrap gap-2">
-              {% if current_user and current_user.is_admin %}
+              {% if current_user and (current_user.is_admin or can_export_zengin) %}
               {% if row.export.status.value != 'canceled' %}
               <a href="/billing/zengin/exports/{{ row.export.id }}/download" class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">ダウンロード</a>
               {% endif %}
@@ -155,7 +193,14 @@
                 <button type="submit" class="rounded border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50">銀行提出済みにする</button>
               </form>
               {% endif %}
-              {% if row.can_reopen %}{{ reopen_button(row.export, row.year_month) }}{% endif %}
+              {% if row.can_reopen %}
+              {% set req_pending = row.export.reopen_confirm_requested_by and not row.export.reopen_confirm_at %}
+              {{ reopen_button(row.export, row.year_month, pending=req_pending,
+                               approver=current_user.is_admin,
+                               requested_by=row.export.reopen_confirm_requested_by,
+                               requested_at=row.export.reopen_confirm_requested_at,
+                               withdrawable=(row.export.reopen_confirm_requested_by == current_user.name or current_user.is_admin)) }}
+              {% endif %}
               {% if row.export.status.value == "submitted" %}
               <form method="post" action="/billing/zengin/exports/{{ row.export.id }}/supersede-ui"
                     class="flex gap-1" onsubmit="return confirm('この出力を差し替えますか？');">
