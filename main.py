@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from contextlib import suppress
@@ -112,6 +113,9 @@ from csrf import CsrfTokenMiddleware, verify_csrf
 from security_config import deployment_environment, parent_auth_mode, staff_auth_mode, validate_runtime_security
 from security_headers import SecurityHeadersMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+logger = logging.getLogger(__name__)
 
 
 def initialize_application() -> None:

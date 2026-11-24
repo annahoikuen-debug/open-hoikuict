@@ -255,6 +255,42 @@ class BillingReopenTests(unittest.TestCase):
         with Session(self.engine) as session:
             self.assertEqual(session.exec(select(BillingChargeLine)).one().amount, 300)
 
+    def test_phase4_billing_child_charges_ui_elements(self):
+        """Phase 4 UI/UX テスト:
+        (1) インスペクション・サマリーカード (口座登録状況, 請求総額)
+        (2) 差分行ハイライト & 一括保存セーフガード
+        (3) 入力済み明細のアコーディオン (<details>)
+        """
+        # 編集可能な下書きサイクルを作成
+        with Session(self.engine) as session:
+            editable_cycle = BillingCycle(
+                year_month="2026-05",
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                status=BillingCycleStatus.draft,
+                withdrawal_date=date(2026, 5, 27),
+            )
+            session.add(editable_cycle)
+            session.commit()
+            session.refresh(editable_cycle)
+            editable_cycle_id = editable_cycle.id
+
+        response = self.client.get(f"/billing/cycles/{editable_cycle_id}/child-charges")
+        self.assertEqual(response.status_code, 200)
+        html = response.text
+
+        # (1) サマリーカード
+        self.assertIn("口座登録状況", html)
+        self.assertIn("請求総額 (目安)", html)
+        self.assertIn("billing-summary-grand-total", html)
+
+        # (2) 一括保存ボタン & セーフガード文言
+        self.assertIn("請求データを一括保存", html)
+
+        # (3) アコーディオン
+        self.assertIn("<details", html)
+        self.assertIn("入力済み明細", html)
+
 
 class BillingReopenMigrationAndRaceTests(unittest.TestCase):
     def test_old_database_adds_nullable_audit_columns_idempotently(self):

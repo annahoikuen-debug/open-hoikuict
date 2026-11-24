@@ -774,6 +774,7 @@
       "fever_review_c",
       "final_pickup_time",
       "id",
+      "medical_consent_auto_approve",
       "parent_billing_portal_enabled",
       "supplementary_meal_fee",
       "supplementary_meal_time",
@@ -1262,6 +1263,7 @@
     ],
     "parent_medical_responses": [
       "answers",
+      "auto_approved",
       "before",
       "child_id",
       "created_at",
@@ -1374,6 +1376,7 @@
       "attendance_confirmation_enabled",
       "closure_notice_enabled",
       "created_at",
+      "dinner_reminder_enabled",
       "emergency_notice_enabled",
       "fever_notification_enabled",
       "id",
@@ -1703,6 +1706,7 @@
     ],
     "shift_plan_cells": [
       "cell_state",
+      "facility_id",
       "id",
       "is_pinned",
       "pinned_by_user_id",
@@ -1736,6 +1740,7 @@
       "created_at",
       "created_by_name",
       "created_by_user_id",
+      "facility_id",
       "id",
       "input_fingerprint",
       "lock_version",
@@ -1758,6 +1763,14 @@
       "stats",
       "status",
       "time_limit_sec"
+    ],
+    "shift_solve_snapshots": [
+      "created_at",
+      "facility_id",
+      "id",
+      "job_id",
+      "payload",
+      "plan_id"
     ],
     "shift_violations": [
       "code",
@@ -2063,6 +2076,11 @@
       "file_name",
       "id",
       "reissue_reason",
+      "reopen_confirm_at",
+      "reopen_confirm_by",
+      "reopen_confirm_payload",
+      "reopen_confirm_requested_at",
+      "reopen_confirm_requested_by",
       "result_imported_at",
       "settings_snapshot",
       "status",
