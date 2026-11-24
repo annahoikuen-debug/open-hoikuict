@@ -111,36 +111,42 @@
     {% set entry = entry_by_child_id.get(child.id) %}
     {% set reply = reply_by_child_id.get(child.id) %}
     {% set pending_request = pending_request_by_child_id.get(child.id) %}
-    <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="rounded-2xl {% if reply %}border-2 border-sky-300 bg-gradient-to-br from-sky-50/40 to-white shadow-sm{% elif entry %}border border-emerald-300 bg-white shadow-sm{% else %}border-2 border-amber-300 bg-gradient-to-br from-amber-50/50 to-white shadow-sm{% endif %} p-5 transition">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <div class="flex flex-wrap items-center gap-2">
-              <h3 class="text-lg font-semibold text-gray-800">{{ child.full_name }}</h3>
-      {% if reply %}<a href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}#daily-contact-reply" class="rounded-full bg-sky-100 px-3 py-1 text-sm font-semibold text-sky-900">返信あり</a>{% endif %}
+            <h3 class="text-xl font-bold text-gray-800">{{ child.full_name }}</h3>
+            {% if reply %}
+            <a href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}#daily-contact-reply" class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-sky-900 hover:bg-sky-200 transition"><span class="flex h-2 w-2 rounded-full bg-sky-500 animate-pulse"></span>返信あり</a>
+            {% endif %}
             {% if pending_request %}
             <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">プロフィール変更申請中</span>
             {% endif %}
           </div>
-          <p class="text-sm text-gray-500">{{ child.classroom.name if child.classroom else 'クラス未設定' }}</p>
+          <p class="text-sm text-gray-500 mt-0.5">{{ child.classroom.name if child.classroom else 'クラス未設定' }}</p>
           {% if medical_status and medical_status.get(child.id) in ('requested', 'returned') %}
           <div class="mt-3">
             <p class="mb-1 text-sm font-semibold text-amber-800">園から基本医療情報の{{ '書き直し' if medical_status[child.id] == 'returned' else '記入' }}のお願いがあります。</p>
             <a href="/parent-portal/children/{{ child.id }}/medical" class="inline-block rounded border border-indigo-300 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50">基本医療情報を確認する</a>
           </div>
           {% endif %}
-          <a href="/parent-portal/children/{{ child.id }}/pickup?date={{ target_date_value }}" class="mt-2 block rounded border border-indigo-300 px-4 py-3 text-center text-sm text-indigo-700 hover:bg-indigo-50">お迎え予定を登録・変更</a>
+          <a href="/parent-portal/children/{{ child.id }}/pickup?date={{ target_date_value }}" class="mt-2.5 inline-block rounded-xl border border-indigo-200 bg-white/80 px-4 py-2 text-center text-sm font-medium text-indigo-700 hover:bg-indigo-50 shadow-xs">🕒 お迎え予定を登録・変更</a>
           {% if pending_request %}
           <p class="mt-2 text-xs text-amber-700">最終申請: {{ pending_request.submitted_at|jst_datetime("%Y-%m-%d %H:%M") }} JST</p>
           {% endif %}
         </div>
         <div class="flex flex-wrap items-center gap-3">
           {% if entry %}
-          <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{{ entry.contact_type.label }}</span>
+          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-700">
+            <span>✓</span> {{ entry.contact_type.label }}（送信済み）
+          </span>
           {% else %}
-          <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">未送信</span>
+          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800">
+            <span>⚠️</span> 本日の連絡帳は未送信
+          </span>
           {% endif %}
-          <a href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}" class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-            {{ "日次連絡を編集" if entry else "日次連絡を入力" }}
+          <a href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}" class="flex items-center justify-center rounded-xl {% if entry %}bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100{% else %}bg-indigo-600 text-white hover:bg-indigo-700 shadow-md{% endif %} px-5 py-2.5 text-sm font-bold transition">
+            {{ "日次連絡を編集" if entry else "日次連絡を入力 →" }}
           </a>
         </div>
       </div>
@@ -262,6 +268,12 @@
     </button>
   </div>
 </div>
+
+<!-- モバイル専用 登降園QR フローティングアクションボタン (FAB) -->
+<button type="button" id="btn-open-qr-fab" class="fixed right-4 z-40 flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-3 text-white shadow-xl hover:bg-indigo-700 active:scale-95 transition md:hidden" style="bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));" aria-label="登降園QRコードを表示">
+  <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+  <span class="font-bold text-sm tracking-wide">登降園QR</span>
+</button>
 {% endblock %}
 
 {% block body_end %}
@@ -269,14 +281,16 @@
   (() => {
     const modal = document.getElementById("qr-modal");
     const btnOpen = document.getElementById("btn-open-qr-modal");
+    const btnOpenFab = document.getElementById("btn-open-qr-fab");
     const btnClose = document.getElementById("btn-close-qr-modal");
     const btnCloseBottom = document.getElementById("btn-close-qr-modal-bottom");
 
-    if (modal && btnOpen) {
+    if (modal) {
       const openModal = () => modal.classList.remove("hidden");
       const closeModal = () => modal.classList.add("hidden");
 
-      btnOpen.addEventListener("click", openModal);
+      if (btnOpen) btnOpen.addEventListener("click", openModal);
+      if (btnOpenFab) btnOpenFab.addEventListener("click", openModal);
       if (btnClose) btnClose.addEventListener("click", closeModal);
       if (btnCloseBottom) btnCloseBottom.addEventListener("click", closeModal);
       modal.addEventListener("click", (e) => {

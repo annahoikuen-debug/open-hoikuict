@@ -4,12 +4,14 @@
 {% block title %}日次連絡入力 | open-hoikuict{% endblock %}
 
 {% block content %}
-{% set selected_contact_type = form_data.contact_type if form_data and form_data.contact_type is not none else 'present' %}
+{% set selected_contact_type = form_data.contact_type if form_data and form_data.contact_type is not none else 'present'
+%}
 {% set selected_absence_reason = form_data.absence_reason if form_data and form_data.absence_reason else '' %}
 {% if not selected_absence_reason and selected_contact_type in ['absent_private', 'absent_sick'] %}
 {% set selected_absence_reason = selected_contact_type %}
 {% endif %}
-{% set selected_mode = form_data.attendance_mode if form_data and form_data.attendance_mode else ('absent' if selected_absence_reason else 'present') %}
+{% set selected_mode = form_data.attendance_mode if form_data and form_data.attendance_mode else ('absent' if
+selected_absence_reason else 'present') %}
 {% if selected_mode not in ['present', 'absent'] %}
 {% set selected_mode = 'absent' if selected_absence_reason else 'present' %}
 {% endif %}
@@ -24,11 +26,20 @@
   </div>
 
   {% if notice %}
-  <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ notice }}</div>
+  <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ notice }}
+  </div>
   {% endif %}
+  <div id="draft-restored-banner" class="hidden mb-4 rounded-xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 text-xs font-semibold text-indigo-800 flex items-center justify-between shadow-xs">
+    <span class="flex items-center gap-1.5">
+      <span>📝</span> 入力途中の下書きを自動復元しました
+    </span>
+    <button type="button" id="btn-discard-draft" class="text-indigo-600 underline text-xs hover:text-indigo-800">下書きを破棄</button>
+  </div>
   {% if form_error %}
-  <div role="alert" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ form_error }}</div>
-  {% if response_conflict %}<p class="mb-4"><a class="underline" href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}">最新の連絡内容を開く</a></p>{% endif %}
+  <div role="alert" class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{{
+    form_error }}</div>
+  {% if response_conflict %}<p class="mb-4"><a class="underline"
+      href="/parent-portal/children/{{ child.id }}/contact?date={{ target_date_value }}">最新の連絡内容を開く</a></p>{% endif %}
   {% endif %}
 
   {% if published_reply %}
@@ -39,9 +50,9 @@
         {% if published_reply.staff_name %}
         <span>返信者: {{ published_reply.staff_name }}</span>
         {% endif %}
-      {% if published_reply.published_at %}
+        {% if published_reply.published_at %}
         <span>{{ published_reply.published_at|jst_datetime("%Y-%m-%d %H:%M") }} JST</span>
-      {% endif %}
+        {% endif %}
       </div>
     </div>
     {% if reply_display_items %}
@@ -52,14 +63,18 @@
     </div>
     {% endif %}
     {% if published_reply.message %}
-    <div class="mt-3 whitespace-pre-wrap rounded border border-sky-200 bg-white/70 px-3 py-2 text-sm text-sky-900">{{ published_reply.message }}</div>
+    <div class="mt-3 whitespace-pre-wrap rounded border border-sky-200 bg-white/70 px-3 py-2 text-sm text-sky-900">{{
+      published_reply.message }}</div>
     {% endif %}
   </section>
   {% endif %}
 
-  <form method="post" action="/parent-portal/children/{{ child.id }}/contact" class="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+  <form method="post" action="/parent-portal/children/{{ child.id }}/contact"
+    class="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <input type="hidden" name="date" value="{{ target_date_value }}">
     <input type="hidden" name="contact_revision" value="{{ contact_revision }}">
+    <input type="hidden" name="contact_layout_version" value="2">
+    <input type="hidden" name="copied_from_previous" value="0">
     <input type="hidden" id="contact_type" name="contact_type" value="{{ selected_contact_type }}">
 
     <section class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -68,25 +83,33 @@
           <h2 class="text-lg font-semibold text-slate-800">1. 出席か欠席かを選択</h2>
           <p class="mt-1 text-sm text-slate-500">当日の状況に合わせて選んでください。</p>
         </div>
-        {% if has_previous_entry and not entry %}
+        {% if has_previous_entry %}
         <div>
-          <button type="button" id="btn-copy-previous" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <button type="button" id="btn-copy-previous"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
             前回の入力を反映（{{ previous_entry_date }}）
           </button>
         </div>
         {% endif %}
       </div>
       <div class="grid gap-3 md:grid-cols-2">
-        <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_mode == 'present' %}border-emerald-500 bg-emerald-50{% else %}border-slate-200 bg-white{% endif %}">
-          <input type="radio" name="attendance_mode" value="present" {% if selected_mode == 'present' %}checked{% endif %} class="h-4 w-4">
+        <label
+          class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_mode == 'present' %}border-emerald-500 bg-emerald-50{% else %}border-slate-200 bg-white{% endif %}">
+          <input type="radio" name="attendance_mode" value="present" {% if selected_mode=='present' %}checked{% endif %}
+            class="h-4 w-4">
           <div>
             <div class="font-medium text-slate-800">出席</div>
             <div class="text-sm text-slate-500">体調や園への連絡事項を入力</div>
           </div>
         </label>
-        <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_mode == 'absent' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
-          <input type="radio" name="attendance_mode" value="absent" {% if selected_mode == 'absent' %}checked{% endif %} class="h-4 w-4">
+        <label
+          class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_mode == 'absent' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
+          <input type="radio" name="attendance_mode" value="absent" {% if selected_mode=='absent' %}checked{% endif %}
+            class="h-4 w-4">
           <div>
             <div class="font-medium text-slate-800">欠席</div>
             <div class="text-sm text-slate-500">私用または病欠を選択</div>
@@ -97,15 +120,19 @@
       <div id="absence-reason-panel" class="{% if selected_mode != 'absent' %}hidden{% endif %}">
         <div class="mb-2 text-sm font-medium text-slate-600">2. 欠席理由</div>
         <div class="grid gap-3 md:grid-cols-2">
-          <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_absence_reason == 'absent_private' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
-            <input type="radio" name="absence_reason" value="absent_private" {% if selected_absence_reason == 'absent_private' %}checked{% endif %} class="h-4 w-4">
+          <label
+            class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_absence_reason == 'absent_private' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
+            <input type="radio" name="absence_reason" value="absent_private" {% if
+              selected_absence_reason=='absent_private' %}checked{% endif %} class="h-4 w-4">
             <div>
               <div class="font-medium text-slate-800">私用</div>
               <div class="text-sm text-slate-500">備考のみ入力</div>
             </div>
           </label>
-          <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_absence_reason == 'absent_sick' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
-            <input type="radio" name="absence_reason" value="absent_sick" {% if selected_absence_reason == 'absent_sick' %}checked{% endif %} class="h-4 w-4">
+          <label
+            class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 {% if selected_absence_reason == 'absent_sick' %}border-amber-500 bg-amber-50{% else %}border-slate-200 bg-white{% endif %}">
+            <input type="radio" name="absence_reason" value="absent_sick" {% if selected_absence_reason=='absent_sick'
+              %}checked{% endif %} class="h-4 w-4">
             <div>
               <div class="font-medium text-slate-800">病欠</div>
               <div class="text-sm text-slate-500">体温、症状などを入力</div>
@@ -132,102 +159,204 @@
         <input type="hidden" name="pickup_fields_version" value="1">
         <input type="hidden" name="pickup_revision" value="{{ pickup_values.pickup_revision }}">
         {{ pickup_fields(pickup_values, closing_time=closing_time) }}
+        {% if previous_entry and previous_entry.extra_data and previous_entry.extra_data.get('planned_pickup_time') %}
+        <button type="button" id="btn-same-pickup-time"
+          class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">
+          前回と同じ時刻（{{ previous_entry.extra_data.planned_pickup_time }}）
+        </button>
+        {% endif %}
         <p class="text-sm text-slate-500">わかる項目を入力できます。未入力の項目は登園時に確認します。</p>
-        {% else %}<p>{{ pickup_values.planned_pickup_time or '時刻未入力' }} ／ {{ pickup_values.pickup_person or '人は未入力' }} ／ 補食：{{ '未選択' if pickup_values.snack_required == '' else ('必要' if pickup_values.snack_required == '1' else '不要') }}</p><p class="text-sm text-slate-500">この日のお迎え予定は変更できません。</p>{% endif %}
+        {% else %}<p>{{ pickup_values.planned_pickup_time or '時刻未入力' }} ／ {{ pickup_values.pickup_person or '人は未入力' }} ／
+          補食：{{ '未選択' if pickup_values.snack_required == '' else ('必要' if pickup_values.snack_required == '1' else '不要')
+          }}</p>
+        <p class="text-sm text-slate-500">この日のお迎え予定は変更できません。</p>{% endif %}
       </section>
+
+      <details class="space-y-4 border rounded-lg p-3 bg-white">
+        <summary class="cursor-pointer list-none font-semibold text-slate-700 flex items-center gap-2">
+          <span>前日のお世話</span>
+          <span class="ml-auto text-xs text-slate-400">{{ "変更済み" if previous_entry and previous_entry.extra_data else
+            "未入力" }} <span class="badge-inline">{% if previous_entry and previous_entry.extra_data %}変更済み{% else %}未入力{%
+              endif %}</span></span>
+        </summary>
+        <p class="text-xs text-slate-500 mb-2">変更がなければ開かなくて構いません。</p>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label class="text-sm block mb-1">就寝</label>
+            <input type="time" name="bedtime" disabled
+              value="{{ previous_entry.extra_data.bedtime if previous_entry and previous_entry.extra_data else form_data.bedtime }}"
+              class="w-full rounded border border-gray-300 px-3 py-2 bg-gray-100">
+          </div>
+          <div>
+            <label class="text-sm block mb-1">起床</label>
+            <input type="time" name="wakeup_time" disabled
+              value="{{ previous_entry.extra_data.wakeup_time if previous_entry and previous_entry.extra_data else form_data.wakeup_time }}"
+              class="w-full rounded border border-gray-300 px-3 py-2 bg-gray-100">
+          </div>
+          <div>
+            <label class="text-sm block mb-1">朝食の食欲</label>
+            <select name="breakfast_appetite" disabled
+              class="w-full rounded border border-gray-300 px-3 py-2 bg-gray-100">
+              {% for value in appetites %}
+              <option value="{{ value }}" {% if previous_entry and previous_entry.extra_data and
+                previous_entry.extra_data.get('breakfast_appetite')==value %}selected{% endif %} {% if not
+                previous_entry and form_data.breakfast_appetite==value %}selected{% endif %}>{{ value }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="text-sm block mb-1">夕食の食欲</label>
+            <select name="dinner_appetite" disabled class="w-full rounded border border-gray-300 px-3 py-2 bg-gray-100">
+              {% for value in appetites %}
+              <option value="{{ value }}" {% if previous_entry and previous_entry.extra_data and
+                previous_entry.extra_data.get('dinner_appetite')==value %}selected{% endif %} {% if not previous_entry
+                and form_data.dinner_appetite==value %}selected{% endif %}>{{ value }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </details>
+
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div>
           <label for="temperature" class="mb-1 block text-sm font-medium text-gray-600">体温</label>
-          <input id="temperature" type="text" inputmode="decimal" name="temperature" value="{{ form_data.temperature }}" placeholder="36.7" aria-describedby="temperature-help temperature-error" class="w-full rounded border border-gray-300 px-3 py-2">
-          <p id="temperature-help" class="mt-2 text-sm text-gray-500">{{ present_temperature_limit }}℃以上の場合は、出席として送信できません。</p>
-          <p id="temperature-error" role="alert" class="mt-2 hidden rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+          <input id="temperature" type="text" inputmode="decimal" name="temperature" value="{{ form_data.temperature }}"
+            placeholder="36.7" aria-describedby="temperature-help temperature-error"
+            class="w-full rounded border border-gray-300 px-3 py-2">
+          <p id="temperature-help" class="mt-2 text-sm text-gray-500">{{ present_temperature_limit
+            }}℃以上の場合は、出席として送信できません。</p>
+          <p id="temperature-error" role="alert"
+            class="mt-2 hidden rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
           {{ temperature_picker('temperature') }}
         </div>
         <div>
           <input type="hidden" name="care_fields_version" value="1">
           <div class="mb-3 flex flex-wrap gap-3">
-            <label class="text-sm">就寝<input type="time" name="bedtime" value="{{ form_data.bedtime }}" class="mt-1 block rounded border px-3 py-3"></label>
-            <label class="text-sm">起床<input type="time" name="wakeup_time" value="{{ form_data.wakeup_time }}" class="mt-1 block rounded border px-3 py-3"></label>
+            <label class="text-sm">就寝<input type="time" name="bedtime" value="{{ form_data.bedtime }}"
+                class="mt-1 block rounded border px-3 py-3"></label>
+            <label class="text-sm">起床<input type="time" name="wakeup_time" value="{{ form_data.wakeup_time }}"
+                class="mt-1 block rounded border px-3 py-3"></label>
           </div>
           <label class="mb-1 block text-sm font-medium text-gray-600">睡眠メモ</label>
-          <input type="text" name="sleep_notes" value="{{ form_data.sleep_notes }}" placeholder="夜中の目覚めなど" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input type="text" name="sleep_notes" value="{{ form_data.sleep_notes }}" placeholder="夜中の目覚めなど"
+            class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
         <input type="hidden" name="meal_fields_version" value="1">
         {% include 'parent_portal/_meal_fields.html' %}
         <div>
           <p class="mb-2 text-sm font-medium">排便（前日夕方から連絡時まで）</p>
           <div class="mb-3 flex flex-wrap gap-3"><label class="text-sm">性状
-            <select name="stool_consistency" class="mt-1 block rounded border px-3 py-3">
-              {% for value, label in [('', '未入力'), ('none', 'なし'), ('normal', '普通'), ('hard', '硬い'), ('soft', '軟らかい'), ('watery', '水様'), ('mixed', '複数の性状'), ('unknown', '不明')] %}
-              <option value="{{ value }}" {% if form_data.stool_consistency == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-            </select></label><label class="text-sm">回数（不明なら空欄）<input type="number" name="stool_count" min="0" max="99" step="1" value="{{ form_data.stool_count }}" class="mt-1 block w-36 rounded border px-3 py-3"></label></div>
+              <select name="stool_consistency" class="mt-1 block rounded border px-3 py-3">
+                {% for value, label in [('', '未入力'), ('none', 'なし'), ('normal', '普通'), ('hard', '硬い'), ('soft', '軟らかい'),
+                ('watery', '水様'), ('mixed', '複数の性状'), ('unknown', '不明')] %}
+                <option value="{{ value }}" {% if form_data.stool_consistency==value %}selected{% endif %}>{{ label }}
+                </option>{% endfor %}
+              </select></label><label class="text-sm">回数（不明なら空欄）<input type="number" name="stool_count" min="0" max="99"
+                step="1" value="{{ form_data.stool_count }}" class="mt-1 block w-36 rounded border px-3 py-3"></label>
+          </div>
           <label class="mb-1 block text-sm font-medium text-gray-600">排便メモ</label>
-          <input type="text" name="bowel_movement_status" value="{{ form_data.bowel_movement_status }}" placeholder="あり / なし" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input type="text" name="bowel_movement_status" value="{{ form_data.bowel_movement_status }}"
+            placeholder="あり / なし" class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
         <div>
           <label for="mood" class="mb-1 block text-sm font-medium text-gray-600">機嫌</label>
-          <input id="mood" type="text" name="mood" value="{{ form_data.mood }}" placeholder="良好 / 少し眠そう" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input id="mood" type="text" name="mood" value="{{ form_data.mood }}" placeholder="良好 / 少し眠そう"
+            class="w-full rounded border border-gray-300 px-3 py-2">
           {{ choices('mood', [('🙂', '良好'), ('😐', 'ふつう'), ('😟', '不機嫌'), ('😴', '眠そう')]) }}
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-600">咳</label>
-          <input type="text" name="cough" value="{{ form_data.cough }}" placeholder="なし / 少し" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input type="text" name="cough" value="{{ form_data.cough }}" placeholder="なし / 少し"
+            class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-600">鼻水</label>
-          <input type="text" name="runny_nose" value="{{ form_data.runny_nose }}" placeholder="なし / 少し" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input type="text" name="runny_nose" value="{{ form_data.runny_nose }}" placeholder="なし / 少し"
+            class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-600">服薬</label>
-          <input type="text" name="medication" value="{{ form_data.medication }}" placeholder="なし / 朝に服用" class="w-full rounded border border-gray-300 px-3 py-2">
+          <input type="text" name="medication" value="{{ form_data.medication }}" placeholder="なし / 朝に服用"
+            class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
       </div>
 
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-600">体調メモ</label>
-        <textarea name="condition_note" rows="4" class="w-full rounded border border-gray-300 px-3 py-2">{{ form_data.condition_note }}</textarea>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-1">
+          <label class="block text-sm font-medium text-gray-700">体調メモ</label>
+          <span class="text-xs text-gray-400">タップで定型文を挿入</span>
+        </div>
+        <div class="mb-2 flex flex-wrap gap-1.5" data-phrase-target="condition_note">
+          {% for phrase in ["元気です", "少し鼻水あり（熱なし）", "軽い咳あり", "夜中に目覚めあり", "食欲旺盛です"] %}
+          <button type="button" data-insert-phrase="{{ phrase }}" class="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition active:scale-95">
+            + {{ phrase }}
+          </button>
+          {% endfor %}
+        </div>
+        <textarea name="condition_note" rows="4"
+          class="w-full rounded-xl border border-gray-300 px-3 py-2 text-base shadow-2xs">{{ form_data.condition_note }}</textarea>
       </div>
 
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-600">園への連絡事項</label>
-        <textarea name="contact_note" rows="4" class="w-full rounded border border-gray-300 px-3 py-2">{{ form_data.contact_note }}</textarea>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-1">
+          <label class="block text-sm font-medium text-gray-700">園への連絡事項</label>
+          <span class="text-xs text-gray-400">タップで定型文を挿入</span>
+        </div>
+        <div class="mb-2 flex flex-wrap gap-1.5" data-phrase-target="contact_note">
+          {% for phrase in ["特になし", "本日祖母がお迎えに行きます", "本日父がお迎えに行きます", "着替えを補充しました", "早めのお迎え予定です"] %}
+          <button type="button" data-insert-phrase="{{ phrase }}" class="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition active:scale-95">
+            + {{ phrase }}
+          </button>
+          {% endfor %}
+        </div>
+        <textarea name="contact_note" rows="4"
+          class="w-full rounded-xl border border-gray-300 px-3 py-2 text-base shadow-2xs">{{ form_data.contact_note }}</textarea>
       </div>
     </section>
 
-    <section id="absence-private-fields" class="space-y-4 {% if selected_absence_reason != 'absent_private' %}hidden{% endif %}">
+    <section id="absence-private-fields"
+      class="space-y-4 {% if selected_absence_reason != 'absent_private' %}hidden{% endif %}">
       <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
         <h2 class="text-lg font-semibold text-amber-900">私用休み</h2>
         <p class="mt-1 text-sm text-amber-800">必要に応じて備考を入力してください。</p>
         <div class="mt-4">
           <label class="mb-1 block text-sm font-medium text-amber-900">備考</label>
-          <textarea name="absence_note" rows="4" class="w-full rounded border border-amber-300 px-3 py-2">{{ form_data.absence_note }}</textarea>
+          <textarea name="absence_note" rows="4"
+            class="w-full rounded border border-amber-300 px-3 py-2">{{ form_data.absence_note }}</textarea>
         </div>
       </div>
     </section>
 
-    <section id="absence-sick-fields" class="space-y-4 {% if selected_absence_reason != 'absent_sick' %}hidden{% endif %}">
+    <section id="absence-sick-fields"
+      class="space-y-4 {% if selected_absence_reason != 'absent_sick' %}hidden{% endif %}">
       <div class="rounded-xl border border-rose-200 bg-rose-50 p-5">
         <h2 class="text-lg font-semibold text-rose-900">病欠</h2>
         <p class="mt-1 text-sm text-rose-800">現在の体温と症状は必須です。</p>
         <div class="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2">
           <div>
-            <label for="absence_temperature" class="mb-1 block text-sm font-medium text-rose-900">現在の体温<span class="text-rose-600">*</span></label>
-            <input id="absence_temperature" type="text" inputmode="decimal" name="absence_temperature" value="{{ form_data.absence_temperature }}" placeholder="37.8" aria-describedby="absence-temperature-error" class="w-full rounded border border-rose-300 px-3 py-2">
+            <label for="absence_temperature" class="mb-1 block text-sm font-medium text-rose-900">現在の体温<span
+                class="text-rose-600">*</span></label>
+            <input id="absence_temperature" type="text" inputmode="decimal" name="absence_temperature"
+              value="{{ form_data.absence_temperature }}" placeholder="37.8"
+              aria-describedby="absence-temperature-error" class="w-full rounded border border-rose-300 px-3 py-2">
             <p id="absence-temperature-error" role="alert" class="mt-2 hidden text-sm text-rose-700"></p>
             {{ temperature_picker('absence_temperature') }}
           </div>
           <div>
             <label class="mb-1 block text-sm font-medium text-rose-900">症状<span class="text-rose-600">*</span></label>
-            <input type="text" name="absence_symptoms" value="{{ form_data.absence_symptoms }}" placeholder="発熱、咳" class="w-full rounded border border-rose-300 px-3 py-2">
+            <input type="text" name="absence_symptoms" value="{{ form_data.absence_symptoms }}" placeholder="発熱、咳"
+              class="w-full rounded border border-rose-300 px-3 py-2">
           </div>
         </div>
         <div class="mt-4">
           <label class="mb-1 block text-sm font-medium text-rose-900">医師から伝えられた診断名</label>
-          <input type="text" name="absence_diagnosis" value="{{ form_data.absence_diagnosis }}" class="w-full rounded border border-rose-300 px-3 py-2">
+          <input type="text" name="absence_diagnosis" value="{{ form_data.absence_diagnosis }}"
+            class="w-full rounded border border-rose-300 px-3 py-2">
         </div>
         <div class="mt-4">
           <label class="mb-1 block text-sm font-medium text-rose-900">備考</label>
-          <textarea name="absence_note" rows="4" class="w-full rounded border border-rose-300 px-3 py-2">{{ form_data.absence_note }}</textarea>
+          <textarea name="absence_note" rows="4"
+            class="w-full rounded border border-rose-300 px-3 py-2">{{ form_data.absence_note }}</textarea>
         </div>
       </div>
     </section>
@@ -238,9 +367,10 @@
     </div>
     {% endif %}
 
-    <div class="flex gap-3">
-      <button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">保存する</button>
-      <a href="/parent-portal/?date={{ target_date_value }}" class="rounded border border-gray-300 px-4 py-2 hover:bg-gray-50">戻る</a>
+    <div class="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center">
+      <a href="/parent-portal/?date={{ target_date_value }}"
+        class="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 active:scale-[0.98] transition">戻る</a>
+      <button type="submit" class="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-indigo-600 px-6 py-3 text-base font-bold text-white shadow-md hover:bg-indigo-700 active:scale-[0.98] transition">保存する</button>
     </div>
   </form>
 </div>
@@ -262,187 +392,343 @@
     const temperatureError = document.getElementById("temperature-error");
     const absenceTemperatureInput = document.getElementById("absence_temperature");
     const absenceTemperatureError = document.getElementById("absence-temperature-error");
-    const temperatureLimit = Number({{ present_temperature_limit|tojson }});
-    const highTemperatureMessage = {{ present_temperature_error|tojson }};
-    const invalidTemperatureMessage = {{ temperature_format_error|tojson }};
+    const temperatureLimit = Number({{ present_temperature_limit| tojson }});
+  const highTemperatureMessage = {{ present_temperature_error| tojson }};
+  const invalidTemperatureMessage = {{ temperature_format_error| tojson }};
 
-    function validateTemperatureField(input, error, active, limit) {
-      const value = input.value.normalize("NFKC").trim();
-      let message = "";
-      if (active && value) {
-        const match = value.match(/^([0-9]+(?:\.[0-9]+)?)\s*(?:°[cC]|[cC]|度)?$/);
-        if (!match) {
-          message = invalidTemperatureMessage;
-        } else if (limit && Number(match[1]) >= temperatureLimit) {
-          message = highTemperatureMessage;
-        }
-      }
-      error.textContent = message;
-      error.classList.toggle("hidden", !message);
-      input.setAttribute("aria-invalid", message ? "true" : "false");
-      return !message;
-    }
-
-    function validateTemperature() {
-      const presentValid = validateTemperatureField(temperatureInput, temperatureError, selectedMode() === 'present', true);
-      const absentValid = validateTemperatureField(absenceTemperatureInput, absenceTemperatureError, selectedMode() === 'absent' && selectedReason() === 'absent_sick', false);
-      return presentValid && absentValid;
-    }
-
-    document.querySelectorAll('[data-temperature-picker]').forEach(picker => {
-      const input = document.getElementById(picker.dataset.temperaturePicker);
-      let whole = '', fraction = '';
-      const syncPicker = () => {
-        const value = input.value.normalize('NFKC').trim();
-        const match = value.match(/^([0-9]*)(?:\.([0-9]*))?\s*(?:°[cC]|[cC]|度)?$/);
-        whole = match ? match[1] : '';
-        fraction = match && match[2] ? match[2] : '';
-        picker.querySelectorAll('[data-temperature-whole]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.temperatureWhole === whole)));
-        picker.querySelectorAll('[data-temperature-fraction]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.temperatureFraction === fraction)));
-      };
-      picker.addEventListener('click', event => {
-        const button = event.target.closest('button');
-        if (!button || input.disabled) return;
-        if (button.hasAttribute('data-temperature-clear')) { whole = ''; fraction = ''; input.value = ''; }
-        else {
-          if (button.hasAttribute('data-temperature-whole')) whole = button.dataset.temperatureWhole;
-          if (button.hasAttribute('data-temperature-fraction')) fraction = button.dataset.temperatureFraction;
-          input.value = `${whole}.${fraction}`;
-        }
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      });
-      input.addEventListener('input', syncPicker);
-      syncPicker();
-    });
-    document.querySelectorAll('[data-quick-choices]').forEach(choices => {
-      const input = document.getElementById(choices.dataset.quickChoices);
-      const syncChoices = () => choices.querySelectorAll('[data-choice]').forEach(button => button.setAttribute('aria-pressed', String(Boolean(input.value) && input.value === button.dataset.choice)));
-      choices.addEventListener('click', event => {
-        const button = event.target.closest('[data-choice]');
-        if (!button || input.disabled) return;
-        input.value = button.dataset.choice;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      });
-      input.addEventListener('input', syncChoices);
-      syncChoices();
-    });
-
-    function setDisabled(section, disabled) {
-      if (!section) return;
-      section.querySelectorAll("input, textarea, select").forEach((field) => {
-        field.disabled = disabled;
-      });
-    }
-
-    function selectedMode() {
-      const selected = modeInputs.find((input) => input.checked);
-      return selected ? selected.value : "present";
-    }
-
-    function selectedReason() {
-      const selected = reasonInputs.find((input) => input.checked);
-      return selected ? selected.value : "";
-    }
-
-    function syncState() {
-      const mode = selectedMode();
-      const reason = selectedReason();
-      const contactType = mode === "present" ? "present" : reason;
-      contactTypeInput.value = contactType;
-
-      presentFields.classList.toggle("hidden", mode !== "present");
-      absenceReasonPanel.classList.toggle("hidden", mode !== "absent");
-      absencePrivateFields.classList.toggle("hidden", contactType !== "absent_private");
-      absenceSickFields.classList.toggle("hidden", contactType !== "absent_sick");
-
-      setDisabled(presentFields, mode !== "present");
-      setDisabled(absencePrivateFields, contactType !== "absent_private");
-      setDisabled(absenceSickFields, contactType !== "absent_sick");
-      if (absenceReasonError && (mode !== "absent" || reason)) {
-        absenceReasonError.classList.add("hidden");
-      }
-      if (mode !== "present" || !temperatureError.classList.contains("hidden")) {
-        validateTemperature();
+  function validateTemperatureField(input, error, active, limit) {
+    const value = input.value.normalize("NFKC").trim();
+    let message = "";
+    if (active && value) {
+      const match = value.match(/^([0-9]+(?:\.[0-9]+)?)\s*(?:°[cC]|[cC]|度)?$/);
+      if (!match) {
+        message = invalidTemperatureMessage;
+      } else if (limit && Number(match[1]) >= temperatureLimit) {
+        message = highTemperatureMessage;
       }
     }
+    error.textContent = message;
+    error.classList.toggle("hidden", !message);
+    input.setAttribute("aria-invalid", message ? "true" : "false");
+    return !message;
+  }
 
-    temperatureInput.addEventListener("input", () => {
-      if (!temperatureError.classList.contains("hidden")) validateTemperature();
-    });
-    absenceTemperatureInput.addEventListener("input", () => {
-      if (!absenceTemperatureError.classList.contains("hidden")) validateTemperature();
-    });
-    modeInputs.forEach((input) => input.addEventListener("change", syncState));
-    reasonInputs.forEach((input) => input.addEventListener("change", syncState));
-    form.addEventListener("submit", (event) => {
-      const mode = selectedMode();
-      const reason = selectedReason();
-      if (!validateTemperature()) {
-        event.preventDefault();
-        (mode === 'present' ? temperatureInput : absenceTemperatureInput).focus();
-        return;
+  function validateTemperature() {
+    const presentValid = validateTemperatureField(temperatureInput, temperatureError, selectedMode() === 'present', true);
+    const absentValid = validateTemperatureField(absenceTemperatureInput, absenceTemperatureError, selectedMode() === 'absent' && selectedReason() === 'absent_sick', false);
+    return presentValid && absentValid;
+  }
+
+  document.querySelectorAll('[data-temperature-picker]').forEach(picker => {
+    const input = document.getElementById(picker.dataset.temperaturePicker);
+    let whole = '', fraction = '';
+    const syncPicker = () => {
+      const value = input.value.normalize('NFKC').trim();
+      const match = value.match(/^([0-9]*)(?:\.([0-9]*))?\s*(?:°[cC]|[cC]|度)?$/);
+      whole = match ? match[1] : '';
+      fraction = match && match[2] ? match[2] : '';
+      picker.querySelectorAll('[data-temperature-whole]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.temperatureWhole === whole)));
+      picker.querySelectorAll('[data-temperature-fraction]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.temperatureFraction === fraction)));
+    };
+    picker.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (!button || input.disabled) return;
+      if (button.hasAttribute('data-temperature-clear')) { whole = ''; fraction = ''; input.value = ''; }
+      else {
+        if (button.hasAttribute('data-temperature-whole')) whole = button.dataset.temperatureWhole;
+        if (button.hasAttribute('data-temperature-fraction')) fraction = button.dataset.temperatureFraction;
+        input.value = `${whole}.${fraction}`;
       }
-      if (mode === "absent" && !reason) {
-        event.preventDefault();
-        if (absenceReasonError) {
-          absenceReasonError.classList.remove("hidden");
-        }
-        absenceReasonPanel.scrollIntoView({ block: "center" });
-      }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
     });
+    input.addEventListener('input', syncPicker);
+    syncPicker();
+  });
+  document.querySelectorAll('[data-quick-choices]').forEach(choices => {
+    const input = document.getElementById(choices.dataset.quickChoices);
+    const syncChoices = () => choices.querySelectorAll('[data-choice]').forEach(button => button.setAttribute('aria-pressed', String(Boolean(input.value) && input.value === button.dataset.choice)));
+    choices.addEventListener('click', event => {
+      const button = event.target.closest('[data-choice]');
+      if (!button || input.disabled) return;
+      input.value = button.dataset.choice;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    input.addEventListener('input', syncChoices);
+    syncChoices();
+  });
+
+  function setDisabled(section, disabled) {
+    if (!section) return;
+    section.querySelectorAll("input, textarea, select").forEach((field) => {
+      field.disabled = disabled;
+    });
+  }
+
+  function selectedMode() {
+    const selected = modeInputs.find((input) => input.checked);
+    return selected ? selected.value : "present";
+  }
+
+  function selectedReason() {
+    const selected = reasonInputs.find((input) => input.checked);
+    return selected ? selected.value : "";
+  }
+
+  function syncState() {
+    const mode = selectedMode();
+    const reason = selectedReason();
+    const contactType = mode === "present" ? "present" : reason;
+    contactTypeInput.value = contactType;
+
+    presentFields.classList.toggle("hidden", mode !== "present");
+    absenceReasonPanel.classList.toggle("hidden", mode !== "absent");
+    absencePrivateFields.classList.toggle("hidden", contactType !== "absent_private");
+    absenceSickFields.classList.toggle("hidden", contactType !== "absent_sick");
+
+    setDisabled(presentFields, mode !== "present");
+    setDisabled(absencePrivateFields, contactType !== "absent_private");
+    setDisabled(absenceSickFields, contactType !== "absent_sick");
+    if (absenceReasonError && (mode !== "absent" || reason)) {
+      absenceReasonError.classList.add("hidden");
+    }
+    if (mode !== "present" || !temperatureError.classList.contains("hidden")) {
+      validateTemperature();
+    }
+  }
+
+  temperatureInput.addEventListener("input", () => {
+    if (!temperatureError.classList.contains("hidden")) validateTemperature();
+  });
+  absenceTemperatureInput.addEventListener("input", () => {
+    if (!absenceTemperatureError.classList.contains("hidden")) validateTemperature();
+  });
+  modeInputs.forEach((input) => input.addEventListener("change", syncState));
+  reasonInputs.forEach((input) => input.addEventListener("change", syncState));
+  form.addEventListener("submit", (event) => {
+    const mode = selectedMode();
+    const reason = selectedReason();
+    if (!validateTemperature()) {
+      event.preventDefault();
+      (mode === 'present' ? temperatureInput : absenceTemperatureInput).focus();
+      return;
+    }
+    if (mode === "absent" && !reason) {
+      event.preventDefault();
+      if (absenceReasonError) {
+        absenceReasonError.classList.remove("hidden");
+      }
+      absenceReasonPanel.scrollIntoView({ block: "center" });
+    }
+  });
+  syncState();
+
+  const btnCopyPrevious = document.getElementById("btn-copy-previous");
+  if (btnCopyPrevious) {
+    const prevData = {{ previous_copy_fields| tojson
+  }};
+  btnCopyPrevious.addEventListener("click", () => {
+    // 出席モードに設定
+    const presentRadio = modeInputs.find((r) => r.value === "present");
+    if (presentRadio) {
+      presentRadio.checked = true;
+    }
+
+    // コピー対象フィールドを安全に設定
+    const setVal = (name, val) => {
+      const el = form.querySelector(`[name="${name}"]`);
+      if (el && val !== undefined && val !== null && val !== "") {
+        el.value = val;
+      }
+    };
+
+    setVal("bedtime", prevData.bedtime);
+    setVal("wakeup_time", prevData.wakeup_time);
+    setVal("breakfast_status", prevData.breakfast_status);
+    setVal("breakfast_contents", prevData.breakfast_contents);
+    setVal("mood", prevData.mood);
+    setVal("stool_consistency", prevData.stool_consistency);
+    setVal("stool_count", prevData.stool_count);
+    setVal("sleep_notes", prevData.sleep_notes);
+
+    // お迎え予定
+    setVal("planned_pickup_time", prevData.planned_pickup_time);
+    setVal("pickup_person", prevData.pickup_person);
+    if (prevData.planned_pickup_time && prevData.planned_pickup_time.includes(":")) {
+      const [h, m] = prevData.planned_pickup_time.split(":");
+      setVal("pickup_hour", h);
+      setVal("pickup_minute", m);
+    }
+    if (prevData.snack_required !== "") {
+      const snackRadio = form.querySelector(`input[name="snack_required"][value="${prevData.snack_required}"]`);
+      if (snackRadio) snackRadio.checked = true;
+    }
+
+    // 前回コピーフラグをセット
+    const copiedInput = form.querySelector('input[name="copied_from_previous"]');
+    if (copiedInput) {
+      copiedInput.value = "1";
+    } else {
+      const hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = "copied_from_previous";
+      hidden.value = "1";
+      form.appendChild(hidden);
+    }
+
     syncState();
 
-    const btnCopyPrevious = document.getElementById("btn-copy-previous");
-    if (btnCopyPrevious) {
-      const prevData = {{ previous_copy_fields|tojson }};
-      btnCopyPrevious.addEventListener("click", () => {
-        // 出席モードに設定
-        const presentRadio = modeInputs.find((r) => r.value === "present");
-        if (presentRadio) {
-          presentRadio.checked = true;
-        }
-
-        // コピー対象フィールドを安全に設定
-        const setVal = (name, val) => {
-          const el = form.querySelector(`[name="${name}"]`);
-          if (el && val !== undefined && val !== null && val !== "") {
-            el.value = val;
-          }
-        };
-
-        setVal("bedtime", prevData.bedtime);
-        setVal("wakeup_time", prevData.wakeup_time);
-        setVal("breakfast_status", prevData.breakfast_status);
-        setVal("breakfast_contents", prevData.breakfast_contents);
-        setVal("mood", prevData.mood);
-        setVal("stool_consistency", prevData.stool_consistency);
-        setVal("stool_count", prevData.stool_count);
-        setVal("sleep_notes", prevData.sleep_notes);
-
-        // お迎え予定
-        setVal("planned_pickup_time", prevData.planned_pickup_time);
-        setVal("pickup_person", prevData.pickup_person);
-        if (prevData.planned_pickup_time && prevData.planned_pickup_time.includes(":")) {
-          const [h, m] = prevData.planned_pickup_time.split(":");
-          setVal("pickup_hour", h);
-          setVal("pickup_minute", m);
-        }
-        if (prevData.snack_required !== "") {
-          const snackRadio = form.querySelector(`input[name="snack_required"][value="${prevData.snack_required}"]`);
-          if (snackRadio) snackRadio.checked = true;
-        }
-
-        syncState();
-
-        // 成功フィードバック表示
-        btnCopyPrevious.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-300");
-        btnCopyPrevious.innerHTML = `✓ 前回の入力を反映しました（体温を入力してください）`;
-        setTimeout(() => {
-          temperatureInput.focus();
-        }, 100);
-      });
+    // 成功フィードバック表示
+    btnCopyPrevious.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-300");
+    btnCopyPrevious.innerHTML = `✓ 前回の入力を反映しました（体温を入力してください）`;
+    setTimeout(() => {
+      temperatureInput.focus();
+    }, 100);
+  });
     }
-  })();
+
+  const btnSamePickupTime = document.getElementById("btn-same-pickup-time");
+  if (btnSamePickupTime) {
+    btnSamePickupTime.addEventListener("click", () => {
+      const timeText = btnSamePickupTime.textContent.match(/（(\d{2}:\d{2})）/);
+      if (timeText) {
+        const [h, m] = timeText[1].split(":");
+        setVal("planned_pickup_time", timeText[1]);
+        setVal("pickup_hour", h);
+        setVal("pickup_minute", m);
+        btnSamePickupTime.classList.add("bg-emerald-50", "text-emerald-700", "border-emerald-300");
+        btnSamePickupTime.innerHTML = `✓ 前回と同じ時刻（${timeText[1]}）を設定しました`;
+      }
+    });
+  }
+
+  function setVal(name, val) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el && val !== undefined && val !== null && val !== "") {
+      el.value = val;
+    }
+  }
+
+  // --- クイック定型フレーズ挿入 ---
+  document.querySelectorAll("[data-phrase-target]").forEach((container) => {
+    const targetName = container.dataset.phraseTarget;
+    const targetEl = form.querySelector(`[name="${targetName}"]`);
+    if (!targetEl) return;
+
+    container.querySelectorAll("[data-insert-phrase]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const text = btn.dataset.insertPhrase;
+        if (!targetEl.value.trim()) {
+          targetEl.value = text;
+        } else if (targetEl.value.includes(text)) {
+          // すでに含まれている場合は重複挿入しない
+          return;
+        } else {
+          targetEl.value = `${targetEl.value.trim()}\n${text}`;
+        }
+        targetEl.dispatchEvent(new Event("input", { bubbles: true }));
+        targetEl.focus();
+      });
+    });
+  });
+
+  // --- ローカル自動下書き保存 (Autosave) ---
+  const draftKey = `hoikuict_draft_{{ child.id }}_{{ target_date_value }}`;
+  const draftBanner = document.getElementById("draft-restored-banner");
+  const btnDiscardDraft = document.getElementById("btn-discard-draft");
+
+  const saveDraft = () => {
+    try {
+      const draft = {
+        updatedAt: Date.now(),
+        fields: {}
+      };
+      const watched = [
+        "attendance_mode", "absence_reason", "temperature", "absence_temperature",
+        "absence_symptoms", "absence_diagnosis", "absence_note", "condition_note",
+        "contact_note", "mood", "cough", "runny_nose", "medication", "sleep_notes",
+        "bowel_movement_status", "breakfast_contents", "dinner_contents"
+      ];
+      watched.forEach((name) => {
+        const el = form.querySelector(`[name="${name}"]`);
+        if (el) {
+          if (el.type === "radio") {
+            const checked = form.querySelector(`[name="${name}"]:checked`);
+            draft.fields[name] = checked ? checked.value : "";
+          } else {
+            draft.fields[name] = el.value;
+          }
+        }
+      });
+      // 入力が空でなければ保存
+      const hasContent = Object.values(draft.fields).some((v) => v && v.trim && v.trim().length > 0);
+      if (hasContent) {
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }
+    } catch (_) {}
+  };
+
+  // デバウンス保存 (700ms)
+  let saveTimer = null;
+  form.addEventListener("input", () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 700);
+  });
+  form.addEventListener("change", () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 700);
+  });
+
+  // 初回読み込み時の復元 (サーバー側に未保存、またはフォームが初期状態の場合)
+  try {
+    const rawDraft = localStorage.getItem(draftKey);
+    const hasServerEntry = {{ "true" if entry else "false" }};
+    if (rawDraft && !hasServerEntry) {
+      const draft = JSON.parse(rawDraft);
+      if (draft && draft.fields) {
+        let restoredCount = 0;
+        Object.entries(draft.fields).forEach(([k, v]) => {
+          if (v) {
+            const el = form.querySelector(`[name="${k}"]`);
+            if (el) {
+              if (el.type === "radio") {
+                const radio = form.querySelector(`[name="${k}"][value="${v}"]`);
+                if (radio && !radio.checked) {
+                  radio.checked = true;
+                  radio.dispatchEvent(new Event("change", { bubbles: true }));
+                  restoredCount++;
+                }
+              } else if (!el.value) {
+                el.value = v;
+                el.dispatchEvent(new Event("input", { bubbles: true }));
+                restoredCount++;
+              }
+            }
+          }
+        });
+        if (restoredCount > 0 && draftBanner) {
+          draftBanner.classList.remove("hidden");
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 下書き破棄ボタン
+  if (btnDiscardDraft) {
+    btnDiscardDraft.addEventListener("click", () => {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch (_) {}
+      window.location.reload();
+    });
+  }
+
+  // 正常送信完了時は下書きを消去
+  form.addEventListener("submit", () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch (_) {}
+  });
+  }) ();
 </script>
 {% include 'shared/_pickup_script.html' %}
 {% endblock %}
