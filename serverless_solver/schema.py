@@ -6,8 +6,7 @@ Webサーバー本体（FastAPI）とサーバーレスコンテナ間の型安�
 
 from __future__ import annotations
 
-from datetime import date, time
-from typing import Any, Optional
+from typing import Optional
 from pydantic import BaseModel, Field
 
 

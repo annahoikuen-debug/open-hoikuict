@@ -240,7 +240,8 @@
         <tr id="extended-care-details-{{ summary.child_id }}">
           <td colspan="8" class="bg-gray-50 px-4 py-3">
             <details {% if open_child_id == summary.child_id %}open{% endif %}>
-              <summary class="cursor-pointer text-sm font-medium text-gray-700">日別明細 {{ summary.details|length }} 件</summary>
+              <summary class="cursor-pointer text-sm font-medium text-gray-700">日別明細 {{ summary.details|length }} 件{% if summary.unconfirmed_count %} <span class="font-bold text-amber-700">(要確認 {{ summary.unconfirmed_count }}件)</span>{% endif %}</summary>
+              {% if open_child_id == summary.child_id %}
               <div class="mt-3 overflow-x-auto rounded border border-gray-200 bg-white">
                 <table class="min-w-full text-xs">
                   <thead class="bg-gray-100 text-gray-700">
@@ -327,6 +328,12 @@
                   </tbody>
                 </table>
               </div>
+              {% else %}
+              <div class="mt-2 text-xs text-gray-500 flex items-center justify-between">
+                <span>日別明細 {{ summary.details|length }}件{% if summary.unconfirmed_count %}（要確認 {{ summary.unconfirmed_count }}件）{% endif %}</span>
+                <a href="{{ current_url }}{% if '?' in current_url %}&{% else %}?{% endif %}open_child_id={{ summary.child_id }}#extended-care-child-{{ summary.child_id }}" class="text-indigo-600 font-semibold hover:underline">明細・操作フォームを展開する →</a>
+              </div>
+              {% endif %}
             </details>
           </td>
         </tr>

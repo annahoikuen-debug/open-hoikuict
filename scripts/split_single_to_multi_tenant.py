@@ -11,22 +11,17 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import shutil
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Dict, List, Set
-from uuid import UUID
+from typing import List
 
-from sqlalchemy import create_engine, inspect, text
-from sqlmodel import Session, select
 
 from database_tenants.migration import (
     ensure_tenant_template_initialized,
-    provision_tenant_from_template,
 )
-from models.organization import DEFAULT_FACILITY_ID, DEFAULT_ORGANIZATION_ID, Facility, Organization
+from models.organization import DEFAULT_FACILITY_ID, DEFAULT_ORGANIZATION_ID
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("split_single_to_multi_tenant")

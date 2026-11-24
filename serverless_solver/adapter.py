@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime, time as dt_time, timedelta
-from typing import Any
+from datetime import date, time as dt_time, timedelta
 
 from shiftai.domain import (
     CellState,

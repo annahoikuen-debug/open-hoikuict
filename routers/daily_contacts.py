@@ -551,6 +551,41 @@ def approve_daily_contact_reply(
     return RedirectResponse(f"/daily-contacts/{reply.child_id}?date={reply.target_date.isoformat()}&notice=reply_approved", status_code=303)
 
 
+@router.post("/replies/bulk-approve")
+def bulk_approve_daily_contact_replies(
+    request: Request,
+    reply_ids: list[int] = Form(default=[]),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """主任・園長が未承認の連絡帳返信を一括承認して公開する。"""
+    is_admin_or_chief = getattr(current_user, "is_admin", False) or getattr(current_user, "role", "") in ("admin", "chief")
+    if not is_admin_or_chief:
+        raise HTTPException(403, "承認権限がありません（主任または管理者のみ承認可能です）")
+
+    query = select(DailyContactReply).where(DailyContactReply.status == DailyContactReplyStatus.pending_review)
+    if reply_ids:
+        query = query.where(DailyContactReply.id.in_(reply_ids))
+
+    replies = session.exec(query).all()
+    now = utc_now()
+    reviewer_id = getattr(current_user, "user_id", None)
+    reviewer_name = getattr(current_user, "name", "主任")
+
+    for reply in replies:
+        reply.status = DailyContactReplyStatus.published
+        reply.published_at = now
+        reply.reviewed_by_staff_id = reviewer_id
+        reply.reviewed_by_name = reviewer_name
+        reply.reviewed_at = now
+        reply.rejection_reason = None
+        reply.updated_at = now
+        session.add(reply)
+
+    session.commit()
+    return {"status": "ok", "approved_count": len(replies)}
+
+
 @router.post("/replies/{reply_id}/reject")
 def reject_daily_contact_reply(
     reply_id: int,

@@ -12,7 +12,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 import sqlite3
 
 logger = logging.getLogger("database_tenants.analytics")
@@ -72,12 +72,7 @@ class CrossTenantAnalytics:
 
         # DuckDB がインストールされている場合は DuckDB による超高速スキャンを試行
         try:
-            import duckdb
-
-            pattern = (self.tenants_dir / "*.db").as_posix()
-            con = duckdb.connect(database=":memory:")
-            # テーブル名を sqlite_scan('pattern', 'table') に置換
-            # 簡易集計の場合はDuckDBをダイレクト活用
+            import duckdb  # noqa: F401
         except ImportError:
             pass
 

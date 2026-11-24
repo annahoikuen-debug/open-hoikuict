@@ -107,6 +107,28 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 
 ---
 
+### 7. Nusoft v0.8.2 統合（現場利便性・段階的請求締め解除・プロファイル統合・実務ブラッシュアップ）（2026-11-24）
+
+| 指摘区分 | 対象ファイル | 修正内容 | ステータス |
+|---|---|---|:---:|
+| **Critical** | `profile_config.py`, `main.py`, `database.py` | デュアルランタイムプロファイル（`ProfileMode.EMBEDDED` オールインワン vs `ProfileMode.CLOUD` SaaS）の実装。外部依存ゼロの単一プロセス動作を担保。 | 修正完了 |
+| **Critical** | `routers/billing.py`, `zengin_service.py`, `models/core.py`, `alembic/versions/f7b91c2a4d05_*.py` | 段階的請求締め解除（L0: 差分なし直ちに取り消し / L1: 差分あり園長確認申請・承認フロー / L2: 全銀送金済み管理者手動）を実装。5つの理由テンプレート、差分事前見積もり、構造化監査ログ完備。 | 修正完了 |
+| **High** | `templates/child_records/log_form.html`, `static/js/hoiku-autosave.js`, `templates/shared/ui_macros.html` | 児童記録の自動保存マクロ（`hoiku-autosave.js`）、保育指針「5領域」定型フレーズチップ、タッチターゲット最適化（44px以上）を実装。 | 修正完了 |
+| **High** | `routers/attendance_checks.py`, `static/js/attendance-checks.js`, `templates/attendance_checks/` | 出欠点検ボードの安全アラートバナー、タッチ大型ボタン、Web Audio API による音響確認フィードバック、クラス別クエリ最適化（`?classroom_id=X`）を実装。 | 修正完了 |
+| **High** | `templates/staff_portal/shift_requests.html`, `templates/paid_leave/index.html` | 職員ポータルにおけるスマート時間入力セレクター、理由チップ、モバイルタッチ操作性を刷新。 | 修正完了 |
+| **High** | `templates/billing/child_charges.html`, `templates/billing/index.html` | 請求点検サマリカード、インライン差分ハイライト、児童別請求保存セーフガードを配備。 | 修正完了 |
+| **Medium** | `routers/parent_portal.py` | お迎え予定入力の補食指定（`snack_required`）未選択時の自動安全フォールバック（HTTP 400エラー防止）。連絡帳履歴の期間指定（180日上限）による読み込み高速化。 | 修正完了 |
+| **Medium** | `routers/daily_contacts.py` | 主任・園長による未承認連絡帳返信の一括承認エンドポイント（`/daily-contacts/replies/bulk-approve`）を実装。 | 修正完了 |
+| **Medium** | `routers/child_health.py` | クラス・複数園児の午睡チェック・定期検温一括登録エンドポイント（`/health/bulk-checks`）を実装。 | 修正完了 |
+| **Medium** | `zengin_service.py` | 全銀事前チェック（preflight）での未転送確定済み延長保育料の自動検知・警告通知機能を実装。 | 修正完了 |
+| **Medium** | `shift_schedule/routers/nushift_export.py`, `shift_schedule/services/nushift_export.py` | NuShift突発欠勤リペア同期API（`/shifts/import-repaired-shift`）およびエクスポート時のデフォルト月フォールバック・役職マッピング補正を実装。 | 修正完了 |
+| **Medium** | `routers/parent_accounts.py` | 管理者向け保護者登録用QRコード即時生成エンドポイント（`/parent-accounts/registration-qr`）を実装。 | 修正完了 |
+| **Medium** | `extended_care_billing_transfer_service.py`, `extended_care_fee_service.py`, `templates/extended_care_fees/` | 延長保育料・請求転送処理のクエリ最適化（`not_in` スライシング）および一覧画面のアコーディオン・要確認バッジ最適化。 | 修正完了 |
+| **High** | `version.py`, `tests/test_version.py`, `README.md`, `MANUAL.md` | バージョン表記を統一して `v0.8.2` / `nusoft v0.8.2` へアップデート。操作マニュアルに新機能の具体的な手順を追記。 | 修正完了 |
+| **High** | `tests/` | 新規テストスイート（`test_improvements_cases_1_to_6.py`, `test_parent_accounts_qr.py`, `test_nushift_roundtrip.py`, `test_app_lifespan_smoke.py`, `test_startup_smoke.py` 等）を追加し全件パス。 | 修正完了 |
+
+---
+
 ## 公開前チェックリスト
 
 ### 必須項目
@@ -130,7 +152,7 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 - [x] CSV インポート・エクスポートで数式インジェクション対策が適用されていること（PIMS CSV 含む）
 - [x] 園児マスタ・PIMS 帳票エクスポートの認可制御および監査ログ記録が適用されていること
 - [x] Alembic マイグレーションが最新（`e1f54a7b30d4`）であること
-- [x] NuShift ソルバーが最新 v0.8.0 に同期されていること (`scripts/sync_nushift_vendor.py` 実行・全54ファイル完全一致検証済)
+- [x] NuShift ソルバーが最新 v0.8.0+ に同期され、突発欠勤リペア同期 API と連携確認済であること
 - [ ] ファミリーアーカイブ/削除が監査ログ付きで状態遷移すること
 - [ ] Zengin ファイル形式 (cp932, 120バイトレコード) が正しく出力・解析されること
 - [ ] 請求計算の丸め処理 (proration rounding) が正しく動作すること

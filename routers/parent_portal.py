@@ -1927,23 +1927,46 @@ def parent_contact_history(
         return RedirectResponse(url="/parent-portal/login", status_code=303)
 
     child_ids = list(_child_ids(current_parent_user))
+    today = local_today()
+    entry_stmt = (
+        select(DailyContactEntry)
+        .options(selectinload(DailyContactEntry.child))
+        .where(DailyContactEntry.child_id.in_(child_ids) if child_ids else False)
+    )
+    reply_stmt = (
+        select(DailyContactReply)
+        .where(
+            DailyContactReply.child_id.in_(child_ids) if child_ids else False,
+            DailyContactReply.status == DailyContactReplyStatus.published,
+        )
+    )
+
+    if period == "today":
+        entry_stmt = entry_stmt.where(DailyContactEntry.target_date == today)
+        reply_stmt = reply_stmt.where(DailyContactReply.target_date == today)
+    elif period == "week":
+        week_start = today - timedelta(days=today.weekday())
+        entry_stmt = entry_stmt.where(DailyContactEntry.target_date >= week_start, DailyContactEntry.target_date <= today)
+        reply_stmt = reply_stmt.where(DailyContactReply.target_date >= week_start, DailyContactReply.target_date <= today)
+    elif period == "month":
+        month_start = today.replace(day=1)
+        entry_stmt = entry_stmt.where(DailyContactEntry.target_date >= month_start, DailyContactEntry.target_date <= today)
+        reply_stmt = reply_stmt.where(DailyContactReply.target_date >= month_start, DailyContactReply.target_date <= today)
+    else:
+        # デフォルト(all)の場合も過去180日に絞ることで数千件のフルスキャンを抑止
+        cutoff = today - timedelta(days=180)
+        entry_stmt = entry_stmt.where(DailyContactEntry.target_date >= cutoff)
+        reply_stmt = reply_stmt.where(DailyContactReply.target_date >= cutoff)
+
     entries = (
         session.exec(
-            select(DailyContactEntry)
-            .options(selectinload(DailyContactEntry.child))
-            .where(DailyContactEntry.child_id.in_(child_ids) if child_ids else False)
-            .order_by(DailyContactEntry.target_date.desc(), DailyContactEntry.updated_at.desc())
+            entry_stmt.order_by(DailyContactEntry.target_date.desc(), DailyContactEntry.updated_at.desc())
         ).all()
         if child_ids
         else []
     )
     replies = (
-        session.exec(
-            select(DailyContactReply).where(
-                DailyContactReply.child_id.in_(child_ids),
-                DailyContactReply.status == DailyContactReplyStatus.published,
-            )
-        ).all()
+        session.exec(reply_stmt).all()
         if child_ids
         else []
     )
@@ -2077,8 +2100,6 @@ def _load_visible_parent_surveys(session: Session, parent_account: ParentAccount
         select(Survey)
         .options(
             selectinload(Survey.targets),
-            selectinload(Survey.questions).selectinload(SurveyQuestion.options),
-            selectinload(Survey.answers),
         )
         .where(
             Survey.audience_type == SurveyAudienceType.parent,
@@ -2557,11 +2578,12 @@ def parent_pickup_save(request: Request, child_id: int, date: str = Form(...), r
     if day < local_today():
         raise HTTPException(400, "過去のお迎え予定は変更できません")
     try:
-        if snack_required not in {"0", "1"}:
-            raise HTTPException(400, "補食の必要・不要を選んでください。")
+        clean_snack = str(snack_required or "").strip()
+        if clean_snack not in {"0", "1"}:
+            clean_snack = "0"
         save_pickup_plan(session, child_id=child_id, day=day, revision=revision,
             planned_pickup_time=planned_pickup_time, pickup_person=pickup_person,
-            snack_required=snack_required == "1", actor_name=parent.display_name,
+            snack_required=clean_snack == "1", actor_name=parent.display_name,
             parent_account_id=parent.id, source="parent_portal")
         session.commit()
     except HTTPException as exc:

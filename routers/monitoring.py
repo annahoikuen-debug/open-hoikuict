@@ -4,14 +4,12 @@ Prometheus メトリクスおよび Kubernetes / クラウドコンテナ向け 
 """
 from __future__ import annotations
 
-import os
 import tempfile
-import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, Response, status
 from fastapi.responses import JSONResponse
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select
 
 from database import engine
 from models.core import Child, ChildStatus

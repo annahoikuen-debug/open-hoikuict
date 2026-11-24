@@ -159,16 +159,10 @@ def _load_rows(
     target_day: date,
     selected_classroom_id: Optional[int],
 ) -> list[AttendanceCheckRow]:
-    children = session.exec(
-        select(Child)
-        .options(selectinload(Child.classroom))
-        .where(Child.status == ChildStatus.enrolled)
-    ).all()
-    enrolled_children = [
-        child
-        for child in children
-        if child.id is not None and (selected_classroom_id is None or child.classroom_id == selected_classroom_id)
-    ]
+    query = select(Child).options(selectinload(Child.classroom)).where(Child.status == ChildStatus.enrolled)
+    if selected_classroom_id is not None:
+        query = query.where(Child.classroom_id == selected_classroom_id)
+    enrolled_children = list(session.exec(query).all())
     enrolled_children.sort(
         key=lambda child: (
             child.classroom.display_order if child.classroom else 999,

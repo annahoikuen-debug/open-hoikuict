@@ -513,7 +513,7 @@ def notify_dinner_reminder(
                 f"/parent-portal/children/{child_id}/contact?"
                 f"date={target_day.isoformat()}#meal-dinner"
             )
-            body = f"本日の夕食の入力がまだです。お迎え時にご確認をお願いします。"
+            body = "本日の夕食の入力がまだです。お迎え時にご確認をお願いします。"
             notif = _create_notification(
                 session,
                 parent_account_id=parent.id,

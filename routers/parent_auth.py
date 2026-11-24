@@ -6,7 +6,7 @@ import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session, select
 
@@ -37,7 +37,6 @@ from models import (
     ParentMfaPending,
     ParentMailDelivery,
     ParentPublicRegistration,
-    ParentPublicRegistrationSettings,
     ParentRegistrationRequest,
     PasswordCredential,
     User,
@@ -81,7 +80,7 @@ from parent_enrollment import (
 from family_support import validate_parent_contact_email
 from parent_public_registration import (
     InvalidRegistrationEmail, RegistrationLimited, limit_public_network, public_registration_enabled,
-    public_registration_targets, public_registration_url, request_public_registration,
+    public_registration_targets, request_public_registration,
 )
 
 
@@ -865,47 +864,8 @@ def _load_admin_account(session: Session, account_id: int) -> ParentAccount:
     return account
 
 
-@router.get("/parent-accounts/registration-qr", response_class=HTMLResponse)
-def common_registration_qr_page(request: Request, session: Session = Depends(get_session),
-                                current_user=Depends(get_current_staff_user)):
-    _admin_actor(session, current_user)
-    return _render_staff(request, "parent_auth/registration_qr.html", {
-        "current_user": current_user, "accepting": public_registration_enabled(session),
-        "registration_url": public_registration_url(),
-    })
+# 登録QRエンドポイントは認証モードに関わらず共通利用できるよう routers/parent_accounts.py に集約されました。
 
-
-@router.post("/parent-accounts/registration-qr")
-def common_registration_settings(enabled: str = Form(...), session: Session = Depends(get_session),
-                                 current_user=Depends(get_current_staff_user)):
-    actor = _admin_actor(session, current_user)
-    if enabled not in {"yes", "no"}:
-        raise HTTPException(400, "受付状態を選択してください")
-    from models import AuthenticationEvent
-    from time_utils import utc_now
-    settings = session.get(ParentPublicRegistrationSettings, 1) or ParentPublicRegistrationSettings()
-    settings.enabled = enabled == "yes"
-    settings.updated_by_user_id = actor.id
-    settings.updated_at = utc_now()
-    session.add(settings)
-    session.add(AuthenticationEvent(
-        event_type="parent_public_registration_setting", principal_type="staff", staff_user_id=actor.id,
-        result="success", reason_code="enabled" if settings.enabled else "disabled",
-    ))
-    session.commit()
-    return RedirectResponse("/parent-accounts/registration-qr", status_code=303)
-
-
-@router.get("/parent-accounts/registration-qr.svg")
-def common_registration_qr_image(session: Session = Depends(get_session),
-                                current_user=Depends(get_current_staff_user)):
-    _admin_actor(session, current_user)
-    import qrcode
-    from qrcode.image.svg import SvgPathFillImage
-    qr = qrcode.make(public_registration_url(), image_factory=SvgPathFillImage, border=4)
-    response = Response(qr.to_string(), media_type="image/svg+xml")
-    response.headers["Content-Disposition"] = 'inline; filename="parent-registration-qr.svg"'
-    return _no_store(response)
 
 
 @router.get("/parent-accounts/enrollment/new", response_class=HTMLResponse)

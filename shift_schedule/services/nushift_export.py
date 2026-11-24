@@ -182,7 +182,12 @@ def staff_csv_string(session: Session) -> str:
             ).order_by(StaffContracts.effective_from.desc(), StaffContracts.id.desc())
         ).first()
 
-        main_role = quals[0].role if quals else ""
+        if quals and quals[0].role:
+            main_role = quals[0].role
+        elif getattr(u, "staff_role", None) in ("admin", "principal", "head"):
+            main_role = "園長・主任（配置対象外）"
+        else:
+            main_role = "保育士"
         sub_role = quals[1].role if len(quals) > 1 else ""
 
         emp_type = contract.employment_type if contract else "正職員"

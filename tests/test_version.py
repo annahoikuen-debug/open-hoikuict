@@ -13,7 +13,7 @@ from version import __version__
 def test_app_version_matches_module():
     """FastAPI インスタンスの version が version.__version__ と一致すること。"""
     assert app.version == __version__
-    assert app.version == "0.7.1"
+    assert app.version == "0.8.2"
 
 
 def test_healthz_includes_version():
@@ -23,4 +23,4 @@ def test_healthz_includes_version():
         assert resp.status_code == 200
         data = resp.json()
         assert data.get("status") == "ok"
-        assert data.get("version") == "0.7.1"
+        assert data.get("version") == "0.8.2"

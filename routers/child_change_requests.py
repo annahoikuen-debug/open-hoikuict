@@ -83,6 +83,7 @@ def _load_change_request(session: Session, request_id: int) -> ChildProfileChang
     return change_request
 
 
+@router.get("", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/", response_class=HTMLResponse)
 def child_change_request_list(
     request: Request,

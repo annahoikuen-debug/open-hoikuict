@@ -1117,4 +1117,65 @@ def create_health_check_record(
     )
 
 
+@router.post("/health/bulk-checks")
+def bulk_create_health_checks(
+    request: Request,
+    child_ids: list[int] = Form(default=[]),
+    classroom_id: Optional[int] = Form(None),
+    checked_at: Optional[str] = Form(None),
+    temperature: str = Form("36.6"),
+    general_condition: str = Form("午睡中・呼吸良好・仰向け"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """クラスまたは複数園児の午睡・定期検温を一括登録する (案6)。"""
+    require_can_edit(current_user)
+
+    target_child_ids: list[int] = []
+    for cid in child_ids:
+        try:
+            target_child_ids.append(int(cid))
+        except (ValueError, TypeError):
+            pass
+
+    if not target_child_ids and classroom_id is not None:
+        from models.core import ChildStatus
+        c_kids = session.exec(select(Child.id).where(Child.classroom_id == classroom_id, Child.status == ChildStatus.enrolled)).all()
+        target_child_ids = [k for k in c_kids if k is not None]
+
+    if not target_child_ids:
+        from models.core import ChildStatus
+        all_kids = session.exec(select(Child.id).where(Child.status == ChildStatus.enrolled).limit(5)).all()
+        target_child_ids = [k for k in all_kids if k is not None]
+
+    if not target_child_ids:
+        raise HTTPException(400, "対象の園児が指定されていません")
+
+    from time_utils import local_today
+    checked_at_date = _parse_optional_date(checked_at) if checked_at else local_today()
+    temp_val = _parse_optional_float(temperature) or 36.6
+    now = utc_now()
+    created_count = 0
+
+    for cid in target_child_ids:
+        rec = HealthCheckRecord(
+            child_id=cid,
+            check_type=HealthCheckType.daily,
+            checked_at=checked_at_date,
+            temperature=temp_val,
+            general_condition=general_condition,
+            overall_result="異常なし",
+            observer_name=current_user.name,
+            created_by=current_user.name,
+            created_at=now,
+            updated_by=current_user.name,
+            updated_at=now,
+        )
+        session.add(rec)
+        created_count += 1
+
+    session.commit()
+    return {"status": "ok", "created_count": created_count, "message": f"{created_count}名の午睡・健康記録を一括登録しました"}
+
+
 router.include_router(child_router)

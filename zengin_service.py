@@ -486,7 +486,7 @@ def request_reopen_confirm(
     """Store a director-confirmation request for a diff-bearing (L1) cancel."""
     if confirmed_unsubmitted is not True:
         raise ZenginError("銀行へ提出・アップロードしていないことを確認してください")
-    combined = _validate_reopen_reason(reason_templates, reason)
+    _validate_reopen_reason(reason_templates, reason)
     try:
         cycle, export = _lock_export_cycle(session, export_id)
         exports = list(session.exec(select(ZenginExport).where(
@@ -1016,6 +1016,26 @@ def scan_zengin_preflight(session: Session, cycle_id: int) -> dict[str, Any]:
             validate_billing_setting(settings)
         except ZenginError as exc:
             settings_errors.append(f"請求設定の不備: {exc}")
+
+    # 未転送の確定済み延長保育料の検知 (案5)
+    try:
+        from models.core import ExtendedCareCharge, ExtendedCareChargeStatus
+        from sqlalchemy import func
+        untransferred_count = session.exec(
+            select(func.count(ExtendedCareCharge.id)).where(
+                ExtendedCareCharge.is_transferred == False,
+                ExtendedCareCharge.status == ExtendedCareChargeStatus.confirmed,
+            )
+        ).one()
+        if untransferred_count > 0:
+            issues.append({
+                "type": "warning",
+                "category": "extended_care",
+                "message": f"未転送の確定済み延長保育料が {untransferred_count} 件あります。請求へ転送してから振替データを作成してください。",
+                "action_url": "/extended-care-fees/",
+            })
+    except Exception:
+        pass
 
     claims = session.exec(
         select(BillingClaim)

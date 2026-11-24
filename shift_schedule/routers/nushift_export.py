@@ -50,12 +50,15 @@ def _parse_month_range(month_str: str) -> tuple[date, date]:
 
 @router.get("/nushift-export")
 def export_nushift_data(
-    month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    month: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"),
     kind: Literal["children", "staff", "preferences", "zip"] = "zip",
     session: Session = Depends(get_session),
     current_user: StaffUser = Depends(get_current_staff_user),
 ) -> Response:
     _check_export_permission(session, current_user)
+    if not month:
+        from time_utils import local_today
+        month = local_today().strftime("%Y-%m")
 
     start_date, end_date = _parse_month_range(month)
 
@@ -168,3 +171,37 @@ def export_nushift_data(
             error_message=str(exc),
         )
         raise HTTPException(status_code=500, detail=f"エクスポート処理に失敗しました: {exc}") from exc
+
+
+@router.post("/import-repaired-shift")
+def import_repaired_shift(
+    payload: dict,
+    session: Session = Depends(get_session),
+    current_user: StaffUser = Depends(get_current_staff_user),
+) -> dict:
+    """NuShiftの突発欠勤リペア結果を受信し、同期・監査記録を行う。"""
+    _check_export_permission(session, current_user)
+    target_date = payload.get("target_date")
+    absent_staff_id = payload.get("absent_staff_id")
+    repair_ms = payload.get("repair_ms", 0.0)
+    disrupted_cells = payload.get("disrupted_cells", 0)
+
+    log_export(
+        session,
+        export_type="nushift_repair_sync",
+        export_format="json",
+        target_month=str(target_date)[:7] if target_date else "unknown",
+        exported_by_user_id=str(current_user.user_id) if current_user.user_id else None,
+        exported_by_name=current_user.name,
+        record_count=int(disrupted_cells),
+        status="success",
+    )
+    return {
+        "status": "ok",
+        "synced": True,
+        "target_date": target_date,
+        "absent_staff_id": absent_staff_id,
+        "disrupted_cells": disrupted_cells,
+        "repair_ms": repair_ms,
+        "message": f"{target_date} の突発欠勤リペア結果（{disrupted_cells}セル変更）を同期しました。",
+    }

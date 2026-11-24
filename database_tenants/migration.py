@@ -11,7 +11,7 @@ import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import create_engine, text
@@ -55,7 +55,7 @@ def ensure_tenant_template_initialized(force_recreate: bool = False) -> Path:
         SQLModel.metadata.create_all(engine)
 
         # 組み込みマイグレーションのテーブルを作成し、最新マイグレーション済みとして記録
-        from database import _ensure_schema_migrations_table, _sqlite_migrations
+        from database import _sqlite_migrations
         with engine.connect() as conn:
             conn.execute(text(
                 "CREATE TABLE IF NOT EXISTS schema_migrations ("

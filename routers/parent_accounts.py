@@ -453,3 +453,62 @@ def remove_email(account_id: int, reason: str = Form(""), confirmed: str = Form(
         raise HTTPException(400, str(exc)) from exc
     session.commit()
     return RedirectResponse("/parent-accounts/", status_code=303)
+
+
+@router.get("/registration-qr", response_class=HTMLResponse)
+def common_registration_qr_page(request: Request, session: Session = Depends(get_session),
+                                current_user=Depends(get_current_staff_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    from parent_public_registration import public_registration_enabled, public_registration_url
+    response = templates.TemplateResponse(
+        request,
+        "parent_auth/registration_qr.html",
+        {
+            "current_user": current_user,
+            "accepting": public_registration_enabled(session),
+            "registration_url": public_registration_url(),
+        },
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@router.post("/registration-qr")
+def common_registration_settings(enabled: str = Form(...), session: Session = Depends(get_session),
+                                 current_user=Depends(get_current_staff_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    if enabled not in {"yes", "no"}:
+        raise HTTPException(400, "受付状態を選択してください")
+    from models import AuthenticationEvent, ParentPublicRegistrationSettings
+    settings = session.get(ParentPublicRegistrationSettings, 1) or ParentPublicRegistrationSettings()
+    settings.enabled = enabled == "yes"
+    settings.updated_by_user_id = current_user.user_id
+    settings.updated_at = utc_now()
+    session.add(settings)
+    session.add(AuthenticationEvent(
+        event_type="parent_public_registration_setting", principal_type="staff", staff_user_id=current_user.user_id,
+        result="success", reason_code="enabled" if settings.enabled else "disabled",
+    ))
+    session.commit()
+    return RedirectResponse("/parent-accounts/registration-qr", status_code=303)
+
+
+@router.get("/registration-qr.svg")
+def common_registration_qr_image(session: Session = Depends(get_session),
+                                 current_user=Depends(get_current_staff_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    import qrcode
+    from qrcode.image.svg import SvgPathFillImage
+    from fastapi.responses import Response
+    from parent_public_registration import public_registration_url
+    qr = qrcode.make(public_registration_url(), image_factory=SvgPathFillImage, border=4)
+    response = Response(qr.to_string(), media_type="image/svg+xml")
+    response.headers["Content-Disposition"] = 'inline; filename="parent-registration-qr.svg"'
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+

@@ -50,6 +50,7 @@ def test_nushift_export_creates_audit_log_for_children_csv(test_setup):
             select(DocumentExportLog).where(
                 DocumentExportLog.export_type == "nushift",
                 DocumentExportLog.export_format == "csv",
+                DocumentExportLog.exported_by_user_id == admin_user_id,
             )
         ).all()
         assert len(logs) == 1
@@ -72,6 +73,7 @@ def test_nushift_export_creates_audit_log_for_staff_csv(test_setup):
             select(DocumentExportLog).where(
                 DocumentExportLog.export_type == "nushift",
                 DocumentExportLog.export_format == "csv",
+                DocumentExportLog.exported_by_user_id == admin_user_id,
             )
         ).all()
         assert len(logs) == 1
@@ -92,6 +94,7 @@ def test_nushift_export_creates_audit_log_for_preferences_csv(test_setup):
             select(DocumentExportLog).where(
                 DocumentExportLog.export_type == "nushift",
                 DocumentExportLog.export_format == "csv",
+                DocumentExportLog.exported_by_user_id == admin_user_id,
             )
         ).all()
         assert len(logs) == 1
@@ -112,6 +115,7 @@ def test_nushift_export_creates_audit_log_for_zip(test_setup):
             select(DocumentExportLog).where(
                 DocumentExportLog.export_type == "nushift",
                 DocumentExportLog.export_format == "zip",
+                DocumentExportLog.exported_by_user_id == admin_user_id,
             )
         ).all()
         assert len(logs) == 1
@@ -121,7 +125,13 @@ def test_nushift_export_creates_audit_log_for_zip(test_setup):
         assert log.file_size_bytes is not None and log.file_size_bytes > 0
 
 
-def test_nushift_export_dashboard_and_history_integration(test_setup):
+def test_nushift_export_without_month_defaults_to_current_month(test_setup):
+    client, admin_user_id = test_setup
+
+    resp = client.get("/shifts/nushift-export")
+    assert resp.status_code == 200
+    assert "application/zip" in resp.headers.get("content-type", "")
+
     client, admin_user_id = test_setup
 
     # 1件ZIPを出力してログを作成

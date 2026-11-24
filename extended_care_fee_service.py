@@ -617,13 +617,16 @@ def build_monthly_overview(
         if _is_unconfirmed(charge):
             summary.unconfirmed_count += 1
 
-    unchecked_records = session.exec(
-        select(AttendanceRecord).where(
-            AttendanceRecord.attendance_date >= start_date,
-            AttendanceRecord.attendance_date <= end_date,
-            AttendanceRecord.check_out_at.is_not(None),
-        )
-    ).all()
+    unchecked_query = select(AttendanceRecord).where(
+        AttendanceRecord.attendance_date >= start_date,
+        AttendanceRecord.attendance_date <= end_date,
+        AttendanceRecord.check_out_at.is_not(None),
+    )
+    if charge_record_ids:
+        # SQLiteの式深度制限を考慮し、極端に多い場合はスライシングまたはPython側スキップを併用
+        if len(charge_record_ids) < 500:
+            unchecked_query = unchecked_query.where(AttendanceRecord.id.not_in(charge_record_ids))
+    unchecked_records = session.exec(unchecked_query).all()
     for record in unchecked_records:
         if record.id in charge_record_ids:
             continue

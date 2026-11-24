@@ -173,6 +173,8 @@ def validate_extended_care_billing_setting(
 def build_extended_care_transfer_preview(
     session: Session,
     month: str,
+    *,
+    charges: Optional[list[ExtendedCareCharge]] = None,
 ) -> ExtendedCareTransferPreview:
     normalized_month, start_date, end_date = parse_month(month)
     setting = get_extended_care_billing_setting(session)
@@ -190,20 +192,22 @@ def build_extended_care_transfer_preview(
     elif cycle.status not in EDITABLE_CYCLE_STATUSES:
         errors.append("全銀データ作成後の請求月は変更できません。")
 
-    charges = session.exec(
-        select(ExtendedCareCharge).where(
-            ExtendedCareCharge.target_date >= start_date,
-            ExtendedCareCharge.target_date <= end_date,
-        )
-    ).all()
+    if charges is None:
+        charges = session.exec(
+            select(ExtendedCareCharge).where(
+                ExtendedCareCharge.target_date >= start_date,
+                ExtendedCareCharge.target_date <= end_date,
+            )
+        ).all()
     charged_record_ids = {charge.attendance_record_id for charge in charges}
-    completed_records = session.exec(
-        select(AttendanceRecord).where(
-            AttendanceRecord.attendance_date >= start_date,
-            AttendanceRecord.attendance_date <= end_date,
-            AttendanceRecord.check_out_at.is_not(None),
-        )
-    ).all()
+    completed_query = select(AttendanceRecord).where(
+        AttendanceRecord.attendance_date >= start_date,
+        AttendanceRecord.attendance_date <= end_date,
+        AttendanceRecord.check_out_at.is_not(None),
+    )
+    if charged_record_ids and len(charged_record_ids) < 500:
+        completed_query = completed_query.where(AttendanceRecord.id.not_in(charged_record_ids))
+    completed_records = session.exec(completed_query).all()
     for record in completed_records:
         if record.id in charged_record_ids:
             continue
