@@ -14,13 +14,14 @@
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Sequence
 
 from sqlmodel import Session, select
 
 from models import (
     Child,
+    ChildStatus,
     NotificationDeliveryChannel,
     NotificationDeliveryStatus,
     ParentAccount,
@@ -96,6 +97,7 @@ _PREFERENCE_MUTE_COLUMNS: dict[ParentNotificationKind, str | None] = {
     ParentNotificationKind.notice_published: "notice_published_enabled",
     ParentNotificationKind.survey_published: "survey_published_enabled",
     ParentNotificationKind.fever_notification: "fever_notification_enabled",
+    ParentNotificationKind.dinner_reminder: "dinner_reminder_enabled",
     ParentNotificationKind.push_test: None,
 }
 
@@ -405,3 +407,127 @@ def send_survey_deadline_reminders(
             created_notifications.append(notif)
 
     return created_notifications
+
+
+def notify_dinner_reminder(
+    session: Session,
+    *,
+    target_date: date | None = None,
+    now: datetime | None = None,
+) -> list[ParentNotification]:
+    """当日の夕食入力が未完了の園児の保護者に夕食リマインド通知を送信する（W2）。
+
+    - 毎日 19:00（facility_settings の dinner_reminder_time で設定可能、初期 19:00）
+    - 当日の dinner_appetite が未入力の園児のみ対象（入力済み・欠席連絡済みは除外）
+    - 保護者の push 設定 dinner_reminder_enabled でオフ可能（初期オン）
+    - 通知タップ → /parent-portal/children/{id}/contact?date=当日#meal-dinner
+    """
+    from facility_settings_service import dinner_reminder_time
+    from models import DailyContactEntry, ParentContactType
+    from time_utils import ensure_utc_from_local, utc_now
+
+    current_time = ensure_utc_from_local(now or utc_now())
+    target_day = target_date or current_time.date()
+
+    # 施設設定のリマインド時刻（例: 19:00）を取得
+    reminder_time_str = dinner_reminder_time(session)
+    try:
+        reminder_hour, reminder_minute = map(int, reminder_time_str.split(":"))
+    except (ValueError, AttributeError):
+        reminder_hour, reminder_minute = 19, 0
+
+    # リマインド時刻を過ぎているかチェック（同日分）
+    reminder_datetime = datetime.combine(
+        target_day, time(reminder_hour, reminder_minute)
+    )
+    reminder_datetime = ensure_utc_from_local(reminder_datetime)
+    if current_time < reminder_datetime:
+        return []
+
+    # 当日の日次連絡エントリを全取得（除外判定用）
+    entries = session.exec(
+        select(DailyContactEntry).where(
+            DailyContactEntry.target_date == target_day,
+        )
+    ).all()
+
+    # 夕食入力済み（dinner_appetite が入っている）または欠席連絡の園児IDを除外対象とする
+    entered_or_absent_child_ids: set[int] = set()
+    for entry in entries:
+        extra = entry.extra_data or {}
+        if extra.get("dinner_appetite"):
+            entered_or_absent_child_ids.add(entry.child_id)
+        if entry.contact_type in (
+            ParentContactType.absent_private,
+            ParentContactType.absent_sick,
+        ):
+            entered_or_absent_child_ids.add(entry.child_id)
+
+    # 全在園児から除外対象を引き、アクティブ保護者がリンクされている子のみを対象とする
+    # （エントリが1件もない子＝未提出の子も対象に含める）
+    all_children = session.exec(
+        select(Child).where(Child.status == ChildStatus.enrolled)
+    ).all()
+
+    active_parents_by_child: dict[int, list[ParentAccount]] = {}
+    target_child_ids: list[int] = []
+    for child in all_children:
+        if not child.id:
+            continue
+        if child.id in entered_or_absent_child_ids:
+            continue
+        parents = session.exec(
+            select(ParentAccount)
+            .join(ParentChildLink, ParentChildLink.parent_account_id == ParentAccount.id)
+            .where(
+                ParentChildLink.child_id == child.id,
+                ParentAccount.status == ParentAccountStatus.active,
+            )
+        ).all()
+        if parents:
+            active_parents_by_child[child.id] = parents
+            target_child_ids.append(child.id)
+
+    if not target_child_ids:
+        return []
+
+    created: list[ParentNotification] = []
+    for child_id in target_child_ids:
+        parents = active_parents_by_child[child_id]
+        for parent in parents:
+            if not parent.id:
+                continue
+            # ミュートされている保護者には通知を送信しない
+            if _is_muted(session, parent_account_id=parent.id, kind=ParentNotificationKind.dinner_reminder):
+                continue
+            # 同一子・同日分のリマインドは冪等に排除
+            if _notification_exists(
+                session,
+                parent_account_id=parent.id,
+                kind=ParentNotificationKind.dinner_reminder,
+                source_type="dinner_reminder",
+                source_id=f"{target_day.isoformat()}:{child_id}",
+            ):
+                continue
+            action_url = (
+                f"/parent-portal/children/{child_id}/contact?"
+                f"date={target_day.isoformat()}#meal-dinner"
+            )
+            body = f"本日の夕食の入力がまだです。お迎え時にご確認をお願いします。"
+            notif = _create_notification(
+                session,
+                parent_account_id=parent.id,
+                child_id=child_id,
+                kind=ParentNotificationKind.dinner_reminder,
+                title="夕食の入力をお忘れありませんか",
+                body=body,
+                action_url=action_url,
+                source_type="dinner_reminder",
+                source_id=f"{target_day.isoformat()}:{child_id}",
+                created_by_name="システムリマインダー",
+                created_at=current_time,
+                target_date=target_day,
+            )
+            created.append(notif)
+
+    return created

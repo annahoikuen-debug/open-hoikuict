@@ -272,6 +272,7 @@ def _render_contact_form(
     has_previous_entry: bool = False,
     previous_entry_date: Optional[str] = None,
     previous_copy_fields: Optional[dict[str, str]] = None,
+    previous_entry=None,
 ):
     target_day = date.fromisoformat(target_date_value)
     emergency = (load_orders(session, child, target_day, legacy=may_share(current_parent_user, child))
@@ -310,6 +311,7 @@ def _render_contact_form(
             "has_previous_entry": has_previous_entry,
             "previous_entry_date": previous_entry_date,
             "previous_copy_fields": previous_copy_fields or {},
+            "previous_entry": previous_entry,
             "present_temperature_limit": str(PRESENT_TEMPERATURE_LIMIT),
             "present_temperature_error": PRESENT_TEMPERATURE_ERROR,
             "temperature_format_error": TEMPERATURE_FORMAT_ERROR,
@@ -1337,6 +1339,7 @@ def parent_contact_form(
         has_previous_entry=has_prev,
         previous_entry_date=prev_date_str,
         previous_copy_fields=prev_fields,
+        previous_entry=latest_prev,
         form_data=form_data,
     )
 
@@ -1354,6 +1357,8 @@ def save_parent_contact(
     care_fields_version: str = Form(""),
     meal_fields_version: str = Form(""),
     contact_revision: str = Form(""),
+    contact_layout_version: str = Form(""),
+    copied_from_previous: str = Form(""),
     dinner_appetite: str = Form(""),
     dinner_contents: str = Form(""),
     breakfast_appetite: str = Form(""),
@@ -1417,6 +1422,8 @@ def save_parent_contact(
 
     form_data = {
         "attendance_mode": submitted_mode,
+        "contact_layout_version": contact_layout_version,
+        "copied_from_previous": copied_from_previous,
         "dinner_appetite": dinner_appetite, "dinner_contents": dinner_contents, "breakfast_appetite": breakfast_appetite,
         "emergency_mode": emergency_mode, "emergency_rows": list(zip(emergency_label, emergency_phone)),
         "base_revision": base_revision, "day_revision": day_revision, "contact_revision": contact_revision,
@@ -1662,8 +1669,18 @@ def save_parent_contact(
     sync_attendance_alarm(session, child_id=child_id, target_date=day, entry=entry, now=now)
     session.commit()
 
+    is_copy_from_previous = (
+        contact_layout_version == "2"
+        and str(form_data.get("copied_from_previous", "")).strip() == "1"
+    )
+    if is_copy_from_previous:
+        prev_date_label = _jp_date_label(day - timedelta(days=1))
+        notice_value = f"{prev_date_label}の内容を引き継いで送信しました。"
+    else:
+        notice_value = "saved"
+
     return RedirectResponse(
-        url=f"/parent-portal/?date={day.isoformat()}&notice=saved",
+        url=f"/parent-portal/?date={day.isoformat()}&notice={notice_value}",
         status_code=303,
     )
 

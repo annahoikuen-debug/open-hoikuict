@@ -669,6 +669,30 @@
     "fever_review_c",
     "parent_billing_portal_enabled",
     "contact_reply_review_required",
+    "medical_consent_auto_approve",
+    "updated_at",
+    "updated_by_user_id",
+    "updated_by_name"
+  ],
+  "facility_settings_history": [
+    "updated_at",
+    "updated_by_user_id",
+    "updated_by_name"
+  ],
+  "facility_settings_history": [
+    "id",
+    "final_pickup_time",
+    "supplementary_meal_time",
+    "supplementary_meal_fee",
+    "fever_return_days",
+    "fever_caution_c",
+    "fever_review_c",
+    "parent_billing_portal_enabled",
+    "updated_at",
+    "updated_by_user_id",
+    "updated_by_name"
+  ],
+  "facility_settings_history": [
     "updated_at",
     "updated_by_user_id",
     "updated_by_name"
@@ -1217,17 +1241,18 @@
     "updated_at"
   ],
   "parent_push_preferences": [
-    "id",
-    "parent_account_id",
-    "push_enabled",
     "attendance_confirmation_enabled",
     "closure_notice_enabled",
-    "emergency_notice_enabled",
-    "punch_correction_notice_enabled",
-    "notice_published_enabled",
-    "survey_published_enabled",
-    "fever_notification_enabled",
     "created_at",
+    "dinner_reminder_enabled",
+    "emergency_notice_enabled",
+    "fever_notification_enabled",
+    "id",
+    "notice_published_enabled",
+    "parent_account_id",
+    "punch_correction_notice_enabled",
+    "push_enabled",
+    "survey_published_enabled",
     "updated_at"
   ],
   "parent_push_subscriptions": [
@@ -1620,6 +1645,7 @@
   ],
   "parent_medical_responses": [
     "answers",
+    "auto_approved",
     "before",
     "child_id",
     "created_at",

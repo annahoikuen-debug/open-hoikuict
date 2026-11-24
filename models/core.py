@@ -155,6 +155,7 @@ class ParentNotificationKind(str, Enum):
     closure_notice = "closure_notice"  # 休園のお知らせ
     emergency_notice = "emergency_notice"  # 緊急連絡
     punch_correction_notice = "punch_correction_notice"  # 打刻訂正の報告
+    dinner_reminder = "dinner_reminder"  # 夕食リマインド通知
 
 
 class NotificationDeliveryChannel(str, Enum):
@@ -859,6 +860,7 @@ class ParentMedicalResponse(SQLModel, table=True):
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_note: Optional[str] = None
+    auto_approved: bool = Field(default=False)
 
 
 class ChildAllergy(SQLModel, table=True):
@@ -2273,6 +2275,7 @@ class ParentPushPreference(SQLModel, table=True):
     notice_published_enabled: bool = Field(default=True)
     survey_published_enabled: bool = Field(default=True)
     fever_notification_enabled: bool = Field(default=True)
+    dinner_reminder_enabled: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -3405,6 +3408,7 @@ class FacilitySettings(SQLModel, table=True):
     fever_review_c: str = Field(default="38.0", max_length=4)
     parent_billing_portal_enabled: bool = Field(default=False)
     contact_reply_review_required: bool = Field(default=False)
+    medical_consent_auto_approve: bool = Field(default=False)
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
     updated_by_name: Optional[str] = None

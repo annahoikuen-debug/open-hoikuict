@@ -8,8 +8,9 @@ from database import get_session
 from models import Child, ParentAccount, ParentAccountStatus, ParentChildLink, ParentMedicalResponse
 from parent_medical_service import (
     BLOOD_TYPES, FIELDS, STATES, UNANSWERED, XRAY_CHOICES, XRAY_QUESTION,
-    current_values, form_answers, latest_answer, latest_consent, lock_child, require_current, revision,
+    current_values, diff_from_baseline, form_answers, latest_answer, latest_consent, lock_child, require_current, revision,
 )
+from facility_settings_service import medical_consent_auto_approve
 from routers.parent_portal import _get_parent_account
 from template_utils import create_templates
 from time_utils import utc_now
@@ -96,6 +97,16 @@ async def medical_form(request: Request, child_id: int, session: Session = Depen
                 answer.submitted_at = utc_now()
                 answer.before, answer.answers = baseline, draft
                 answer.xray_answer, answer.xray_question = xray, XRAY_QUESTION
+
+                # ゼロ差分自動承認（施設設定が有効で、承認済み回答と差分がない場合）
+                approved_consent = latest_consent(session, child_id)
+                if (medical_consent_auto_approve(session)
+                        and not diff_from_baseline(draft, approved_consent.answers if approved_consent else None)):
+                    answer.status = "approved"
+                    answer.auto_approved = True
+                    answer.reviewed_by = "システム（自動承認）"
+                    answer.reviewed_at = utc_now()
+
                 session.add(answer)
                 session.commit()
                 return RedirectResponse(PARENT.format(child_id=child_id) + "?sent=1", status_code=303)

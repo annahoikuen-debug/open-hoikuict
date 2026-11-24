@@ -97,6 +97,83 @@ class ParentMedicalTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"{self.staff}/{last_id}", data={"action": "approve"}).status_code, 409)
         self.assertIn(UNANSWERED, self.client.get(f"/children/{self.child}/health").text)
 
+    def test_staff_medical_get_route(self):
+        """スタッフ向け医療同意一覧GETエンドポイント。"""
+        response = self.client.get(self.staff)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("田中", response.text)
+
+    def test_staff_request_medical_creates_requested_record(self):
+        """スタッフが医療同意をリクエストするとrequestedレコードが作成される。"""
+        self.assertEqual(
+            self.client.post(self.staff + "/request", data={"parent_id": self.parent}).status_code,
+            200,
+        )
+        with Session(self.fixture.engine) as session:
+            records = session.exec(select(ParentMedicalResponse)).all()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].status, "requested")
+
+    def test_staff_request_medical_duplicate_is_noop(self):
+        """同じ親子ペアに重複リクエストしても新規レコードは作られない。"""
+        self.client.post(self.staff + "/request", data={"parent_id": self.parent})
+        self.client.post(self.staff + "/request", data={"parent_id": self.parent})
+        with Session(self.fixture.engine) as session:
+            records = session.exec(select(ParentMedicalResponse)).all()
+            self.assertEqual(len(records), 1)
+
+    def test_staff_request_medical_unknown_parent_returns_404(self):
+        """存在しない親のリクエストは404。"""
+        self.assertEqual(
+            self.client.post(self.staff + "/request", data={"parent_id": 99999}).status_code,
+            404,
+        )
+
+    def test_staff_review_approve_changes_status_to_approved(self):
+        """スタッフが承認するとステータスがapprovedに変わる。"""
+        self.client.post(self.staff + "/request", data={"parent_id": self.parent})
+        with Session(self.fixture.engine) as session:
+            record = session.exec(select(ParentMedicalResponse)).first()
+            self.assertIsNotNone(record)
+            record_id = record.id
+            record.status = "pending"
+            session.add(record)
+            session.commit()
+        self.assertEqual(
+            self.client.post(f"{self.staff}/{record_id}", data={"action": "approve"}).status_code,
+            200,
+        )
+        with Session(self.fixture.engine) as session:
+            record = session.get(ParentMedicalResponse, record_id)
+            self.assertEqual(record.status, "approved")
+
+    def test_staff_review_return_requires_note(self):
+        """書き戻しには500文字以内のメモが必要。"""
+        self.client.post(self.staff + "/request", data={"parent_id": self.parent})
+        with Session(self.fixture.engine) as session:
+            record = session.exec(select(ParentMedicalResponse)).first()
+            self.assertIsNotNone(record)
+            record_id = record.id
+            record.status = "pending"
+            session.add(record)
+            session.commit()
+        self.assertEqual(
+            self.client.post(f"{self.staff}/{record_id}", data={"action": "return", "note": ""}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post(f"{self.staff}/{record_id}", data={"action": "return", "note": "x" * 501}).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.post(f"{self.staff}/{record_id}", data={"action": "return", "note": "病院名を確認"}).status_code,
+            200,
+        )
+        with Session(self.fixture.engine) as session:
+            record = session.get(ParentMedicalResponse, record_id)
+            self.assertEqual(record.status, "returned")
+            self.assertEqual(record.review_note, "病院名を確認")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ import re
 from datetime import date, timedelta
 
 APPETITES = ("旺盛", "普通", "あまりない", "ない")
+APPETITES_V2 = ("完食", "ほぼ完食", "半分", "少なめ")
 MEAL_KEYS = ("dinner_appetite", "dinner_contents", "breakfast_appetite")
 
 
@@ -15,8 +16,9 @@ def meal_dates(day: date):
 def validate_meals(values):
     result = {key: values[key].strip() for key in MEAL_KEYS}
     result["breakfast_contents"] = values["breakfast_contents"].strip()
-    if any(result[key] not in ("", *APPETITES) for key in ("dinner_appetite", "breakfast_appetite")):
-        raise ValueError("食欲は表示された四つから選んでください。")
+    valid_appetites = ("", *APPETITES, *APPETITES_V2)
+    if any(result[key] not in valid_appetites for key in ("dinner_appetite", "breakfast_appetite")):
+        raise ValueError("食欲は表示された四つから選んでください。（完食／ほぼ完食／半分／少なめ または 旺盛／普通／あまりない／ない）")
     if len(result["dinner_contents"]) > 1000:
         raise ValueError("夕食の内容は1000文字以内で入力してください。")
     if len(result["breakfast_contents"]) > 1000:

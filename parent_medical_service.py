@@ -61,6 +61,17 @@ def revision(child_id, parent_id, values, latest, consent):
     return hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
 
 
+def diff_from_baseline(new: dict[str, str], last_approved: dict[str, str] | None) -> dict[str, str]:
+    """new と last_approved の差分（変更されたフィールドのみ）を返す。
+
+    last_approved が None の場合は new の空でない値をすべて差分として返す。
+    値が空文字列の場合は「変更なし/未入力」として差分から除外する。
+    """
+    if last_approved is None:
+        return {key: value for key, value in new.items() if value != ""}
+    return {key: value for key, value in new.items() if value != last_approved.get(key, "")}
+
+
 def staff_medical_context(session, child_id):
     return {"consent": latest_consent(session, child_id), "choices": XRAY_CHOICES,
             "statuses": STATES, "unanswered": UNANSWERED}

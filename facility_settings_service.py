@@ -23,6 +23,8 @@ DEFAULTS = dict(
     supplementary_meal_time="18:00",
     supplementary_meal_fee=100,
     parent_billing_portal_enabled=False,
+    dinner_reminder_time="19:00",
+    medical_consent_auto_approve=False,
 )
 
 
@@ -101,3 +103,15 @@ def is_parent_billing_enabled(session: Session) -> bool:
     """施設設定で保護者ポータル請求・延長保育料確認機能が有効か判定する。"""
     settings = get_facility_settings(session)
     return bool(getattr(settings, "parent_billing_portal_enabled", False))
+
+
+def dinner_reminder_time(session: Session) -> str:
+    """夕食リマインド通知の既定送信時刻（HH:MM）。"""
+    settings = get_facility_settings(session)
+    return getattr(settings, "dinner_reminder_time", "19:00")
+
+
+def medical_consent_auto_approve(session: Session) -> bool:
+    """医療同意のゼロ差分自動承認が有効か判定する。"""
+    settings = get_facility_settings(session)
+    return bool(getattr(settings, "medical_consent_auto_approve", False))
