@@ -2,7 +2,7 @@
 {% block title %}出欠確認 | open-hoikuict{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="/static/css/attendance-compact.css?v=20260925-2">
+<link rel="stylesheet" href="/static/css/attendance-compact.css?v=20261124-1">
 <div class="attendance-compact attendance-checks-page">
   <header class="compact-head"><div><h1>出欠確認</h1><p>全園児の打刻・連絡・目視確認</p></div><a data-roster-link href="/attendance-checks/roster?date={{ target_date_value }}">名前一覧へ</a></header>
   <form
@@ -65,5 +65,5 @@
     <div class="flex justify-end gap-3"><button type="button" onclick="document.getElementById('verification-dialog').close()" class="rounded border px-4 py-2">戻る</button><button type="submit" class="rounded bg-indigo-600 px-4 py-2 text-white">記録する</button></div>
   </form>
 </dialog>
-<script src="/static/js/attendance-checks.js?v=20260925-1" defer></script>
+<script src="/static/js/attendance-checks.js?v=20261124-1" defer></script>
 {% endblock %}

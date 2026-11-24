@@ -3,7 +3,7 @@
 <article id="attendance-check-row-{{ row.child.id }}" class="check-row {% if row.alarm_is_active %}alarm{% endif %}">
   <div class="check-summary">
     <div class="check-name"><strong>{{ row.child.full_name }}</strong>{% if row.alarm_is_active %}<span
-        class="alarm-dot" title="{{ row.alarm_reasons|join(' / ') }}">●</span>{% endif %}<small>{{ row.classroom_name
+        class="alarm-dot text-rose-600 font-bold" title="{{ row.alarm_reasons|join(' / ') }}">●</span><span class="ml-1 inline-flex items-center px-1 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-700 leading-tight">要確認</span>{% endif %}<small>{{ row.classroom_name
         }}</small></div>
     <span class="check-category state-{{ row.attendance_state }}">{{ state_labels[row.attendance_state] }}</span>
     <div class="check-times">{{ row.check_in_at.strftime('%H:%M') if row.check_in_at else '―' }} / {{

@@ -1,5 +1,53 @@
 let pendingVerification = null;
 let verificationSaving = false;
+let audioCtx = null;
+
+function getAudioContext() {
+  try {
+    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  } catch (e) {
+    return null;
+  }
+}
+
+function playTone(freq, duration, delay = 0, type = 'sine', volume = 0.15) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const startTime = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, startTime);
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  } catch (e) {
+    // Audio playback is non-blocking and safe to fail silently
+  }
+}
+
+function playCheckBeep() {
+  // G5 (783.99Hz) - やさしい単音タップ音 (100ms)
+  playTone(783.99, 0.1, 0, 'sine', 0.12);
+}
+
+function playAllCompleteFanfare() {
+  // C5 (523Hz) -> E5 (659Hz) -> G5 (784Hz) - 点呼完了アルペジオ♪
+  playTone(523.25, 0.09, 0, 'triangle', 0.15);
+  playTone(659.25, 0.09, 0.08, 'triangle', 0.15);
+  playTone(783.99, 0.22, 0.16, 'sine', 0.18);
+}
+
 document.addEventListener('htmx:afterSwap', () => {
   const day = document.getElementById('attendance-checks-board')?.dataset.targetDate;
   const link = document.querySelector('[data-roster-link]');
@@ -26,6 +74,8 @@ function openVerificationDialog(button) {
 async function saveVerification(form, reason, notify, fromDialog) {
   if (verificationSaving) return;
   verificationSaving = true;
+  const currentBoard = document.getElementById('attendance-checks-board');
+  const prevUnknownCount = parseInt(currentBoard?.dataset.unknownCount || '0', 10);
   const errorBox = document.getElementById(fromDialog ? 'verification-error' : 'verification-inline-error');
   errorBox.textContent = '';
   const controls = document.querySelectorAll('[data-verification-form] button, #verification-confirm button, .compact-toolbar button');
@@ -52,6 +102,15 @@ async function saveVerification(form, reason, notify, fromDialog) {
     document.getElementById('verification-dialog').close();
     pendingVerification = null;
     window.scrollTo(0, scroll);
+
+    // 点呼フィードバック音の再生
+    const newUnknownCount = parseInt(board.dataset.unknownCount || '0', 10);
+    const newAlarmCount = parseInt(board.dataset.alarmCount || '0', 10);
+    if (prevUnknownCount > 0 && newUnknownCount === 0 && newAlarmCount === 0) {
+      playAllCompleteFanfare();
+    } else {
+      playCheckBeep();
+    }
   } catch (error) { errorBox.textContent = error.message; }
   finally {
     verificationSaving = false;

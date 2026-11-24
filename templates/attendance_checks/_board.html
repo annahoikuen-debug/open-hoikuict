@@ -1,11 +1,45 @@
 {# Keep the browser from anchoring to old rows while HTMX replaces the board. #}
-<div id="attendance-checks-board" data-target-date="{{ target_date_value }}" class="check-board" style="overflow-anchor: none;">
+<div id="attendance-checks-board" data-target-date="{{ target_date_value }}" data-unknown-count="{{ counts.unknown }}" data-alarm-count="{{ counts.alarm }}" class="check-board" style="overflow-anchor: none;">
   {% if action_error %}<p role="alert" class="rounded border border-rose-300 bg-rose-50 p-4 text-rose-800">{{ action_error }}</p>{% endif %}
   {% if action_message %}
   <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
     {{ action_message }}
   </div>
   {% endif %}
+
+  {# 置き去り・点呼漏れ防止のための安全状態バナー #}
+  {% if counts.alarm > 0 %}
+  <div role="alert" class="safety-alert-banner mb-3 flex items-center justify-between rounded-xl border-2 border-rose-400 bg-rose-50 p-3.5 text-rose-900 shadow-sm">
+    <div class="flex items-center gap-3">
+      <span class="flex h-8 w-8 items-center justify-center rounded-full bg-rose-600 text-white font-bold text-base shrink-0 animate-pulse" aria-hidden="true">!</span>
+      <div>
+        <div class="font-bold text-sm sm:text-base text-rose-800">🚨 要確認・アラームが {{ counts.alarm }} 件発生しています</div>
+        <p class="text-xs text-rose-700">打刻・連絡の不一致または未連絡があります。該当園児の状況を確認してください。</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if counts.unknown > 0 %}
+  <div role="status" class="safety-warning-banner mb-3 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-900 shadow-sm">
+    <div class="flex items-center gap-3">
+      <span class="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500 text-white font-bold text-sm shrink-0" aria-hidden="true">⚠️</span>
+      <div>
+        <div class="font-bold text-sm text-amber-800">⚠️ 未確認の園児が {{ counts.unknown }} 名います</div>
+        <p class="text-xs text-amber-700">散歩・移動前後の置き去り防止のため、全員の目視確認を行ってください。</p>
+      </div>
+    </div>
+  </div>
+  {% elif counts.present > 0 and counts.alarm == 0 %}
+  <div role="status" class="safety-complete-banner mb-3 flex items-center gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-emerald-900 shadow-sm">
+    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white font-bold text-sm shrink-0" aria-hidden="true">✓</span>
+    <div>
+      <div class="font-bold text-sm text-emerald-800">✓ 全員の目視確認が完了しています（未確認 0名）</div>
+      <p class="text-xs text-emerald-700">全員の点呼が完了しました。安全に活動を進行できます。</p>
+    </div>
+  </div>
+  {% endif %}
+
   <p class="summary-line">出席 <b>{{ counts.present }}</b>　私用休み <b>{{ counts.private_absent }}</b>　病欠 <b>{{ counts.sick_absent }}</b>　未確認 <b>{{ counts.unknown }}</b>　アラーム <b>{{ counts.alarm }}</b>　／ {{ rows|length }}人表示</p>
   <div class="check-columns"><span>園児</span><span>状態</span><span>登園 / 降園</span><span>保護者連絡</span><span>{{ "目視確認" if current_user.can_manage_attendance_checks else "確認結果" }}</span><span>詳細</span></div>
   {% if selected_layout == "classroom" %}

@@ -485,6 +485,57 @@ class AttendanceChecksTests(unittest.TestCase):
             verification = session.exec(select(AttendanceVerification)).first()
         self.assertIsNone(verification)
 
+    def test_safety_banner_shows_unknown_warning_when_unverified(self):
+        response = self.client.get(f"/attendance-checks/?date={self.day.isoformat()}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("safety-warning-banner", response.text)
+        self.assertIn("未確認の園児が 1 名います", response.text)
+        self.assertIn('data-unknown-count="1"', response.text)
+
+    def test_safety_banner_shows_complete_when_all_verified(self):
+        # 園児を出席確認済みにする
+        self.client.post(
+            f"/attendance-checks/{self.child_id}/verification",
+            data={
+                "date": self.day.isoformat(),
+                "status": "present",
+                "layout": "flat",
+                "filter": "all",
+                "classroom_id": "",
+                "notify_parent": "false",
+                "reason": "",
+            },
+            headers={"HX-Request": "true"},
+        )
+
+        response = self.client.get(f"/attendance-checks/?date={self.day.isoformat()}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("safety-complete-banner", response.text)
+        self.assertIn("全員の目視確認が完了しています", response.text)
+        self.assertIn('data-unknown-count="0"', response.text)
+
+    def test_safety_banner_shows_alarm_when_alarm_triggered(self):
+        # 連絡なしで私用休みに目視確認すると no_contact_and_not_present アラームが発生する
+        self.client.post(
+            f"/attendance-checks/{self.child_id}/verification",
+            data={
+                "date": self.day.isoformat(),
+                "status": "private_absent",
+                "layout": "flat",
+                "filter": "all",
+                "classroom_id": "",
+                "notify_parent": "false",
+                "reason": "姿が見当たらないため要確認",
+            },
+            headers={"HX-Request": "true"},
+        )
+
+        response = self.client.get(f"/attendance-checks/?date={self.day.isoformat()}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("safety-alert-banner", response.text)
+        self.assertIn("要確認・アラームが 1 件発生しています", response.text)
+        self.assertIn("要確認", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()
