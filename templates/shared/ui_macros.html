@@ -1,0 +1,51 @@
+{# 保育ICT 共通 UI/UX マクロコンポーネント集 (Jinja2) #}
+
+{# 1. ローカル自動保存バナー #}
+{% macro autosave_banner(form_id, storage_key, message="入力途中の下書きを自動復元しました") %}
+<div id="{{ form_id }}-autosave-banner" class="hidden mb-4 rounded-xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 text-xs font-semibold text-indigo-800 flex items-center justify-between shadow-xs" data-autosave-key="{{ storage_key }}">
+  <span class="flex items-center gap-1.5">
+    <span aria-hidden="true">📝</span>
+    <span>{{ message }}</span>
+  </span>
+  <button type="button" data-autosave-discard class="text-indigo-600 underline text-xs hover:text-indigo-800 focus:outline-none">下書きを破棄</button>
+</div>
+{% endmacro %}
+
+{# 2. 定型フレーズチップグループ #}
+{% macro phrase_chips(target_field_name, phrases, label="タップで定型文を挿入") %}
+<div class="mb-2">
+  {% if label %}
+  <div class="mb-1 flex items-center justify-between text-xs text-slate-500">
+    <span>{{ label }}</span>
+  </div>
+  {% endif %}
+  <div class="flex flex-wrap gap-1.5" data-phrase-target="{{ target_field_name }}">
+    {% for phrase in phrases %}
+    <button type="button" data-insert-phrase="{{ phrase }}" class="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 transition active:scale-95 shadow-2xs">
+      + {{ phrase }}
+    </button>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
+
+{# 3. ステータスバッジ #}
+{% macro status_badge(type, text, icon=none, pulse=false) %}
+<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold {% if type == 'danger' %}bg-rose-100 text-rose-800 border border-rose-300{% elif type == 'warning' %}bg-amber-100 text-amber-800 border border-amber-300{% elif type == 'success' %}bg-emerald-100 text-emerald-800 border border-emerald-300{% elif type == 'info' %}bg-sky-100 text-sky-800 border border-sky-300{% else %}bg-slate-100 text-slate-700 border border-slate-200{% endif %}">
+  {% if pulse %}<span class="h-2 w-2 rounded-full {% if type == 'danger' %}bg-rose-500{% elif type == 'warning' %}bg-amber-500{% else %}bg-sky-500{% endif %} animate-pulse"></span>{% endif %}
+  {% if icon %}<span>{{ icon }}</span>{% endif %}
+  <span>{{ text }}</span>
+</span>
+{% endmacro %}
+
+{# 4. 表示形式切替トグル #}
+{% macro view_toggle(active_view, views) %}
+<div class="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-2xs">
+  {% for view in views %}
+  <a href="{{ view.url }}" class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition {% if active_view == view.key %}bg-white text-indigo-700 shadow-xs{% else %}text-slate-600 hover:text-slate-900{% endif %}" {% if active_view == view.key %}aria-current="page"{% endif %}>
+    {% if view.icon %}<span aria-hidden="true">{{ view.icon }}</span>{% endif %}
+    <span>{{ view.label }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endmacro %}

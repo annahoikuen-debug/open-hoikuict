@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "shared/ui_macros.html" import autosave_banner, phrase_chips %}
 {% block title %}{{ '記録を訂正' if is_correction else '記録を追加' }} | open-hoikuict{% endblock %}
 
 {% block content %}
@@ -11,6 +12,7 @@
   <div id="record-form-error" role="alert" {% if not error %}hidden{% endif %} class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ error }}</div>
 
   <form data-record-form method="post" action="{% if is_correction %}/children/{{ child.id }}/records/{{ log.id }}/correct{% else %}/children/{{ child.id }}/records{% endif %}" class="space-y-6">
+    {{ autosave_banner('child-record-form', 'draft_child_record_' ~ child.id ~ ('_' ~ log.id if is_correction else '_new')) }}
     {% if is_correction %}<input type="hidden" name="expected_updated_at" value="{{ log.updated_at.isoformat() }}">{% endif %}
     <fieldset class="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
       <legend class="font-semibold">共有範囲</legend>
@@ -35,15 +37,34 @@
             <span class="mt-1 block text-xs font-normal text-slate-500">{{ field.description }}</span>
           </label>
           {% elif field.key == 'child_state' %}
-          <label class="block text-sm font-medium text-slate-700 md:col-span-2">{{ field.label }} <span class="text-rose-600">*</span>
-            <textarea name="child_state" rows="6" maxlength="5000" required class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="例：積み木を何度も積み直し、崩れると『もう一回』と言って隣の子と笑い合っていた。">{{ values.get('child_state', '') }}</textarea>
-            <span class="mt-1 block text-xs font-normal text-slate-500">{{ field.description }}</span>
-          </label>
+          <div class="md:col-span-2">
+            {{ phrase_chips('child_state', [
+              '友だちと玩具を譲り合って遊ぶ',
+              '意欲的に一人で靴を履こうとする',
+              '音楽に合わせて身体を揺らし笑顔',
+              '絵本を指差しながら言葉を発する',
+              '午睡は途中で目覚めることなく入眠'
+            ], label="💡 指針5領域・子どもの姿の文例チップ") }}
+            <label class="block text-sm font-medium text-slate-700">{{ field.label }} <span class="text-rose-600">*</span>
+              <textarea name="child_state" rows="6" maxlength="5000" required class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base shadow-2xs" placeholder="例：積み木を何度も積み直し、崩れると『もう一回』と言って隣の子と笑い合っていた。">{{ values.get('child_state', '') }}</textarea>
+              <span class="mt-1 block text-xs font-normal text-slate-500">{{ field.description }}</span>
+            </label>
+          </div>
           {% elif field.key in ['caregiver_support', 'reflection', 'next_focus', 'family_note'] %}
-          <label class="block text-sm font-medium text-slate-700 {% if field.key in ['caregiver_support', 'reflection'] %}md:col-span-1{% endif %}">{{ field.label }}{% if field.required %} <span class="text-rose-600">*</span>{% endif %}
-            <textarea name="{{ field.key }}" rows="4" maxlength="5000" {% if field.required %}required{% endif %} class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2">{{ values.get(field.key) or '' }}</textarea>
-            <span class="mt-1 block text-xs font-normal text-slate-500">{{ field.description }}</span>
-          </label>
+          <div class="{% if field.key in ['caregiver_support', 'reflection'] %}md:col-span-1{% endif %}">
+            {% if field.key == 'caregiver_support' %}
+            {{ phrase_chips('caregiver_support', [
+              '見守りながら適宜励ましの声をかけた',
+              '自分でできた達成感を共感し褒めた',
+              '安全に配慮し危険のないよう動線を確保',
+              '気持ちを受け止め優しく代弁した'
+            ], label="💡 保育者の関わり・援助の文例チップ") }}
+            {% endif %}
+            <label class="block text-sm font-medium text-slate-700">{{ field.label }}{% if field.required %} <span class="text-rose-600">*</span>{% endif %}
+              <textarea name="{{ field.key }}" rows="4" maxlength="5000" {% if field.required %}required{% endif %} class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-base shadow-2xs">{{ values.get(field.key) or '' }}</textarea>
+              <span class="mt-1 block text-xs font-normal text-slate-500">{{ field.description }}</span>
+            </label>
+          </div>
           {% elif field.key == 'categories' %}
           <fieldset class="md:col-span-2"><legend class="text-sm font-medium text-slate-700">{{ field.label }}</legend><div class="mt-2 flex flex-wrap gap-2">{% for option in categories %}<label class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs"><input type="checkbox" name="categories" value="{{ option }}" {% if option in values.categories %}checked{% endif %}> {{ option }}</label>{% endfor %}</div></fieldset>
           {% elif field.key == 'perspective_tags' %}
@@ -63,16 +84,22 @@
 
     {% if is_correction %}
     <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+      {{ phrase_chips('correction_reason', [
+        '誤字・脱字の修正',
+        '観察日時の誤り訂正',
+        '状況詳細の追記',
+        '園児取り違えの修正'
+      ], label="💡 訂正理由の定型チップ") }}
       <label class="block text-sm font-medium text-amber-900">訂正理由 <span class="text-rose-600">*</span>
-        <textarea name="correction_reason" rows="2" maxlength="500" required class="mt-1 block w-full rounded-lg border border-amber-300 bg-white px-3 py-2" placeholder="訂正が必要になった理由を記録してください。">{{ values.get("correction_reason", "") }}</textarea>
+        <textarea name="correction_reason" rows="2" maxlength="500" required class="mt-1 block w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-base shadow-2xs" placeholder="訂正が必要になった理由を記録してください。">{{ values.get("correction_reason", "") }}</textarea>
       </label>
       <p class="mt-2 text-xs text-amber-800">保存前の内容は訂正履歴に残ります。</p>
     </section>
     {% endif %}
 
-    <div class="flex flex-wrap justify-between gap-3">
-      <a href="/children/{{ child.id }}/records" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">キャンセル</a>
-      <button type="submit" class="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">{{ '訂正を保存' if is_correction else '記録を保存' }}</button>
+    <div class="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+      <a href="/children/{{ child.id }}/records" class="flex min-h-12 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition">キャンセル</a>
+      <button type="submit" class="flex min-h-12 items-center justify-center rounded-xl bg-indigo-600 px-7 py-2.5 text-base font-bold text-white shadow-md hover:bg-indigo-700 active:scale-[0.98] transition">{{ '訂正を保存' if is_correction else '記録を保存' }}</button>
     </div>
   </form>
 
