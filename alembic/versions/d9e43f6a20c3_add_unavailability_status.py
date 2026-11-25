@@ -19,11 +19,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('staff_shift_unavailability', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('status', sa.VARCHAR(length=16), server_default='approved', nullable=False))
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("staff_shift_unavailability")}
+    if "status" not in cols:
+        with op.batch_alter_table('staff_shift_unavailability', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('status', sa.VARCHAR(length=16), server_default='approved', nullable=False))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('staff_shift_unavailability', schema=None) as batch_op:
-        batch_op.drop_column('status')
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("staff_shift_unavailability")}
+    if "status" in cols:
+        with op.batch_alter_table('staff_shift_unavailability', schema=None) as batch_op:
+            batch_op.drop_column('status')
 

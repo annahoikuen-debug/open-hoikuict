@@ -101,6 +101,83 @@
           </label>
         </div>
       </div>
+      <div class="border-t border-slate-100 pt-5">
+        <div class="flex items-center gap-2">
+          <label class="block text-sm font-semibold text-slate-800" for="attendance_smart_hud_enabled">
+            スマート・モーニング点呼HUDモード
+          </label>
+          <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">新機能</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">有効にすると、出欠確認画面で「3色シグナルHUD（登園済・連絡済・要対応）」「未打刻・発熱・アラームの例外集中ボード」「登園済園児のワンクリック一括出席確定」が利用可能になります。毎朝の点呼突合・確認作業を大幅に効率化できます。各職員が出欠確認画面上で通常表示との切替を行うことも可能です。</p>
+        <div class="mt-3 flex items-center gap-3">
+          <label class="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="attendance_smart_hud_enabled" name="attendance_smart_hud_enabled" value="1"
+              {% if settings.attendance_smart_hud_enabled %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <span class="ml-2 text-sm font-medium text-slate-700">スマート・モーニング点呼HUDモードを有効にする（既定）</span>
+          </label>
+        </div>
+      </div>
+      <div class="border-t border-slate-100 pt-5">
+        <div class="flex items-center gap-2">
+          <label class="block text-sm font-semibold text-slate-800" for="staff_simple_mode_enabled">
+            職員かんたんモード ＆ 時間帯連動コマンドバー
+          </label>
+          <span class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-800">改善案9</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">有効にすると、職員ホームに「朝・昼・夕方の時間帯に応じた推奨タスク案内（ネクスト・アクション・コマンドバー）」および「文字・ボタンが大きく押しやすい特大クイックアクセスカード」が表示されます。ITが苦手な職員やパート職員でも迷わず直感的に操作できます。</p>
+        <div class="mt-3 flex items-center gap-3">
+          <label class="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="staff_simple_mode_enabled" name="staff_simple_mode_enabled" value="1"
+              {% if settings.staff_simple_mode_enabled %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+            <span class="ml-2 text-sm font-medium text-slate-700">職員かんたんモード・コマンドバーを有効にする（既定）</span>
+          </label>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-xs font-bold text-slate-700 mb-2">表示するクイックタイルのカスタマイズ（園の運用に合わせて選択）:</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {% for tile in available_tiles %}
+            <label class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-xs font-medium text-slate-800 hover:bg-indigo-50/50 cursor-pointer shadow-sm">
+              <input type="checkbox" name="simple_mode_tiles" value="{{ tile.key }}"
+                {% if tile.key in selected_tile_keys %}checked{% endif %}
+                class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+              <span class="text-base">{{ tile.icon }}</span>
+              <span class="truncate">{{ tile.label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <p class="text-[11px] text-slate-500 mt-2">※ チェックを入れた機能が職員ホームのかんたんモード画面に特大タイルとして優先表示されます。</p>
+        </div>
+      </div>
+
+      <!-- 改善案2: スマート午睡チェック（コドモン互換タイムライン） -->
+      <div class="border-t border-slate-200 pt-5">
+        <div class="flex items-center justify-between">
+          <label class="block text-sm font-semibold text-slate-800" for="nap_check_smart_enabled">
+            スマート午睡チェック ＆ コドモン互換5分刻みタイムライン
+          </label>
+          <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">改善案2</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">有効にすると、午睡チェック画面でコドモン互換の5分刻み時系列タイムライン、差分ワンタップ一括記録（登園中園児の一括仰向け確定）、SIDS防止タイマー（カウントダウン＆うつ伏せアラート）、クラス室温・湿度記録が利用可能になります。</p>
+        <div class="mt-3 flex flex-wrap items-center gap-6">
+          <label class="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" id="nap_check_smart_enabled" name="nap_check_smart_enabled" value="1"
+              {% if settings.nap_check_smart_enabled %}checked{% endif %}
+              class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+            <span class="ml-2 text-sm font-medium text-slate-700">スマート午睡タイムラインを有効にする（既定）</span>
+          </label>
+
+          <div class="flex items-center space-x-2">
+            <label for="nap_check_interval_minutes" class="text-xs font-semibold text-slate-700">チェック間隔:</label>
+            <select id="nap_check_interval_minutes" name="nap_check_interval_minutes" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-800 bg-white">
+              <option value="5" {% if settings.nap_check_interval_minutes == 5 %}selected{% endif %}>5分間隔（推奨・0歳児対応）</option>
+              <option value="10" {% if settings.nap_check_interval_minutes == 10 %}selected{% endif %}>10分間隔（1〜2歳児対応）</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </section>
 
     <div class="flex justify-end gap-3">

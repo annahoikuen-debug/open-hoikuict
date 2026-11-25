@@ -13,7 +13,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-SOLVE_QUEUE_KEY = "hoikuict:queue:solve_jobs"
+SOLVE_QUEUE_KEY = os.getenv("HOIKUICT_SOLVER_QUEUE_KEY", "hoikuict:shift:solve_queue")
 
 _redis_client: Optional[object] = None
 _redis_available_cached: Optional[bool] = None

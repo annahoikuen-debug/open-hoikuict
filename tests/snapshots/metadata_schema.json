@@ -660,42 +660,24 @@
     "updated_at"
   ],
   "facility_settings": [
-    "id",
-    "final_pickup_time",
-    "supplementary_meal_time",
-    "supplementary_meal_fee",
-    "fever_return_days",
-    "fever_caution_c",
-    "fever_review_c",
-    "parent_billing_portal_enabled",
+    "attendance_smart_hud_enabled",
     "contact_reply_review_required",
-    "medical_consent_auto_approve",
-    "updated_at",
-    "updated_by_user_id",
-    "updated_by_name"
-  ],
-  "facility_settings_history": [
-    "updated_at",
-    "updated_by_user_id",
-    "updated_by_name"
-  ],
-  "facility_settings_history": [
-    "id",
-    "final_pickup_time",
-    "supplementary_meal_time",
-    "supplementary_meal_fee",
-    "fever_return_days",
     "fever_caution_c",
+    "fever_return_days",
     "fever_review_c",
+    "final_pickup_time",
+    "id",
+    "medical_consent_auto_approve",
+    "nap_check_interval_minutes",
+    "nap_check_smart_enabled",
     "parent_billing_portal_enabled",
+    "simple_mode_custom_tiles",
+    "staff_simple_mode_enabled",
+    "supplementary_meal_fee",
+    "supplementary_meal_time",
     "updated_at",
-    "updated_by_user_id",
-    "updated_by_name"
-  ],
-  "facility_settings_history": [
-    "updated_at",
-    "updated_by_user_id",
-    "updated_by_name"
+    "updated_by_name",
+    "updated_by_user_id"
   ],
   "facility_settings_history": [
     "id",
@@ -1665,5 +1647,29 @@
     "submitted_at",
     "xray_answer",
     "xray_question"
+  ],
+  "nap_check_records": [
+    "child_id",
+    "created_at",
+    "created_by",
+    "daily_memo",
+    "id",
+    "slots",
+    "target_date",
+    "updated_at",
+    "updated_by"
+  ],
+  "nap_classroom_environments": [
+    "classroom_id",
+    "created_at",
+    "created_by",
+    "humidity",
+    "id",
+    "notes",
+    "room_temperature",
+    "target_date",
+    "updated_at",
+    "updated_by",
+    "weather"
   ]
 }

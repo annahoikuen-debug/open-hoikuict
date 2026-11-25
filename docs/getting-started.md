@@ -45,4 +45,4 @@ Windows 11 x64では、[Windowsの段階別導入手順](windows-server-setup.md
 !!! note "初期値を確認する"
     TrueNAS用の基本ComposeはキオスクとWeb Pushが `disabled` です。必要な機能は[キオスク端末](chromebook-guardian-kiosk.md)と[Web Push設定](parent-push-production-setup.md)に沿って有効化します。パスワード認証とSMTPはproductionの起動条件です。
 
-実データを使う範囲と開始日は、[導入までの進め方](roadmap.md)と[運用試験の受入条件](pilot-deployment-spec-v2.md)に沿って施設で決めます。
+実データを使う範囲と開始日は、[β版をかんたん導入](beta-quickstart.md)と[運用試験の受入条件](pilot-deployment-spec-v2.md)に沿って施設で決めます。

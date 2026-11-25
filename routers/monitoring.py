@@ -4,19 +4,25 @@ Prometheus メトリクスおよび Kubernetes / クラウドコンテナ向け 
 """
 from __future__ import annotations
 
+import hmac
+import logging
+import os
 import tempfile
 from typing import Any, Dict
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlmodel import Session, select
 
+from auth import Role, resolve_staff_principal
 from database import engine
 from models.core import Child, ChildStatus
 from models.organization import Facility
+from security_config import is_production
 from tasks.queue import get_queue_length, is_redis_available
 from time_utils import local_naive_now
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["monitoring"])
 
 
@@ -48,9 +54,10 @@ def readiness_probe() -> JSONResponse:
             # 最小クエリで接続確認
             session.exec(select(1)).first()
             checks["database"] = {"status": "ok"}
-    except Exception as exc:
+    except Exception:
+        logger.warning("Readiness DB check failed", exc_info=True)
         is_healthy = False
-        checks["database"] = {"status": "error", "error": str(exc)}
+        checks["database"] = {"status": "error"}
 
     # 2. ストレージ（テンポラリ）書き込み検証
     try:
@@ -58,9 +65,10 @@ def readiness_probe() -> JSONResponse:
             tf.write(b"health_check")
             tf.flush()
         checks["storage"] = {"status": "ok"}
-    except Exception as exc:
+    except Exception:
+        logger.warning("Readiness storage check failed", exc_info=True)
         is_healthy = False
-        checks["storage"] = {"status": "error", "error": str(exc)}
+        checks["storage"] = {"status": "error"}
 
     # 3. 非同期キュー検証
     redis_online = is_redis_available()
@@ -81,9 +89,26 @@ def readiness_probe() -> JSONResponse:
     )
 
 
+def _require_metrics_access(request: Request) -> None:
+    expected_token = (os.getenv("HOIKUICT_METRICS_TOKEN") or "").strip()
+    auth_header = request.headers.get("authorization", "")
+    if expected_token:
+        if auth_header.startswith("Bearer "):
+            presented = auth_header.removeprefix("Bearer ").strip()
+            if hmac.compare_digest(presented, expected_token):
+                return
+        raise HTTPException(status_code=401, detail="メトリクス参照にはBearer認証が必要です")
+    if is_production():
+        principal = resolve_staff_principal(request)
+        if principal is not None and principal.role == Role.ADMIN:
+            return
+        raise HTTPException(status_code=401, detail="本番環境のメトリクス参照には管理者認証またはトークンが必要です")
+
+
 @router.get("/metrics")
-def prometheus_metrics() -> Response:
+def prometheus_metrics(request: Request) -> Response:
     """Prometheus 互換メトリクスエンドポイント."""
+    _require_metrics_access(request)
     db_ok = 1
     facility_count = 0
     enrolled_children = 0

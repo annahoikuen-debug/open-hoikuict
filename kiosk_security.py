@@ -34,7 +34,7 @@ def issue_kiosk_device_cookie(response: Response) -> None:
         httponly=True,
         secure=os.getenv("HOIKUICT_COOKIE_SECURE") == "1",
         samesite="strict",
-        path="/guardian",
+        path="/",
     )
 
 
@@ -79,3 +79,23 @@ def require_kiosk_activation_mode() -> None:
 def kiosk_activation_token_is_valid(candidate: str) -> bool:
     expected = os.getenv("HOIKUICT_KIOSK_TOKEN", "")
     return bool(expected and hmac.compare_digest(candidate, expected))
+
+
+def require_kiosk_or_staff_access(request: Request) -> None:
+    """職員ログイン済み、または有効なキオスク端末アクセスのみ許可する。"""
+    from auth import resolve_staff_principal
+
+    if resolve_staff_principal(request) is not None:
+        return
+    mode = kiosk_access_mode()
+    if mode == "open":
+        if not is_production() and (
+            os.getenv("HOIKUICT_ENV") == "development"
+            or os.getenv("HOIKUICT_ALLOW_OPEN_KIOSK") == "1"
+        ):
+            return
+    elif mode == "token" and kiosk_device_cookie_is_valid(
+        request.cookies.get(KIOSK_DEVICE_COOKIE)
+    ):
+        return
+    raise HTTPException(status_code=401, detail="職員ログインまたはキオスク認証が必要です")

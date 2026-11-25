@@ -538,6 +538,40 @@ class DataTransferTests(unittest.TestCase):
             self.assertEqual(filename, "children.csv")
             self.assertEqual(content, b"sample")
 
+    def test_export_csv_sanitizes_formula_injection(self):
+        with Session(self.engine) as session:
+            child = session.get(Child, self.child_id)
+            child.last_name = "=CMD('calc')"
+            child.first_name = "+1+1"
+            session.add(child)
+            session.commit()
+
+        response = self.client.get("/data-transfers/export/children.csv")
+        self.assertEqual(response.status_code, 200)
+        text = response.content.decode("utf-8-sig")
+        self.assertIn("'=CMD('calc')", text)
+        self.assertIn("'+1+1", text)
+
+    def test_xlsx_upload_rejects_oversized_zip_member(self):
+        import io
+        import zipfile
+        from data_transfer_service import _read_xlsx_matrix
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("xl/worksheets/sheet1.xml", b"A" * (11 * 1024 * 1024))
+
+        with self.assertRaises(ValueError):
+            _read_xlsx_matrix(buf.getvalue())
+
+        many_buf = io.BytesIO()
+        with zipfile.ZipFile(many_buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx in range(505):
+                zf.writestr(f"xl/item_{idx}.xml", b"<x/>")
+
+        with self.assertRaises(ValueError):
+            _read_xlsx_matrix(many_buf.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

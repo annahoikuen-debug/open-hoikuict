@@ -14,6 +14,7 @@ from typing import Any, Optional
 import requests
 
 from serverless_solver.schema import (
+    ChildPlanSchema,
     FacilityConfigSchema,
     ShiftSlotSchema,
     ShiftSolveRequest,
@@ -31,6 +32,14 @@ SERVERLESS_SOLVER_TIMEOUT = int(os.getenv("HOIKUICT_SERVERLESS_SOLVER_TIMEOUT", 
 def get_serverless_solver_url() -> str:
     """サーバーレスソルバーのURLを動的に取得する。"""
     return os.getenv("HOIKUICT_SERVERLESS_SOLVER_URL", SERVERLESS_SOLVER_URL).strip().rstrip("/")
+
+
+def _auth_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    token = (os.getenv("HOIKUICT_SERVERLESS_SOLVER_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def is_serverless_configured() -> bool:
@@ -78,18 +87,17 @@ def call_serverless_solve(request: ShiftSolveRequest) -> Optional[ShiftSolveResp
             endpoint,
             json=request.model_dump(),
             timeout=SERVERLESS_SOLVER_TIMEOUT,
-            headers={"Content-Type": "application/json"},
+            headers=_auth_headers(),
         )
         if resp.status_code == 200:
             data = resp.json()
             return ShiftSolveResponse.model_validate(data)
-        else:
-            logger.error(
-                "サーバーレスAPIエラー: status=%d, body=%s",
-                resp.status_code,
-                resp.text[:300],
-            )
-            return None
+        logger.error(
+            "サーバーレスAPIエラー: status=%d, body=%s",
+            resp.status_code,
+            resp.text[:300],
+        )
+        return None
     except requests.Timeout:
         logger.error("サーバーレスAPIタイムアウト (%d秒超過)", SERVERLESS_SOLVER_TIMEOUT)
         return None
@@ -134,6 +142,30 @@ def execute_via_serverless_if_available(
                 )
             )
 
+        # 1b. 園児登降園計画の変換
+        children_list: list[ChildPlanSchema] = []
+        raw_children = getattr(context, "children", ()) or ()
+        if not isinstance(raw_children, (list, tuple)):
+            raw_children = ()
+        for ch in raw_children:
+            age_cls = getattr(getattr(ch, "age_class", None), "value", "1歳児")
+            arrive_t = getattr(ch, "arrive", None)
+            depart_t = getattr(ch, "depart", None)
+            children_list.append(
+                ChildPlanSchema(
+                    child_id=str(ch.child_id),
+                    name=str(getattr(ch, "name", ch.child_id)),
+                    day=ch.day.isoformat() if hasattr(ch.day, "isoformat") else str(ch.day),
+                    age_class=str(age_cls),
+                    arrive=arrive_t.strftime("%H:%M") if hasattr(arrive_t, "strftime") else "08:30",
+                    depart=depart_t.strftime("%H:%M") if hasattr(depart_t, "strftime") else "16:30",
+                    is_short_time=bool(getattr(ch, "is_short_time", False)),
+                    absent=bool(getattr(ch, "absent", False)),
+                    uses_early_care=bool(getattr(ch, "uses_early_care", False)),
+                    uses_late_care=bool(getattr(ch, "uses_late_care", False)),
+                )
+            )
+
         # 2. ピン留めセルの変換
         pinned_map: dict[str, dict[str, ShiftSlotSchema]] = {}
         for (sid, p_date, sl_label), c_state in context.fixed_assignments.items():
@@ -157,6 +189,7 @@ def execute_via_serverless_if_available(
                 closed_days=[d.isoformat() for d in context.facility_settings.closed_days],
                 holiday_dates=[d.isoformat() for d in context.facility_settings.holiday_dates],
             ),
+            children=children_list,
             staff_list=staff_list,
             pinned_assignments=pinned_map,
             prior_duty_streaks=context.prior_duty_history or {},
@@ -168,13 +201,19 @@ def execute_via_serverless_if_available(
             return None
 
         # 4. ShiftSolveResponse を SolveResult に復元
+        state_by_value = {c.value: c for c in CellState}
         shift_days: list[ShiftDay] = []
         for d in context.all_days:
             d_str = d.isoformat()
             day_assignments: dict[str, dict[str, CellState]] = {}
             for sid_str, date_dict in resp.schedule_matrix.items():
                 slot_info = date_dict.get(d_str)
-                if slot_info and slot_info.code not in ("休", "公休", "OFF"):
+                if slot_info and slot_info.slots:
+                    day_assignments[sid_str] = {
+                        sl_k: state_by_value.get(sl_v, CellState.WORK)
+                        for sl_k, sl_v in slot_info.slots.items()
+                    }
+                elif slot_info and slot_info.code not in ("休", "公休", "OFF"):
                     day_assignments[sid_str] = {"all": CellState.WORK}
                 else:
                     day_assignments[sid_str] = {"all": CellState.OFF}

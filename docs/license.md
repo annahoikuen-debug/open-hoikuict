@@ -1,6 +1,6 @@
 # ライセンス・問い合わせ
 
-リポジトリのライセンスは **MIT License** です。著作権表記は `Copyright (c) 2026 open-hoikuict contributors` で、正確な条件は[リポジトリのLICENSE](https://github.com/hoikuict/open-hoikuict/blob/main/LICENSE)を参照してください。
+`open-hoikuict (nusoft)` 本体は **商用プロプライエタリライセンス（全権利保持）** で管理されています。詳細な条件は[リポジトリの LICENSE](https://github.com/hoikuict/open-hoikuict/blob/main/LICENSE)を参照してください。（同梱しているシフト最適化コアエンジン `NuShift (shiftai)` のみ **MIT License** で公開されています。）
 
 依存ライブラリや外部から持ち込む素材・データについては、それぞれの利用条件も確認します。
 

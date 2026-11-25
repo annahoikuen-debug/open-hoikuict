@@ -11,7 +11,9 @@ import time
 from datetime import date, time as dt_time, timedelta
 
 from shiftai.domain import (
+    AgeClass,
     CellState,
+    ChildPlan,
     Contract,
     EmploymentType,
     FacilitySettings,
@@ -137,11 +139,30 @@ def execute_solve(request: ShiftSolveRequest) -> ShiftSolveResponse:
             else:
                 fixed_assignments[(staff_id, slot_date, slot.code)] = CellState.WORK
 
-    # 6. 必要人員テーブル（RequirementTable）の構築
+    # 6. 園児登降園計画・必要人員テーブル（RequirementTable）の構築
     from shiftai.standards import build_requirements
 
+    age_by_value = {a.value: a for a in AgeClass}
+    child_plans: list[ChildPlan] = []
+    for ch in request.children:
+        age_cls = age_by_value.get(ch.age_class, AgeClass.AGE_1)
+        child_plans.append(
+            ChildPlan(
+                child_id=ch.child_id,
+                name=ch.name or ch.child_id,
+                day=date.fromisoformat(ch.day),
+                age_class=age_cls,
+                arrive=_parse_time(ch.arrive),
+                depart=_parse_time(ch.depart),
+                is_short_time=ch.is_short_time,
+                absent=ch.absent,
+                uses_early_care=ch.uses_early_care,
+                uses_late_care=ch.uses_late_care,
+            )
+        )
+
     requirements = build_requirements(
-        children=[],
+        children=child_plans,
         days=all_days,
         standard=standard,
         day_open=day_open,
@@ -165,7 +186,7 @@ def execute_solve(request: ShiftSolveRequest) -> ShiftSolveResponse:
         fixed_assignments=fixed_assignments,
         prior_duty_history=request.prior_duty_streaks,
         monthly_holiday_target=8,
-        children=[],
+        children=child_plans,
         standard=standard,
         weights=None,
     )
@@ -212,7 +233,12 @@ def execute_solve(request: ShiftSolveRequest) -> ShiftSolveResponse:
                 sid_str = str(staff_id)
                 pinned_info = request.pinned_assignments.get(sid_str, {}).get(d_str)
 
+                slot_detail: dict[str, str] = {}
                 if isinstance(staff_slots, dict):
+                    slot_detail = {
+                        sl_name: c_state.value if isinstance(c_state, CellState) else str(c_state)
+                        for sl_name, c_state in staff_slots.items()
+                    }
                     work_slots = [
                         sl_name for sl_name, c_state in staff_slots.items() if c_state == CellState.WORK
                     ]
@@ -241,6 +267,7 @@ def execute_solve(request: ShiftSolveRequest) -> ShiftSolveResponse:
                     start=start_str,
                     end=end_str,
                     is_pinned=bool(pinned_info and pinned_info.is_pinned),
+                    slots=slot_detail,
                 )
     elif res.assignments:
         for (staff_id, a_date), pattern in res.assignments.items():

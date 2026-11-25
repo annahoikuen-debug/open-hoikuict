@@ -768,6 +768,7 @@
       "valid_to"
     ],
     "facility_settings": [
+      "attendance_smart_hud_enabled",
       "contact_reply_review_required",
       "fever_caution_c",
       "fever_return_days",
@@ -775,7 +776,11 @@
       "final_pickup_time",
       "id",
       "medical_consent_auto_approve",
+      "nap_check_interval_minutes",
+      "nap_check_smart_enabled",
       "parent_billing_portal_enabled",
+      "simple_mode_custom_tiles",
+      "staff_simple_mode_enabled",
       "supplementary_meal_fee",
       "supplementary_meal_time",
       "updated_at",
@@ -1161,6 +1166,30 @@
       "status",
       "title",
       "updated_at"
+    ],
+    "nap_check_records": [
+      "child_id",
+      "created_at",
+      "created_by",
+      "daily_memo",
+      "id",
+      "slots",
+      "target_date",
+      "updated_at",
+      "updated_by"
+    ],
+    "nap_classroom_environments": [
+      "classroom_id",
+      "created_at",
+      "created_by",
+      "humidity",
+      "id",
+      "notes",
+      "room_temperature",
+      "target_date",
+      "updated_at",
+      "updated_by",
+      "weather"
     ],
     "notification_jobs": [
       "created_at",

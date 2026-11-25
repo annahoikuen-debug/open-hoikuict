@@ -14,6 +14,7 @@ from attendance_checks_service import alarm_reason_labels, sync_attendance_alarm
 from attendance_checks_service import verification_label as attendance_verification_label
 from auth import get_current_staff_user, require_attendance_check_editor
 from database import get_session
+from facility_settings_service import is_smart_hud_enabled
 from models import (
     AttendanceAlarmState,
     AttendanceContactConfirmation,
@@ -92,6 +93,39 @@ class AttendanceCheckRow:
             return "present"
         return "pending"
 
+    @property
+    def hud_status(self) -> str:
+        """スマートHUDの3色シグナル分類: 'danger' (赤), 'warning' (黄), 'success' (緑), 'pending' (灰)"""
+        # 1. 危険・要対応（赤）: アラーム、発熱、体調要注意、未打刻・無連絡
+        if self.alarm_is_active:
+            return "danger"
+        if self.eligibility_level in ("blocked", "review"):
+            return "danger"
+        if self.entry and self.entry.absence_temperature:
+            try:
+                if float(self.entry.absence_temperature) >= 37.5:
+                    return "danger"
+            except ValueError:
+                pass
+        if self.attendance_state == "pending" and not self.entry and not self.contact_confirmation:
+            return "danger"
+
+        # 2. 連絡済（黄）: 欠席連絡済（私用・病欠）、遅刻登園予定
+        if self.attendance_state == "absent":
+            return "warning"
+        if self.entry and getattr(self.entry, "is_absent_contact", False):
+            return "warning"
+        if self.contact_confirmation and self.contact_confirmation.status.value.endswith("absent"):
+            return "warning"
+        if self.attendance_state == "pending" and (self.entry or self.contact_confirmation):
+            return "warning"
+
+        # 3. 登園済・正常（緑）
+        if self.has_check_in or self.verification_key == "present":
+            return "success"
+
+        return "pending"
+
 
 def _parse_target_date(raw: Optional[str]) -> date:
     if not raw:
@@ -139,6 +173,7 @@ def _build_redirect_url(
     selected_layout: str,
     selected_filter: str,
     selected_classroom_id: Optional[int],
+    hud: Optional[str] = None,
     notice: Optional[str] = None,
 ) -> str:
     params = {
@@ -148,6 +183,8 @@ def _build_redirect_url(
     }
     if selected_classroom_id is not None:
         params["classroom_id"] = str(selected_classroom_id)
+    if hud is not None:
+        params["hud"] = hud
     if notice:
         params["notice"] = notice
     return f"/attendance-checks/?{urlencode(params)}"
@@ -366,6 +403,7 @@ def _build_page_context(
     selected_layout: str,
     selected_filter: str,
     selected_classroom_id: Optional[int],
+    hud: Optional[str] = None,
     notice: Optional[str] = None,
 ) -> dict[str, object]:
     classrooms = session.exec(select(Classroom).order_by(Classroom.display_order, Classroom.id)).all()
@@ -375,6 +413,38 @@ def _build_page_context(
         selected_classroom_id=selected_classroom_id,
     )
     display_rows = [row for row in scope_rows if _matches_filter(row, selected_filter)]
+    counts = _build_counts(scope_rows)
+
+    # スマートHUDの判定と集計（改善案1: オプション対応）
+    facility_hud_enabled = is_smart_hud_enabled(session)
+    show_smart_hud = (hud == "1") if hud in ("0", "1") else facility_hud_enabled
+
+    danger_rows = [row for row in display_rows if row.hud_status == "danger"]
+    warning_rows = [row for row in display_rows if row.hud_status == "warning"]
+    success_rows = [row for row in display_rows if row.hud_status == "success"]
+    unconfirmed_present_rows = [
+        row for row in display_rows
+        if row.has_check_in and row.verification_key == AttendanceVerificationStatus.unknown.value and not row.alarm_is_active
+    ]
+
+    hud_metrics = {
+        "danger_count": len(danger_rows),
+        "warning_count": len(warning_rows),
+        "success_count": len(success_rows),
+        "unconfirmed_present_count": len(unconfirmed_present_rows),
+        "is_all_confirmed": len(danger_rows) == 0 and counts["unknown"] == 0,
+    }
+
+    base_query_params = {
+        "date": target_day.isoformat(),
+        "layout": selected_layout,
+        "filter": selected_filter,
+        "classroom_id": selected_classroom_id or "",
+    }
+    return_query_params = dict(base_query_params)
+    if hud is not None:
+        return_query_params["hud"] = hud
+
     return {
         "request": request,
         "current_user": current_user,
@@ -387,9 +457,16 @@ def _build_page_context(
         "status_filter_options": STATUS_FILTER_OPTIONS,
         "verification_options": VERIFICATION_OPTIONS,
         "classrooms": classrooms,
-        "counts": _build_counts(scope_rows),
-        "return_query": urlencode({"date": target_day.isoformat(), "layout": selected_layout,
-                                   "filter": selected_filter, "classroom_id": selected_classroom_id or ""}),
+        "counts": counts,
+        "show_smart_hud": show_smart_hud,
+        "hud_param": "1" if show_smart_hud else "0",
+        "hud_metrics": hud_metrics,
+        "danger_rows": danger_rows,
+        "warning_rows": warning_rows,
+        "success_rows": success_rows,
+        "unconfirmed_present_rows": unconfirmed_present_rows,
+        "return_query_base": urlencode(base_query_params),
+        "return_query": urlencode(return_query_params),
         "rows": display_rows,
         "grouped_rows": _group_rows(display_rows) if selected_layout == "classroom" else [],
         "action_message": {
@@ -398,6 +475,7 @@ def _build_page_context(
             "contact_revoked": "連絡受付を取り消し、アラームを再確認しました。",
             "parent_notified": "園児に紐づく保護者へ出欠確認の通知を送りました。",
             "parent_not_found": "通知先となる有効な保護者アカウントが見つかりませんでした。",
+            "bulk_present_confirmed": "登園済みの園児の出席確認を一括で記録しました。",
         }.get(notice or "", ""),
     }
 
@@ -409,6 +487,7 @@ def attendance_checks_list(
     layout: Optional[str] = Query(default="flat"),
     status_filter: Optional[str] = Query(default="all", alias="filter"),
     classroom_id: Optional[str] = Query(default=None),
+    hud: Optional[str] = Query(default=None),
     notice: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
@@ -425,6 +504,7 @@ def attendance_checks_list(
         selected_layout=selected_layout,
         selected_filter=selected_filter,
         selected_classroom_id=selected_classroom_id,
+        hud=hud,
         notice=notice,
     )
     template_name = "attendance_checks/_board.html" if _is_hx_request(request) else "attendance_checks/list.html"
@@ -693,6 +773,122 @@ def bulk_contact_confirmation(
             selected_filter=_parse_filter(status_filter),
             selected_classroom_id=_parse_optional_int(classroom_id),
             notice="parent_notified" if notified_count > 0 else "parent_not_found",
+        ),
+        status_code=303,
+    )
+
+
+@router.post("/quick-bulk-present", response_class=HTMLResponse)
+def quick_bulk_present(
+    request: Request,
+    target_date: str = Form(..., alias="date"),
+    classroom_id: str = Form(default=""),
+    layout: str = Form(default="flat"),
+    status_filter: str = Form(default="all", alias="filter"),
+    hud: str = Form(default="1"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """登園打刻があり、目視確認が未確認かつアラームのない園児を一括で出席確定にする（スマートHUD機能）。"""
+    require_attendance_check_editor(current_user)
+    day = _parse_target_date(target_date)
+    selected_classroom_id = _parse_optional_int(classroom_id)
+
+    # 当日登園打刻のある在籍園児を取得
+    query = (
+        select(Child, AttendanceRecord)
+        .join(AttendanceRecord, AttendanceRecord.child_id == Child.id)
+        .where(
+            Child.status == ChildStatus.enrolled,
+            AttendanceRecord.attendance_date == day,
+            AttendanceRecord.check_in_at.is_not(None),
+        )
+    )
+    if selected_classroom_id is not None:
+        query = query.where(Child.classroom_id == selected_classroom_id)
+
+    results = session.exec(query).all()
+    now = utc_now()
+    updated_count = 0
+
+    for child, _record in results:
+        cid = child.id or 0
+        alarm = session.exec(
+            select(AttendanceAlarmState).where(
+                AttendanceAlarmState.child_id == cid,
+                AttendanceAlarmState.target_date == day,
+            )
+        ).first()
+        if alarm and alarm.is_active:
+            continue
+
+        verification = session.exec(
+            select(AttendanceVerification).where(
+                AttendanceVerification.child_id == cid,
+                AttendanceVerification.target_date == day,
+            )
+        ).first()
+
+        # すでに確認済みならスキップ
+        if verification and verification.status != AttendanceVerificationStatus.unknown:
+            continue
+
+        previous_status = verification.status.value if verification else None
+        if not verification:
+            verification = AttendanceVerification(
+                child_id=cid,
+                target_date=day,
+                status=AttendanceVerificationStatus.present,
+                updated_by_name=current_user.name,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            verification.status = AttendanceVerificationStatus.present
+            verification.updated_by_name = current_user.name
+            verification.updated_at = now
+
+        session.add(verification)
+        session.add(
+            AttendanceVerificationHistory(
+                child_id=cid,
+                target_date=day,
+                status=AttendanceVerificationStatus.present,
+                updated_by_name=current_user.name,
+                reason="スマートHUD一括出席確認",
+                previous_status=previous_status,
+                actor_user_id=getattr(current_user, "user_id", None),
+                created_at=now,
+            )
+        )
+        session.flush()
+        sync_attendance_alarm(session, child_id=cid, target_date=day, verification=verification, now=now)
+        updated_count += 1
+
+    session.commit()
+
+    if _is_hx_request(request):
+        context = _build_page_context(
+            request=request,
+            session=session,
+            current_user=current_user,
+            target_day=day,
+            selected_layout=_parse_layout(layout),
+            selected_filter=_parse_filter(status_filter),
+            selected_classroom_id=selected_classroom_id,
+            hud=hud,
+            notice="bulk_present_confirmed",
+        )
+        return templates.TemplateResponse(request, "attendance_checks/_board.html", context)
+
+    return RedirectResponse(
+        url=_build_redirect_url(
+            target_day=day,
+            selected_layout=_parse_layout(layout),
+            selected_filter=_parse_filter(status_filter),
+            selected_classroom_id=selected_classroom_id,
+            hud=hud,
+            notice="bulk_present_confirmed",
         ),
         status_code=303,
     )

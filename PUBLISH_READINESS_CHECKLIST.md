@@ -168,7 +168,24 @@ self.current_user = StaffUser(role=Role.ADMIN, name="園長", user_id=admin_id)
 - [ ] 本番デプロイ手順 (Docker, systemd など) が文書化されていること
 - [ ] 環境変数の一覧と説明が文書化されていること
 - [ ] セキュリティインシデント対応手順が文書化されていること
-- [x] `docs/manual-guide-preview/` を試作版・モックから「オープン保育ICT 総合操作マニュアル・ビジュアルガイド (v0.7.1)」へ全面的にリニューアル（2026-11-20 実施）:
+- [x] `docs/manual-guide-preview/` を試作版・モックから「オープン保育ICT 総合操作マニュアル・ビジュアルガイド (v0.8.2)」へ全面的にリニューアル（2026-11-20 実施 / v0.8.2 更新）:
   - 外部URL依存を解消し、園内LAN・オフラインで完結するローカルリンク化を徹底
   - 主要機能ガイドを追加（NuShiftシフト自動作成・ピン留め、月次請求・全銀口座振替・締め解除、連絡帳ダブルチェック承認、緊急連絡先優先順位、医療同意・レントゲン承諾）
   - ロール別ナビゲーション（保育士向け、管理者向け、保護者向け）とA4印刷（研修資料配布）対応
+
+---
+
+### 8. Nusoft v0.8.2 公開前ハードニング・公式サポート範囲確定（2026-11-25）
+
+- [x] **初回公開サポート範囲の確定**: 単一園オールインワン構成（`HOIKUICT_PROFILE=embedded` / SQLite）のみ正式サポートとして `.env.example` / `.env.production.example` / `deploy/dockge/compose.yaml` / `README.md` / `landing_page/index.html` / `SUPPORT.md` / `SECURITY.md` / `docs/license.md` に明記（`cloud` / PostgreSQL / 分散ワーカーは対象外プレビュー扱いとしつつ、発見された無認証・CORS・キュー名不整合も修正済み）
+- [x] **未コミット機能 3点の v0.8.2 正式統合**:
+  - 午睡チェック（`nap_checks`）・スマートHUD・職員かんたんモードの SQLite マイグレーション `048_smart_hud_simple_mode_and_nap_checks` 及び Alembic リビジョン `a8c01f2d9e40` を追加し、`scripts/backup_contracts/schema-20261105.json` を更新
+  - 不正日付・数値入力の HTTP 400 ハンドリング、重複デッドコード削減、POSTフォーム CSRF 埋め込み、`shift_schedule/routers/facility.py` のルーター認証付与、および Ruff 0 エラー化を完了
+- [x] **セキュリティ・エクスポート境界の強化**:
+  - `/toukouen/*` キオスクルートへの端末クッキー/職員認証必須化、クッキー `path="/"` 修正、CSRF 除外解除、オフライン Tailwind CSS 化、内部例外メッセージ秘匿を実施
+  - `/metrics` 本番認証（`HOIKUICT_METRICS_TOKEN` Bearer / 管理者セッション）および `/health/ready` 例外詳細除去を実施
+  - CSV 数式インジェクション対策を全ビルダーへ拡張し、XLSX 展開の Zip Bomb 上限（最大 500 エントリ / 単体 10MB / 合計 20MB）を追加
+  - サーバーレスソルバーに Bearer トークン認証・CORS 制限・園児計画転送を追加
+- [x] **NuShift v0.8.1 (`568a8ef`) 同期 & ドキュメント整合**:
+  - `E:\nushift\nushift` のリペアエンジン修正・Stage 2 予算配分 (`0.7`) 復旧・Stage 1 `max_req` スラック追加・日本語文字化け対策 (`ALLOWED_KANJI`)・PyPI非公開方針維持（`"Private :: Do Not Upload"`）・MIT範囲明確化を実施し、`vendor/nushift/shiftai` 全60ファイルを検証同期完了
+  - `mkdocs build --strict` 警告 0 件を達成

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -10,6 +11,8 @@ from auth import StaffUser, get_current_staff_user, require_admin
 from csrf import verify_csrf
 from database import get_session
 from facility_settings_service import (
+    AVAILABLE_SIMPLE_TILES,
+    DEFAULT_SIMPLE_TILES,
     DEFAULTS,
     parse_hhmm,
     record_change_history,
@@ -26,6 +29,11 @@ FIELD_LABELS = {
     "supplementary_meal_time": "補食判定時刻",
     "supplementary_meal_fee": "補食費",
     "parent_billing_portal_enabled": "保護者ポータル 請求・延長保育料の表示",
+    "attendance_smart_hud_enabled": "スマート・モーニング点呼HUD",
+    "staff_simple_mode_enabled": "職員かんたんモード・コマンドバー",
+    "simple_mode_custom_tiles": "かんたんモード表示タイル",
+    "nap_check_smart_enabled": "スマート午睡チェック（コドモン互換タイムライン）",
+    "nap_check_interval_minutes": "午睡チェック間隔（分）",
 }
 
 
@@ -52,6 +60,16 @@ def facility_settings_view(
         select(FacilitySettingsHistory).order_by(FacilitySettingsHistory.id.desc()).limit(20)
     ).all()
     csrf_token = getattr(request.state, "csrf_token", "")
+
+    selected_tile_keys = set(DEFAULT_SIMPLE_TILES)
+    if settings.simple_mode_custom_tiles:
+        try:
+            parsed = json.loads(settings.simple_mode_custom_tiles)
+            if isinstance(parsed, list):
+                selected_tile_keys = set(parsed)
+        except Exception:
+            pass
+
     return templates.TemplateResponse(
         request,
         "facility_settings/index.html",
@@ -61,6 +79,8 @@ def facility_settings_view(
             "settings": settings,
             "history": history,
             "field_labels": FIELD_LABELS,
+            "available_tiles": AVAILABLE_SIMPLE_TILES,
+            "selected_tile_keys": selected_tile_keys,
             "csrf_token": csrf_token,
             "saved": request.query_params.get("saved") == "1",
         },
@@ -78,6 +98,11 @@ def facility_settings_update(
     fever_caution_c: str = Form("37.5"),
     fever_review_c: str = Form("38.0"),
     parent_billing_portal_enabled: Optional[str] = Form(None),
+    attendance_smart_hud_enabled: Optional[str] = Form(None),
+    staff_simple_mode_enabled: Optional[str] = Form(None),
+    simple_mode_tiles: list[str] = Form(default=[]),
+    nap_check_smart_enabled: Optional[str] = Form(None),
+    nap_check_interval_minutes: int = Form(5),
     session: Session = Depends(get_session),
     current_user: StaffUser = Depends(get_current_staff_user),
 ):
@@ -99,6 +124,10 @@ def facility_settings_update(
         raise HTTPException(status_code=422, detail="解熱後の登園目安日数は0〜14日の範囲で入力してください")
 
     is_billing_enabled = parent_billing_portal_enabled in ("1", "true", "True", "on")
+    is_hud_enabled = attendance_smart_hud_enabled in ("1", "true", "True", "on")
+    is_simple_enabled = staff_simple_mode_enabled in ("1", "true", "True", "on")
+    is_nap_enabled = nap_check_smart_enabled in ("1", "true", "True", "on")
+    custom_tiles_json = json.dumps(simple_mode_tiles if simple_mode_tiles else DEFAULT_SIMPLE_TILES)
 
     settings = _get_or_create_settings(session)
     previous = dict(
@@ -106,6 +135,11 @@ def facility_settings_update(
         supplementary_meal_time=settings.supplementary_meal_time,
         supplementary_meal_fee=str(settings.supplementary_meal_fee),
         parent_billing_portal_enabled=str(settings.parent_billing_portal_enabled),
+        attendance_smart_hud_enabled=str(settings.attendance_smart_hud_enabled),
+        staff_simple_mode_enabled=str(settings.staff_simple_mode_enabled),
+        simple_mode_custom_tiles=str(settings.simple_mode_custom_tiles or ""),
+        nap_check_smart_enabled=str(settings.nap_check_smart_enabled),
+        nap_check_interval_minutes=str(settings.nap_check_interval_minutes),
     )
     settings.final_pickup_time = final_pickup_time
     settings.supplementary_meal_time = supplementary_meal_time
@@ -114,6 +148,11 @@ def facility_settings_update(
     settings.fever_caution_c = f"{caution_c:.1f}"
     settings.fever_review_c = f"{review_c:.1f}"
     settings.parent_billing_portal_enabled = is_billing_enabled
+    settings.attendance_smart_hud_enabled = is_hud_enabled
+    settings.staff_simple_mode_enabled = is_simple_enabled
+    settings.simple_mode_custom_tiles = custom_tiles_json
+    settings.nap_check_smart_enabled = is_nap_enabled
+    settings.nap_check_interval_minutes = 10 if nap_check_interval_minutes == 10 else 5
     settings.updated_at = utc_now()
     settings.updated_by_user_id = current_user.user_id
     settings.updated_by_name = current_user.name

@@ -169,6 +169,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("045_parent_medical_responses", _migrate_parent_medical_table),
         ("046_daily_contact_review_columns", _migrate_daily_contact_review_columns),
         ("047_attendance_idempotency_key", _migrate_attendance_idempotency_key),
+        ("048_smart_hud_simple_mode_and_nap_checks", _migrate_smart_hud_simple_mode_and_nap_checks),
     ]
 
 
@@ -2284,4 +2285,28 @@ def _migrate_daily_contact_review_columns() -> None:
         _log_migration_skip("daily contact review columns", exc)
 
 
+def _migrate_smart_hud_simple_mode_and_nap_checks() -> None:
+    """スマートHUD・かんたんモード設定列および午睡チェックテーブルを作成する。"""
+    try:
+        from models import NapCheckRecord, NapClassroomEnvironment
+
+        additions = {
+            "attendance_smart_hud_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "staff_simple_mode_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "simple_mode_custom_tiles": "VARCHAR",
+            "nap_check_smart_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "nap_check_interval_minutes": "INTEGER NOT NULL DEFAULT 5",
+        }
+        with engine.begin() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(facility_settings)")}
+            if columns:
+                for name, ddl in additions.items():
+                    if name not in columns:
+                        conn.exec_driver_sql(f"ALTER TABLE facility_settings ADD COLUMN {name} {ddl}")
+            NapCheckRecord.metadata.create_all(
+                conn,
+                tables=[NapCheckRecord.__table__, NapClassroomEnvironment.__table__],
+            )
+    except Exception as exc:
+        _log_migration_skip("smart hud / simple mode / nap checks", exc)
 

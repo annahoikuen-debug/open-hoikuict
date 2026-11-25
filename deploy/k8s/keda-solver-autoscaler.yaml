@@ -67,7 +67,7 @@ spec:
         cloud.google.com/gke-spot: "true"
       containers:
         - name: solver-worker
-          image: ghcr.io/hoikuict/nushift-solver:v0.7.1
+          image: ghcr.io/hoikuict/nushift-solver:v0.8.2
           command: ["python", "-m", "shift_schedule.services.distributed_worker"]
           resources:
             requests:

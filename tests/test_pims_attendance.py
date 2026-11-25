@@ -663,3 +663,78 @@ def test_toukouen_admin_endpoints_require_staff_auth():
     assert resp_imp.status_code in {401, 303}
 
 
+def test_toukouen_kiosk_routes_require_staff_or_kiosk_access_and_csrf():
+    """登降園打刻キオスク画面・POST APIが認証・端末トークン・CSRF・エラー秘匿を強制すること。"""
+    import os
+    from unittest.mock import patch
+    from fastapi import Response
+    from kiosk_security import KIOSK_DEVICE_COOKIE, issue_kiosk_device_cookie
+
+    unauth_client = TestClient(app)
+
+    # 1. 本番環境（オープン許可なし）・トークン未所持の端末はGET/POSTとも401
+    with patch.dict(
+        os.environ,
+        {
+            "HOIKUICT_ENV": "production",
+            "HOIKUICT_KIOSK_ACCESS_MODE": "token",
+            "HOIKUICT_ENABLE_MOCK_AUTH": "0",
+            "HOIKUICT_CSRF_ENFORCE": "1",
+        },
+    ):
+        assert unauth_client.get("/toukouen").status_code == 401
+        assert unauth_client.get("/toukouen/select?mode=in").status_code == 401
+
+        csrf_token = generate_csrf_token()
+        unauth_client.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+        punch_denied = unauth_client.post(
+            "/toukouen/punch",
+            data={"child_ids": ["NO_SUCH_CHILD"], "punch_type": "登園"},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        assert punch_denied.status_code == 401
+
+    # 2. 有効な端末クッキーがあれば /toukouen にアクセスでき、CSRF欠如のPOSTは403で拒否される
+    with patch.dict(
+        os.environ,
+        {
+            "HOIKUICT_ENV": "production",
+            "HOIKUICT_KIOSK_ACCESS_MODE": "token",
+            "HOIKUICT_ENABLE_MOCK_AUTH": "0",
+            "HOIKUICT_CSRF_ENFORCE": "1",
+            "HOIKUICT_SECRET_KEY": "s" * 40,
+            "HOIKUICT_KIOSK_TOKEN": "kiosk-device-secret",
+        },
+    ):
+        probe_resp = Response()
+        issue_kiosk_device_cookie(probe_resp)
+        raw_set_cookie = probe_resp.headers["set-cookie"]
+        cookie_val = raw_set_cookie.split(f"{KIOSK_DEVICE_COOKIE}=", 1)[1].split(";", 1)[0]
+
+        kiosk_client = TestClient(app)
+        kiosk_client.cookies.set(KIOSK_DEVICE_COOKIE, cookie_val)
+        assert kiosk_client.get("/toukouen").status_code == 200
+        assert kiosk_client.get("/toukouen/select?mode=in").status_code == 200
+
+        csrf_missing = kiosk_client.post(
+            "/toukouen/punch",
+            data={"child_ids": ["MISSING"], "punch_type": "登園"},
+        )
+        assert csrf_missing.status_code == 403
+
+    # 3. /punch の例外時に生の str(exc) をレスポンスへ露出しない
+    staff_client = TestClient(app)
+    authenticate_mock_staff(staff_client, role=Role.ADMIN, user_id=PIMS_TEST_ADMIN_ID, can_manage_child_records=True)
+    staff_client.get("/toukouen")
+    token = staff_client.cookies.get(CSRF_COOKIE_NAME) or generate_csrf_token()
+    staff_client.cookies.set(CSRF_COOKIE_NAME, token)
+    with patch("pims_service.record_punch", side_effect=RuntimeError("sensitive_internal_sqlite_error")):
+        err_resp = staff_client.post(
+            "/toukouen/punch",
+            data={"child_ids": ["X1"], "punch_type": "登園", "csrf_token": token},
+            headers={"X-CSRF-Token": token},
+        )
+    assert err_resp.status_code == 500
+    assert "sensitive_internal_sqlite_error" not in err_resp.text
+
+

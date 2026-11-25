@@ -97,7 +97,7 @@
 | **Python ファイル数** | 335+ 本 | vendor, venv, gen_bunnrei を除く |
 | **Python 総コード行数** | 約 95,000 行 | 型アノテーション・Ruff準拠 |
 | **データモデル (`models.py`)** | 185+ クラス | SQLModel / SQLite & PostgreSQL 両対応 |
-| **マイグレーション** | Alembic (Batch mode) / 組み込み047本 | SQLite/Postgres 互換マイグレーション完備 |
+| **マイグレーション** | Alembic (Batch mode) / 組み込み048本 | SQLite/Postgres 互換マイグレーション完備 |
 | **ストレージ基盤** | `StorageDriver` 抽象化 | ローカル保存 / 将来の S3 オブジェクトストレージ対応 |
 | **APIルーター (`routers/`)** | 41 ファイル (全50+ルーター) | FastAPI 構成 (QR打刻・保護者請求・医療同意含む) |
 | **テストスイート** | 210+ ファイル / 1,600+ 件 | pytest / 全件パス・回帰防止テスト完備 |
@@ -176,7 +176,7 @@ open-hoikuict/
 | **メモリ** | 4 GB 以上推奨 | ソルバー実行時は 8 GB 推奨 |
 | **ディスク空き容量** | 5 GB 以上 | データベース・バックアップ・ログを含む |
 | **ソルバー** | COIN-OR CBC ソルバー (PuLP 経由で同梱、またはシステムインストール) | MILP 最適化用 |
-| **データベース** | SQLite (開発/小規模) / PostgreSQL (本番/中規模以上) | Alembic マイグレーション対応 |
+| **データベース** | SQLite（**v0.8.2 公式サポート：単一園オールインワン** `HOIKUICT_PROFILE=embedded`） / PostgreSQL（実験的・サポート対象外） | Alembic マイグレーション対応 |
 | **ブラウザ** | Chrome / Edge / Safari 最新版 | 保護者ポータル・管理画面 |
 
 ### 3.2 インストール手順

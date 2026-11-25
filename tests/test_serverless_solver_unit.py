@@ -163,3 +163,105 @@ class TestServerlessSolverUnit(unittest.TestCase):
         finally:
             if old_url is not None:
                 os.environ["HOIKUICT_SERVERLESS_SOLVER_URL"] = old_url
+
+    def test_serverless_solver_bearer_auth_and_error_redaction(self):
+        import os
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from serverless_solver.main import app as solver_app
+
+        payload = {
+            "facility_id": 1,
+            "target_month": "2026-11",
+            "staff_list": [{"staff_id": "s1", "name": "保育士A"}],
+        }
+        client = TestClient(solver_app)
+
+        with patch.dict(os.environ, {"HOIKUICT_ENV": "production", "HOIKUICT_SERVERLESS_SOLVER_TOKEN": ""}):
+            resp_503 = client.post("/api/v1/solve", json=payload)
+            self.assertEqual(resp_503.status_code, 503)
+
+        with patch.dict(os.environ, {"HOIKUICT_ENV": "production", "HOIKUICT_SERVERLESS_SOLVER_TOKEN": "solver-secret"}):
+            self.assertEqual(client.post("/api/v1/solve", json=payload).status_code, 401)
+            self.assertEqual(
+                client.post("/api/v1/solve", json=payload, headers={"Authorization": "Bearer wrong"}).status_code,
+                401,
+            )
+            with patch("serverless_solver.main.execute_solve", side_effect=RuntimeError("internal_solver_secret_trace")):
+                resp_500 = client.post(
+                    "/api/v1/solve",
+                    json=payload,
+                    headers={"Authorization": "Bearer solver-secret"},
+                )
+            self.assertEqual(resp_500.status_code, 500)
+            self.assertNotIn("internal_solver_secret_trace", resp_500.text)
+
+    def test_serverless_adapter_forwards_children_and_cell_slots(self):
+        from datetime import date
+        from unittest.mock import MagicMock, patch
+        from shiftai.domain import AgeClass, CellState
+        from serverless_solver.adapter import execute_solve
+        from serverless_solver.schema import ChildPlanSchema, ShiftSolveRequest, StaffItemSchema
+
+        req = ShiftSolveRequest(
+            facility_id=1,
+            target_month="2026-11",
+            children=[
+                ChildPlanSchema(
+                    child_id="c1",
+                    name="園児1",
+                    day="2026-11-02",
+                    age_class="1歳児",
+                    arrive="08:30",
+                    depart="16:30",
+                )
+            ],
+            staff_list=[StaffItemSchema(staff_id="s1", name="保育士A")],
+        )
+
+        captured_contexts = []
+
+        def fake_solve_monthly_hierarchical(context, **_kwargs):
+            from types import SimpleNamespace
+
+            captured_contexts.append(context)
+            sday = SimpleNamespace(
+                day=date(2026, 11, 2),
+                assignments={
+                    "s1": {
+                        "08:30-09:00": CellState.WORK,
+                        "09:00-09:30": CellState.BREAK,
+                    }
+                },
+            )
+            return SimpleNamespace(
+                status=SimpleNamespace(name="OPTIMAL"),
+                shift_days=[sday],
+                assignments={},
+                violations=[],
+                score=None,
+                overconstrained_shortfalls=[],
+            )
+
+        with patch("serverless_solver.adapter.solve_monthly_hierarchical", side_effect=fake_solve_monthly_hierarchical):
+            resp = execute_solve(req)
+
+        self.assertEqual(resp.status, "OPTIMAL")
+        self.assertEqual(len(captured_contexts), 1)
+        self.assertEqual(len(captured_contexts[0].children), 1)
+        self.assertEqual(captured_contexts[0].children[0].age_class, AgeClass.AGE_1)
+        slot_cell = resp.schedule_matrix["s1"]["2026-11-02"]
+        self.assertEqual(slot_cell.slots["08:30-09:00"], CellState.WORK.value)
+        self.assertEqual(slot_cell.slots["09:00-09:30"], CellState.BREAK.value)
+
+    @classmethod
+    def setUpClass(cls):
+        import os as _os
+        from unittest.mock import patch as _patch
+
+        cls._env_patcher = _patch.dict(_os.environ, {"HOIKUICT_ENV": "test"})
+        cls._env_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._env_patcher.stop()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import os
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +58,12 @@ def render_daily_plan_pdf(plan_data: dict[str, Any]) -> bytes:
     content_w = page_w - (margin * 2)
 
     title = plan_data.get("title") or "デイリー指導計画（日案）"
-    facility_name = plan_data.get("facility_name") or "あんな保育園"
+    facility_name = (
+        plan_data.get("facility_name")
+        or os.getenv("HOIKU_NURSERY_REF", "").strip()
+        or os.getenv("HOIKUICT_DEFAULT_FACILITY_NAME", "").strip()
+        or "保育園"
+    )
     target_date = plan_data.get("target_date") or ""
     weather = plan_data.get("weather") or "晴"
     classroom_name = plan_data.get("classroom_name") or ""

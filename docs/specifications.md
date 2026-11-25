@@ -2,13 +2,13 @@
 
 現況確認: **2026年10月5日**。利用者向けの概要は[機能と実装状況](features.md)、操作入口は[使い方](daily-work.md)、URLは[画面一覧](screen-transition-list.md)を参照してください。
 
-[10月5日の負債解消](spec-debt-remediation-2026-10-05.md)に、R01/R02/R06/R07/R08 の修正とテスト追加をまとめています。
+10月5日の負債解消記録（`spec-debt-remediation-2026-10-05.md` 相当）として R01/R02/R06/R07/R08 の修正とテスト追加を実装済みです。
 
 [9月23日のアカウントライフサイクル統合](account-lifecycle-unification-implementation-2026-09-23.md)に、保護者アカウント停止・再開の一本化をまとめています。
 
 [9月27日の月次ライブラリ](monthly-library-proposal-2026-09-27.md) / [実装](implementation-monthly-library-2026-09-27.md) に、月案・週案の文例管理と出力をまとめています。
 
-[9月28日の保護者連絡返信リンク](parent-contact-reply-link-proposal-2026-09-28.md) / [実装](implementation-parent-notice-order-2026-09-28.md) に、日次連絡への返信導線をまとめています。
+[9月28日の保護者連絡返信リンク](parent-contact-reply-link-proposal-2026-09-28.md) / [実装](implementation-parent-notice-order-2026-09-27.md) に、日次連絡への返信導線をまとめています。
 
 [仕様と実装の照合記録](spec-consistency-review-2026-09-13.md)に、今回修正した相違点、確認した範囲、残る実装課題をまとめています。
 

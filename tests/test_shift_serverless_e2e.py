@@ -82,7 +82,14 @@ class TestShiftServerlessE2E(unittest.TestCase):
         dummy_context.facility_settings.holiday_dates = ()
         dummy_context.prior_duty_history = {}
 
-        with patch.dict(os.environ, {"HOIKUICT_SERVERLESS_SOLVER_URL": "http://mock-solver"}):
+        dummy_context.children = []
+        with patch.dict(
+            os.environ,
+            {
+                "HOIKUICT_SERVERLESS_SOLVER_URL": "http://mock-solver",
+                "HOIKUICT_USE_SERVERLESS_SOLVER": "1",
+            },
+        ):
             import importlib
             import shift_schedule.services.serverless_client as sc
             importlib.reload(sc)

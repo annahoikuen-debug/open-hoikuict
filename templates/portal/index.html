@@ -54,9 +54,96 @@
     </div>
     <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs text-slate-400">
       <span>最終更新 {{ updated_time }}</span>
-      <a href="/" class="rounded-lg border border-white/15 px-3 py-2 text-slate-200 hover:bg-white/10">更新</a>
+      <div class="flex items-center gap-2">
+        {% if is_simple_mode_feature_enabled %}
+          {% if show_simple_mode %}
+          <a href="/?simple=0" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-400/60 bg-indigo-600/30 px-3 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-600/50 transition-colors shadow-sm" title="通常の詳細ダッシュボード表示に切り替えます">
+            <span>📋 通常ホームへ</span>
+          </a>
+          {% else %}
+          <a href="/?simple=1" class="inline-flex items-center gap-1.5 rounded-lg border border-pink-400/60 bg-pink-600/30 px-3 py-1.5 text-xs font-bold text-pink-200 hover:bg-pink-600/50 transition-colors shadow-sm" title="大きな文字と押しやすいボタンのかんたん画面に切り替えます">
+            <span>🌸 かんたんモードへ</span>
+          </a>
+          {% endif %}
+        {% endif %}
+        <a href="/" class="rounded-lg border border-white/15 px-3 py-2 text-slate-200 hover:bg-white/10">更新</a>
+      </div>
     </div>
   </section>
+
+  {# 改善案9: 時間帯連動ネクスト・アクション・コマンドバー #}
+  {% if is_simple_mode_feature_enabled and next_action %}
+  <section class="overflow-hidden rounded-2xl border-2 border-indigo-300 bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 p-4 sm:p-5 text-white shadow-md">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">{{ next_action.icon }}</span>
+          <span class="rounded-full bg-indigo-500/30 px-2.5 py-0.5 text-xs font-bold text-indigo-300 border border-indigo-400/40">{{ next_action.time_badge }}</span>
+          <span class="text-[11px] text-indigo-200/70">推奨ルーチン</span>
+        </div>
+        <p class="text-sm font-semibold text-white">{{ next_action.headline }}</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <a href="{{ next_action.primary_action.url }}" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-transform active:scale-95">
+          <span>⚡ {{ next_action.primary_action.title }}</span>
+          <span class="rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-bold">{{ next_action.primary_action.badge }}</span>
+        </a>
+        {% if next_action.secondary_actions %}
+        <div class="flex items-center gap-2 text-xs">
+          {% for sec in next_action.secondary_actions %}
+          <a href="{{ sec.url }}" class="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-slate-200 hover:bg-white/20 transition-colors">
+            {{ sec.title }}
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# 改善案9: かんたんモード特大クイックアクセスカード（シニア・パート向け高アクセシビリティUI） #}
+  {% if is_simple_mode_feature_enabled and show_simple_mode %}
+  <section class="rounded-3xl border-2 border-pink-200/80 bg-gradient-to-br from-pink-50/50 via-white to-indigo-50/50 p-6 shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-pink-100 pb-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🌸</span>
+          <h2 class="text-xl font-black text-slate-900 tracking-tight">かんたん業務メニュー</h2>
+          <span class="rounded-full bg-pink-100 px-3 py-0.5 text-xs font-bold text-pink-700 border border-pink-200">シンプルモード</span>
+        </div>
+        <p class="mt-1 text-xs text-slate-600">日常業務でよく使うメニューを大きなボタンで配置しています。タップしてすぐに開始できます。</p>
+      </div>
+      <div class="text-xs text-slate-500">
+        ボタンサイズ: <b class="text-indigo-600">特大</b> ｜ 押しやすさ重視
+      </div>
+    </div>
+
+    <!-- カスタマイズされた特大クイックアクセスグリッド -->
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for tile in simple_tiles %}
+      <a href="{{ tile.url }}" class="group flex items-center gap-4 rounded-2xl border-2 border-slate-200/80 bg-white p-5 shadow-sm hover:border-indigo-400 hover:shadow-md hover:bg-indigo-50/30 transition-all active:scale-98">
+        <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl group-hover:bg-indigo-100 group-hover:scale-105 transition-all shrink-0">
+          {{ tile.icon }}
+        </span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{{ tile.label }}</h3>
+            <span class="text-slate-400 group-hover:translate-x-1 group-hover:text-indigo-600 transition-all text-sm font-bold">開く ➔</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 truncate">{{ tile.desc }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+
+    <div class="mt-6 flex justify-center pt-2">
+      <a href="#attendance" class="text-xs font-bold text-slate-500 hover:text-indigo-600 underline flex items-center gap-1">
+        <span>詳細な在園状況や全体の予定を見る ⬇️</span>
+      </a>
+    </div>
+  </section>
+  {% endif %}
 
   {% include "portal/_returned_documents.html" %}
 

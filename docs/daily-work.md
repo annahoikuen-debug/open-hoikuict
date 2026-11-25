@@ -53,7 +53,7 @@
 | 健康プロフィール、アレルギー、健診 | 健康管理、園児詳細の健康サマリー | [健康管理](health-record-spec-review.md) |
 | 観察や子どもの育ち | 園児詳細の「子どもの記録」 | [児童記録](child-records-spec.md) |
 | 児童票 | 園児詳細の児童票、児童票進捗一覧 | [児童記録](child-records-spec.md) |
-| 年案・月案・週案・日案 | 指導計画 `/plans/` | [保育計画の仕様一覧](specifications.md#plans) |
+| 年案・月案・週案・日案 | 指導計画 `/plans/` | [保育計画の仕様一覧](specifications.md) |
 | 園内の知見、行事の振り返り | 園内記録、ハイライト、年度継続記録 | [画面一覧](screen-transition-list.md) |
 
 日案はカレンダーから作成状況を確認し、詳細画面で振り返りや実施変更を扱います。文例が空の場合は、入力内容だけでなく[文例DBの配置](architecture.md)も確認します。

@@ -8,9 +8,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
+from datetime import datetime
+from typing import Optional
 from auth import get_optional_current_staff_user, parent_auth_is_local_password
 from calendar_service import localize_datetime
 from database import get_session
+from facility_settings_service import get_simple_mode_tiles, is_simple_mode_enabled
 from models import (
     ChildProfileChangeRequest,
     ChildProfileChangeRequestStatus,
@@ -51,6 +54,99 @@ def _no_store(response):
     return response
 
 
+def build_next_action_recommendation(local_current: datetime) -> dict[str, object]:
+    """時間帯連動のネクスト・アクション案内（改善案9: デイリールーチン・コマンドバー）"""
+    hour = local_current.hour
+    minute = local_current.minute
+    time_float = hour + minute / 60.0
+
+    if 7.0 <= time_float < 10.0:
+        return {
+            "phase": "morning",
+            "time_badge": "07:00〜10:00 朝の登園・点呼時間帯",
+            "icon": "🌅",
+            "headline": "朝の点呼と出欠・体温突合を行いましょう",
+            "primary_action": {
+                "title": "出欠確認（スマートHUD）を開く",
+                "url": "/attendance-checks/",
+                "badge": "最優先点呼",
+                "desc": "登園打刻と保護者連絡の自動突合・一括出席確定",
+            },
+            "secondary_actions": [
+                {"title": "日次連絡の確認", "url": "/daily-contacts/"},
+                {"title": "登降園打刻", "url": "/attendance/"},
+            ],
+        }
+    elif 10.0 <= time_float < 12.5:
+        return {
+            "phase": "daytime",
+            "time_badge": "10:00〜12:30 午前活動・給食配膳時間帯",
+            "icon": "🏃",
+            "headline": "体調変化の確認と給食配膳・アレルギーチェックを行いましょう",
+            "primary_action": {
+                "title": "日次連絡・健康確認を開く",
+                "url": "/daily-contacts/",
+                "badge": "健康確認",
+                "desc": "保護者からの体調特記・アレルギー除去食の確認",
+            },
+            "secondary_actions": [
+                {"title": "出欠確認（未確認チェック）", "url": "/attendance-checks/"},
+                {"title": "健康管理・与薬", "url": "/health"},
+            ],
+        }
+    elif 12.5 <= time_float < 15.0:
+        return {
+            "phase": "nap",
+            "time_badge": "12:30〜15:00 午睡・連絡帳作成時間帯",
+            "icon": "💤",
+            "headline": "定期午睡チェック（SIDS予防）と連絡帳返信を行いましょう",
+            "primary_action": {
+                "title": "健康・午睡チェックを開く",
+                "url": "/nap-checks",
+                "badge": "定期記録",
+                "desc": "5分ごとの体位・呼吸記録・一括検温登録",
+            },
+            "secondary_actions": [
+                {"title": "連絡帳の返信作成", "url": "/daily-contacts/"},
+                {"title": "指導計画（月案/週案）", "url": "/plans/"},
+            ],
+        }
+    elif 15.0 <= time_float < 20.0:
+        return {
+            "phase": "evening",
+            "time_badge": "15:00〜20:00 お迎え・降園ラッシュ時間帯",
+            "icon": "🌆",
+            "headline": "お迎え申告の確認と降園打刻・延長保育集計を行いましょう",
+            "primary_action": {
+                "title": "登降園管理（降園打刻）を開く",
+                "url": "/attendance/",
+                "badge": "降園受付",
+                "desc": "お迎え予定の照合・QR降園打刻・延長保育発生チェック",
+            },
+            "secondary_actions": [
+                {"title": "延長保育料金の確認", "url": "/extended-care-fees/"},
+                {"title": "明日の予定カレンダー", "url": "/calendar"},
+            ],
+        }
+    else:
+        return {
+            "phase": "night",
+            "time_badge": "閉園・翌日準備時間帯",
+            "icon": "🌙",
+            "headline": "明日の登園予定・行事と引き継ぎ事項を確認しましょう",
+            "primary_action": {
+                "title": "カレンダー・行事予定を開く",
+                "url": "/calendar",
+                "badge": "事前確認",
+                "desc": "明日の行事・職員シフト・出勤予定の確認",
+            },
+            "secondary_actions": [
+                {"title": "職員ルーム（引き継ぎ）", "url": "/staff-rooms/"},
+                {"title": "出欠確認（事前準備）", "url": "/attendance-checks/"},
+            ],
+        }
+
+
 def _render_login_prompt(request: Request):
     current = local_now()
     response = templates.TemplateResponse(
@@ -72,6 +168,7 @@ def _render_staff_home(
     staff_user: User,
     session: Session,
     scope: str,
+    simple: Optional[str] = None,
 ):
     now = utc_now()
     local_current = localize_datetime(now, staff_user.timezone)
@@ -353,6 +450,12 @@ def _render_staff_home(
 
     from terminal_monitor_service import terminal_statuses
     terminal_alerts = [row for row in terminal_statuses(session) if row["stale"]] if current_user.is_admin else []
+
+    is_simple_mode_feature_enabled = is_simple_mode_enabled(session)
+    show_simple_mode = (simple == "1") if simple in ("0", "1") else is_simple_mode_feature_enabled
+    simple_tiles = get_simple_mode_tiles(session)
+    next_action = build_next_action_recommendation(local_current)
+
     response = templates.TemplateResponse(
         request,
         "portal/index.html",
@@ -393,6 +496,11 @@ def _render_staff_home(
             "present_count": sum(item.present_count for item in attendance_summaries),
             "show_all": show_all,
             "can_show_all": True,
+            "is_simple_mode_feature_enabled": is_simple_mode_feature_enabled,
+            "show_simple_mode": show_simple_mode,
+            "simple_tiles": simple_tiles,
+            "next_action": next_action,
+            "simple_param": "1" if show_simple_mode else "0",
         },
     )
     return _no_store(response)
@@ -477,6 +585,7 @@ def _portal_response(
     current_user,
     session: Session,
     scope: str,
+    simple: Optional[str] = None,
 ):
     if current_user is None or current_user.user_id is None:
         return _render_login_prompt(request)
@@ -489,6 +598,7 @@ def _portal_response(
         staff_user=staff_user,
         session=session,
         scope=scope,
+        simple=simple,
     )
 
 
@@ -496,6 +606,7 @@ def _portal_response(
 def portal_home(
     request: Request,
     scope: str = Query(default="assigned"),
+    simple: Optional[str] = Query(default=None),
     current_user=Depends(get_optional_current_staff_user),
     session: Session = Depends(get_session),
 ):
@@ -504,6 +615,7 @@ def portal_home(
         current_user=current_user,
         session=session,
         scope=scope,
+        simple=simple,
     )
 
 
@@ -511,6 +623,7 @@ def portal_home(
 def staff_portal_alias(
     request: Request,
     scope: str = Query(default="assigned"),
+    simple: Optional[str] = Query(default=None),
     current_user=Depends(get_optional_current_staff_user),
     session: Session = Depends(get_session),
 ):
@@ -521,6 +634,7 @@ def staff_portal_alias(
         current_user=current_user,
         session=session,
         scope=scope,
+        simple=simple,
     )
 
 

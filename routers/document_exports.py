@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import re
 import zipfile
 from datetime import timedelta
@@ -18,6 +19,7 @@ from sqlmodel import Session, func, select
 from auth import get_current_staff_user
 from database import get_session
 from models import Child, Classroom, DocumentExportLog
+from models.organization import Facility
 from plan_docs.contracts import DocumentType
 from plan_docs.db_models import PlanDocumentRow
 from plan_docs.services.monthly_export import pdf_bytes
@@ -440,9 +442,17 @@ def download_daily_plan_pdf_route(
         if cls:
             cls_name = cls.name
 
+    facility_row = session.exec(select(Facility).order_by(Facility.created_at, Facility.id)).first()
+    facility_name = (
+        (facility_row.name if facility_row and facility_row.name else "")
+        or os.getenv("HOIKU_NURSERY_REF", "").strip()
+        or os.getenv("HOIKUICT_DEFAULT_FACILITY_NAME", "").strip()
+        or "保育園"
+    )
+
     sample_plan = {
         "title": "デイリー指導計画（日案）",
-        "facility_name": "あんな保育園",
+        "facility_name": facility_name,
         "target_date": target_date_val,
         "weather": "晴",
         "classroom_name": cls_name,

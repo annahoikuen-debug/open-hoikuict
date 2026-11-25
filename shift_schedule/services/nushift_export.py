@@ -13,6 +13,7 @@ import io
 from datetime import date
 from sqlmodel import Session, select
 
+from common.csv_utils import sanitize_csv_cell
 from models import (
     AttendanceRecord,
     AttendanceVerification,
@@ -136,18 +137,21 @@ def children_csv_string(session: Session, start_date: date, end_date: date) -> s
             age_years = (day - child.birth_date).days // 365
 
             writer.writerow([
-                cp.child_id,
-                cp.name,
-                str(age_years),
-                day.isoformat(),
-                cp.arrive.strftime("%H:%M") if cp.arrive else "08:00",
-                cp.depart.strftime("%H:%M") if cp.depart else "18:00",
-                "true" if cp.is_short_time else "false",
-                "true" if cp.absent else "false",
-                getattr(verif, "status", "") or "",
-                "false",
-                "false",
-                "",
+                sanitize_csv_cell(v)
+                for v in (
+                    cp.child_id,
+                    cp.name,
+                    str(age_years),
+                    day.isoformat(),
+                    cp.arrive.strftime("%H:%M") if cp.arrive else "08:00",
+                    cp.depart.strftime("%H:%M") if cp.depart else "18:00",
+                    "true" if cp.is_short_time else "false",
+                    "true" if cp.absent else "false",
+                    getattr(verif, "status", "") or "",
+                    "false",
+                    "false",
+                    "",
+                )
             ])
 
     return "\ufeff" + output.getvalue()
@@ -203,23 +207,26 @@ def staff_csv_string(session: Session) -> str:
         variable = "true" if (contract and contract.variable_working_hours) else "false"
 
         writer.writerow([
-            u_hex,
-            u.display_name or u.email,
-            main_role,
-            sub_role,
-            emp_type,
-            weekly_h,
-            daily_h,
-            min_m_h,
-            max_m_h,
-            max_w_d,
-            max_c_d,
-            earliest,
-            latest,
-            "",
-            has_36,
-            variable,
-            "",
+            sanitize_csv_cell(v)
+            for v in (
+                u_hex,
+                u.display_name or u.email,
+                main_role,
+                sub_role,
+                emp_type,
+                weekly_h,
+                daily_h,
+                min_m_h,
+                max_m_h,
+                max_w_d,
+                max_c_d,
+                earliest,
+                latest,
+                "",
+                has_36,
+                variable,
+                "",
+            )
         ])
 
     return "\ufeff" + output.getvalue()
@@ -241,12 +248,15 @@ def preferences_csv_string(session: Session, start_date: date, end_date: date) -
     ).all()
     for un in unavails:
         writer.writerow([
-            un.staff_user_id,
-            "出勤不可" if (not un.start_time and not un.end_time) else "希望休",
-            un.target_date.isoformat(),
-            un.start_time or "",
-            un.end_time or "",
-            un.reason or "",
+            sanitize_csv_cell(v)
+            for v in (
+                un.staff_user_id,
+                "出勤不可" if (not un.start_time and not un.end_time) else "希望休",
+                un.target_date.isoformat(),
+                un.start_time or "",
+                un.end_time or "",
+                un.reason or "",
+            )
         ])
 
     # 2. 承認済み有給
@@ -260,12 +270,15 @@ def preferences_csv_string(session: Session, start_date: date, end_date: date) -
     for pl in paid_leaves:
         uid_hex = pl.staff_user_id.hex if hasattr(pl.staff_user_id, "hex") else str(pl.staff_user_id)
         writer.writerow([
-            uid_hex,
-            "出勤不可",
-            pl.target_date.isoformat(),
-            "",
-            "",
-            pl.reason or "有給休暇",
+            sanitize_csv_cell(v)
+            for v in (
+                uid_hex,
+                "出勤不可",
+                pl.target_date.isoformat(),
+                "",
+                "",
+                pl.reason or "有給休暇",
+            )
         ])
 
     return "\ufeff" + output.getvalue()

@@ -35,10 +35,14 @@ def ui_test_plan():
         session.commit()
         session.refresh(plan)
 
+        job = ShiftSolveJobs(plan_id=plan.id, status="succeeded")
+        session.add(job)
+        session.flush()
+
         # 提案 (Pending Proposal)
         prop = ShiftPlanProposals(
             plan_id=plan.id,
-            job_id=1,
+            job_id=job.id,
             status="pending",
             hard_score=0,
             soft_score=-12.5,
@@ -50,8 +54,11 @@ def ui_test_plan():
 
         yield plan
 
-        # クリーンアップ
+        # クリーンアップ（ORM relationship がない FK 順序のため段階的に flush）
         session.delete(prop)
+        session.flush()
+        session.delete(job)
+        session.flush()
         session.delete(plan)
         session.commit()
 

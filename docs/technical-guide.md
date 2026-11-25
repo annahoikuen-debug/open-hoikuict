@@ -2,7 +2,7 @@
 
 <div class="home-hero" markdown>
 
-<p class="home-eyebrow">オープンソースの保育ICT</p>
+<p class="home-eyebrow">単一園オールインワン保育ICT（NuShift コアは MIT License）</p>
 
 ## 機能や仕組みを、詳しく調べる
 

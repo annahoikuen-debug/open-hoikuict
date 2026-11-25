@@ -48,7 +48,7 @@
       <a href="#hero" class="logo-wrap" id="brandLogo">
         <img src="logo.png" alt="Nusoft" style="width: 32px; height: 32px; border-radius: 8px; object-fit: contain;">
         <span>nusoft</span>
-        <span class="logo-badge">v0.7.1</span>
+        <span class="logo-badge">v0.8.2</span>
       </a>
 
       <nav>
@@ -94,13 +94,13 @@
                 <span class="dot dot-green"></span>
               </div>
               <span class="mockup-title">NuShift 勤務割最適化ダッシュボード — あさひ保育園 (2026年10月度)</span>
-              <span class="status-pill success" id="mockupStatusPill">● 最適化完了 (HiGHS / Timefold求解 14.8秒)</span>
+              <span class="status-pill success" id="mockupStatusPill">● 最適化完了 (HiGHS / LNS求解 14.8秒)</span>
             </div>
 
             <!-- Interactive Toolbar -->
             <div class="mockup-toolbar">
               <span class="mockup-toolbar-label">🎮 ライブ操作デモ:</span>
-              <button type="button" class="mockup-ctrl-btn" id="heroRecomputeBtn">⚡ 最適化再計算 (HiGHS/Timefold)</button>
+              <button type="button" class="mockup-ctrl-btn" id="heroRecomputeBtn">⚡ 最適化再計算 (HiGHS / LNS)</button>
               <button type="button" class="mockup-ctrl-btn active" id="heroPinToggleBtn">📌 佐藤(主幹) ピン留め切替</button>
               <button type="button" class="mockup-ctrl-btn btn-alert" id="heroGapSimBtn">⚠️ お迎え急変シミュレート</button>
             </div>
@@ -365,8 +365,8 @@
 
         <div class="tab-content active" id="tab-shift">
           <div class="tab-text">
-            <h3>Timefold 協調数理最適化で、複雑なシフトを瞬時に作成</h3>
-            <p>厚生労働省の配置基準や職員の契約時間、希望休、有給休暇を満たすシフト表を HiGHS / Timefold 協調数理最適化エンジン（NuShift v0.7.1）が自動計算。法令違反ゼロ（Hard）、配置不足ショートフォール最小化（Medium）、現場希望・人件費最適化（Soft）の3階層スコアリングと過剰制約計画により、安全かつ実務的な勤務割を瞬時に導出します。</p>
+            <h3>HiGHS MILP と 3階層スコアリングで、複雑なシフトを瞬時に作成</h3>
+            <p>厚生労働省の配置基準や職員の契約時間、希望休、有給休暇を満たすシフト表を HiGHS / CBC MILP と LNS 局所探索の数理最適化エンジン（NuShift v0.8.1）が自動計算。法令違反ゼロ（Hard）、配置不足ショートフォール最小化（Medium）、現場希望・人件費最適化（Soft）の3階層スコアリングと過剰制約計画により、安全かつ実務的な勤務割を瞬時に導出します。</p>
             <ul class="feature-bullet-list">
               <li><span class="bullet-icon">✓</span><span><strong>Hard/Medium/Soft 3階層スコアリング:</strong> 法令制約と現場希望を厳密な優先度で評価</span></li>
               <li><span class="bullet-icon">✓</span><span><strong>過剰制約計画 (Shortfall Capture):</strong> 人員不足時でも求解不能にならず不足枠を最小化</span></li>
@@ -378,7 +378,7 @@
           <div class="tab-visual">
             <div style="background: var(--bg-secondary); border-radius: 12px; padding: 24px; border: 1px solid var(--border-glass);">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <span style="font-weight: 700;">🧬 NuShift Timefold 協調最適化</span>
+                <span style="font-weight: 700;">🧬 NuShift 3階層スコアリング最適化</span>
                 <span class="status-pill success">HiGHS / LAHC / LNS</span>
               </div>
               <div style="font-family: monospace; font-size: 0.85rem; color: var(--accent-cyan); background: rgba(0,0,0,0.3); padding: 14px; border-radius: 8px; line-height: 1.6;">
@@ -703,22 +703,22 @@
       <div class="container">
         <span class="section-tag">Pricing Plans</span>
         <h2 class="section-title">園の規模に合わせて選べるプラン</h2>
-        <p class="section-desc">オープンソース版は完全無料。クラウド版や法人サポートも柔軟に対応します。</p>
+        <p class="section-desc">v0.8.2 では単一園オールインワン（embedded / SQLite）構成を正式サポートしています。</p>
 
         <div class="pricing-grid">
           <div class="pricing-card">
             <div>
-              <h3>オープンソース (セルフホスト)</h3>
-              <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 6px;">自前のサーバーやNASで自由に運用</p>
-              <div class="price-value">¥0 <span>/ 永久無料</span></div>
+              <h3>単一園セルフホスト (embedded)</h3>
+              <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 6px;">園内サーバーやNAS（SQLite）で完結運用</p>
+              <div class="price-value">要契約 <span>/ 単一園ライセンス</span></div>
               <ul class="feature-bullet-list" style="margin-top: 24px;">
-                <li><span class="bullet-icon">✓</span><span>全ソースコード利用可能</span></li>
-                <li><span class="bullet-icon">✓</span><span>NuShift シフト最適化コア搭載</span></li>
-                <li><span class="bullet-icon">✓</span><span>園児・職員数無制限</span></li>
-                <li><span class="bullet-icon">✓</span><span>TrueNAS / Ubuntu / Windows 対応</span></li>
+                <li><span class="bullet-icon">✓</span><span>単一園オールインワン正式サポート</span></li>
+                <li><span class="bullet-icon">✓</span><span>NuShift シフト最適化コア（MIT）搭載</span></li>
+                <li><span class="bullet-icon">✓</span><span>園児・職員・請求・監査ログを統合</span></li>
+                <li><span class="bullet-icon">✓</span><span>TrueNAS / Docker / Windows 対応</span></li>
               </ul>
             </div>
-            <a href="https://github.com/hoikuict/open-hoikuict" class="btn btn-secondary" style="margin-top: 32px;" target="_blank">GitHub でコードを見る</a>
+            <a href="https://github.com/hoikuict/open-hoikuict" class="btn btn-secondary" style="margin-top: 32px;" target="_blank">ドキュメントを見る</a>
           </div>
 
           <div class="pricing-card featured">
@@ -752,7 +752,7 @@
             <button class="btn btn-secondary open-modal-btn" style="margin-top: 32px;">法人お問い合わせ</button>
           </div>
         </div>
-        <p class="pricing-note">※オープンソース版は個人プロジェクト商用版（全権利保持）です。商用利用に際しては別途ライセンス契約が必要となる場合があります。</p>
+        <p class="pricing-note">※`open-hoikuict (nusoft)` 本体は商用プロプライエタリライセンス（全権利保持・詳細は LICENSE 参照）です。シフト最適化コア `NuShift (shiftai)` のみ MIT License で公開されています。v0.8.2 の初回公開サポート対象は単一園オールインワン構成です。</p>
       </div>
     </section>
 
@@ -891,7 +891,7 @@
         <div>
           <a href="#hero" class="footer-logo">🧸 nusoft</a>
           <p style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; max-width: 320px;">
-            厚生労働省配置基準連動型 数理最適化シフト自動作成 (NuShift) とオープンソース保育ICTの統合プラットフォーム。
+            厚生労働省配置基準連動型 数理最適化シフト自動作成 (NuShift) を統合した商用保育総合ICTプラットフォーム（単一園オールインワン公式サポート）。
           </p>
         </div>
         <div>

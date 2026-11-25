@@ -3418,6 +3418,11 @@ class FacilitySettings(SQLModel, table=True):
     parent_billing_portal_enabled: bool = Field(default=False)
     contact_reply_review_required: bool = Field(default=False)
     medical_consent_auto_approve: bool = Field(default=False)
+    attendance_smart_hud_enabled: bool = Field(default=True)
+    staff_simple_mode_enabled: bool = Field(default=True)
+    simple_mode_custom_tiles: Optional[str] = Field(default=None)
+    nap_check_smart_enabled: bool = Field(default=True)
+    nap_check_interval_minutes: int = Field(default=5)
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
     updated_by_name: Optional[str] = None
@@ -3560,5 +3565,35 @@ class MessageTemplate(SQLModel, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class NapCheckRecord(SQLModel, table=True):
+    __tablename__ = "nap_check_records"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    child_id: int = Field(foreign_key="children.id", index=True)
+    target_date: date = Field(index=True)
+    slots: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    daily_memo: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    created_by: Optional[str] = Field(default=None, max_length=100)
+    updated_by: Optional[str] = Field(default=None, max_length=100)
+
+
+class NapClassroomEnvironment(SQLModel, table=True):
+    __tablename__ = "nap_classroom_environments"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    classroom_id: int = Field(foreign_key="classrooms.id", index=True)
+    target_date: date = Field(index=True)
+    weather: Optional[str] = Field(default=None, max_length=20)
+    room_temperature: Optional[float] = Field(default=None)
+    humidity: Optional[float] = Field(default=None)
+    notes: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    created_by: Optional[str] = Field(default=None, max_length=100)
+    updated_by: Optional[str] = Field(default=None, max_length=100)
 
 

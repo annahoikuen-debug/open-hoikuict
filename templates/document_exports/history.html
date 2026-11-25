@@ -80,13 +80,11 @@
                             {{ status_labels.get(log.status, log.status) }}
                         </span>
                     </td>
-                    {% if log.error_message %}
-                    <td class="px-5 py-3 text-slate-500 text-xs">{{ log.error_message }}</td>
-                    {% endif %}
+                    <td class="px-5 py-3 text-slate-500 text-xs">{{ log.error_message or "-" }}</td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td class="px-5 py-3 text-slate-500 text-center" colspan="8">履歴がありません。</td>
+                    <td class="px-5 py-3 text-slate-500 text-center" colspan="9">履歴がありません。</td>
                 </tr>
                 {% endfor %}
             </tbody>

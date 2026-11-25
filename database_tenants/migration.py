@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,7 @@ from sqlalchemy import create_engine, text
 from sqlmodel import SQLModel
 
 logger = logging.getLogger("database_tenants.migration")
+_TENANT_MIGRATION_LOCK = threading.Lock()
 
 
 def get_template_db_path() -> Path:
@@ -116,12 +118,21 @@ def migrate_single_tenant_db(db_path: Path) -> int:
             applied = set(
                 row[0] for row in conn.execute(text("SELECT migration_id FROM schema_migrations"))
             )
+            conn.commit()
+
+            import database as _database
 
             for mid, migrate_fn in _sqlite_migrations():
                 if mid not in applied:
                     try:
-                        # 単一DBマイグレーションを実行
-                        migrate_fn()
+                        # 単一DBマイグレーションをテナント対象エンジン上で直列実行
+                        with _TENANT_MIGRATION_LOCK:
+                            prev_engine = _database.engine
+                            _database.engine = engine
+                            try:
+                                migrate_fn()
+                            finally:
+                                _database.engine = prev_engine
                         conn.execute(
                             text("INSERT INTO schema_migrations (migration_id) VALUES (:mid)"),
                             {"mid": mid},

@@ -70,6 +70,25 @@ exclude_docs: |
   /spec-change-validity-review-2026-09-11.md
   /spec-change-validity-review-2026-09-17.md
   /staff-auth-registration-guide-2026-09-06.md
+  /implementation-plan-continuity-2026-11-05.md
+  /22_実装計画_コードレビュー指摘修正.md
+  /23_実装計画_未解決テスト修正.md
+  /code-review-fix-implementation-plan-2026-11-14.md
+  /codmon-pain-point-improvement-proposals-2026-11-16.md
+  /database-per-tenant-implementation-plan.md
+  /implementation-plan-codmon-inspired-improvements-2026-11-16.md
+  /implementation-plan-codmon-pain-point-improvements-2026-11-16.md
+  /implementation-plan-guide-polish-2026-11-20.md
+  /implementation-plan-mfa-notice-fixes-2026-11-07.md
+  /optimistic-lock-pattern.md
+  /parent-input-reduction-phase-a-implementation-plan-2026-11-21.md
+  /phase1-vendor-sync-and-audit-implementation-plan.md
+  /phase2-3-detailed-implementation-plan-24steps.md
+  /phase2-solver-unification-and-design-harmonization-plan.md
+  /serverless-solver-implementation-plan.md
+  /shift-organic-integration-implementation-plan-27steps-2026-11-10.md
+  /soft_centric_product_roadmap.md
+  /archive/
 validation:
   nav:
     omitted_files: warn
@@ -90,7 +109,6 @@ nav:
       - technical-guide.md
       - 全体像・機能:
           - 機能と実装状況: features.md
-          - 導入までの進め方: roadmap.md
           - よくある質問: faq.md
           - ライセンス・問い合わせ: license.md
       - 導入:

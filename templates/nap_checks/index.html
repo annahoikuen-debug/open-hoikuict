@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% block title %}健康チェック（午睡） | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl space-y-4">
+
+  <!-- 1. 最上段タブナビゲーション（コドモン互換） -->
+  <div class="no-print flex flex-wrap items-center justify-between border-b border-slate-200 bg-white px-4 py-2 rounded-t-xl shadow-sm">
+    <div class="flex items-center space-x-1 sm:space-x-3 text-sm font-medium">
+      <a href="/attendance" class="px-3 py-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100">出席簿・日誌</a>
+      <a href="/nap-checks" class="border-b-2 border-emerald-600 px-3 py-2 font-bold text-emerald-800 bg-emerald-50 rounded-lg">健康チェック</a>
+      <a href="/daily-contacts" class="px-3 py-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100">食事チェック</a>
+      <a href="/daily-contacts" class="px-3 py-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100">家庭での様子</a>
+    </div>
+
+    <!-- モード切替バッジ（オプション扱いON/OFF） -->
+    <div class="flex items-center space-x-2">
+      <span class="text-xs text-slate-500 hidden sm:inline">表示モード:</span>
+      <a href="/nap-checks/?date={{ sheet.target_date.isoformat() }}{% if sheet.classroom_id %}&classroom_id={{ sheet.classroom_id }}{% endif %}&smart={{ '0' if smart_enabled else '1' }}"
+         class="inline-flex items-center space-x-1 rounded-full px-3 py-1 text-xs font-semibold shadow-sm transition {% if smart_enabled %}bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200{% else %}bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200{% endif %}">
+        {% if smart_enabled %}
+        <span>✨ スマートタイムライン [ON]</span>
+        {% else %}
+        <span>📋 標準リスト表示 [OFF]</span>
+        {% endif %}
+      </a>
+    </div>
+  </div>
+
+  <!-- 2. 日付ナビゲーション & 印刷 & サブタブ -->
+  <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+    <!-- 日付操作 -->
+    <div class="flex items-center space-x-2">
+      <a href="/nap-checks/?date={{ prev_date }}{% if sheet.classroom_id %}&classroom_id={{ sheet.classroom_id }}{% endif %}&hour={{ sheet.selected_hour }}&only_present={{ '1' if sheet.only_present else '0' }}"
+         class="rounded-lg border border-slate-300 p-2 text-slate-600 hover:bg-slate-100" title="前日">
+        &lt;
+      </a>
+      <span class="text-lg font-bold text-slate-900">
+        {{ sheet.target_date.strftime('%Y年%m月%d日') }}
+      </span>
+      <a href="/nap-checks/?date={{ next_date }}{% if sheet.classroom_id %}&classroom_id={{ sheet.classroom_id }}{% endif %}&hour={{ sheet.selected_hour }}&only_present={{ '1' if sheet.only_present else '0' }}"
+         class="rounded-lg border border-slate-300 p-2 text-slate-600 hover:bg-slate-100" title="翌日">
+        &gt;
+      </a>
+      {% if not is_today %}
+      <a href="/nap-checks/?date={{ today_str }}{% if sheet.classroom_id %}&classroom_id={{ sheet.classroom_id }}{% endif %}&hour={{ sheet.selected_hour }}&only_present={{ '1' if sheet.only_present else '0' }}"
+         class="rounded-lg border border-emerald-600 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+        今日を表示
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- サブタブ（検温 / 午睡 / 排便 / 出席番号順） -->
+    <div class="no-print flex items-center space-x-1 sm:space-x-2">
+      <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-medium">
+        <a href="/health" class="px-3 py-1.5 text-slate-600 hover:text-slate-900 rounded-md">検温</a>
+        <span class="rounded-md bg-white px-3 py-1.5 font-bold text-emerald-700 shadow-sm border border-slate-200">午睡</span>
+        <a href="/health" class="px-3 py-1.5 text-slate-600 hover:text-slate-900 rounded-md">排便</a>
+      </div>
+      <button onclick="window.print()" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm">
+        🖨️ 印刷
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. SIDS防止タイマー & アラートHUD（改善案2 コドモン超え機能） -->
+  {% if smart_enabled %}
+  <div class="grid gap-3 sm:grid-cols-3 rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50 via-sky-50 to-emerald-50 p-3.5 shadow-sm">
+    <div class="flex items-center space-x-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow">
+        ⏱️
+      </div>
+      <div>
+        <p class="text-xs font-medium text-slate-500">直近推奨スロット</p>
+        <p class="text-base font-bold text-indigo-900">{{ current_nearest_slot }} チェック推奨</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl {% if sheet.prone_count > 0 %}bg-rose-600 animate-pulse text-white{% else %}bg-emerald-600 text-white{% endif %} shadow">
+        {% if sheet.prone_count > 0 %}⚠️{% else %}🛡️{% endif %}
+      </div>
+      <div>
+        <p class="text-xs font-medium text-slate-500">SIDS体位チェック</p>
+        {% if sheet.prone_count > 0 %}
+        <p class="text-base font-extrabold text-rose-700">うつ伏せ警告: {{ sheet.prone_count }}名あり！</p>
+        {% else %}
+        <p class="text-base font-bold text-emerald-800">うつ伏せ児なし（安全）</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-600 text-white shadow">
+        👶
+      </div>
+      <div>
+        <p class="text-xs font-medium text-slate-500">対象園児</p>
+        <p class="text-base font-bold text-slate-800">{{ sheet.total_children_count }} 名（登園中）</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 4. 絞り込みフィルター & 室温・湿度（コドモン互換） -->
+  <div class="no-print rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <form method="get" action="/nap-checks" class="flex flex-wrap items-center gap-3">
+      <input type="hidden" name="date" value="{{ sheet.target_date.isoformat() }}">
+      <input type="hidden" name="hour" value="{{ sheet.selected_hour }}">
+
+      <!-- クラス絞り込み -->
+      <div class="flex items-center space-x-1.5">
+        <label for="classroom_id" class="text-xs font-medium text-slate-600">クラス:</label>
+        <select id="classroom_id" name="classroom_id" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none">
+          <option value="">全員</option>
+          {% for c in sheet.classrooms %}
+          <option value="{{ c.id }}" {% if sheet.classroom_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 園児名検索 -->
+      <div class="flex items-center space-x-1.5">
+        <input type="text" name="q" value="{{ sheet.search_query }}" placeholder="🔍 園児名検索" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none w-36 sm:w-44">
+      </div>
+
+      <!-- 登園中園児のみ表示 -->
+      <label class="inline-flex items-center space-x-1.5 cursor-pointer">
+        <input type="checkbox" name="only_present" value="1" {% if sheet.only_present %}checked{% endif %} onchange="this.form.submit()" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+        <span class="text-xs font-medium text-slate-700">登園中園児のみ表示</span>
+      </label>
+
+      <button type="submit" class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900 shadow-sm">
+        絞り込む
+      </button>
+
+      {% if sheet.classroom_id %}
+      <span class="text-xs text-emerald-700 font-medium">※クラス選択中: 天気・室温・湿度の記録が可能です</span>
+      {% else %}
+      <span class="text-xs text-slate-400">※クラスを絞り込むと、天気や室温の記録ができます</span>
+      {% endif %}
+    </form>
+
+    <!-- クラス環境記録バー（室温・湿度・天気） -->
+    {% if sheet.classroom_id %}
+    <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-4 bg-slate-50 p-2.5 rounded-lg">
+      <form method="post" action="/nap-checks/environment" class="flex flex-wrap items-center gap-3 w-full">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="classroom_id" value="{{ sheet.classroom_id }}">
+        <input type="hidden" name="target_date" value="{{ sheet.target_date.isoformat() }}">
+        <span class="text-xs font-bold text-slate-700">🌡️ 室温・環境記録:</span>
+
+        <label class="flex items-center space-x-1 text-xs">
+          <span>天気:</span>
+          <select name="weather" class="rounded border border-slate-300 px-2 py-1 text-xs bg-white">
+            <option value="sunny" {% if sheet.classroom_env and sheet.classroom_env.weather == 'sunny' %}selected{% endif %}>☀️ 晴れ</option>
+            <option value="cloudy" {% if sheet.classroom_env and sheet.classroom_env.weather == 'cloudy' %}selected{% endif %}>☁️ 曇り</option>
+            <option value="rainy" {% if sheet.classroom_env and sheet.classroom_env.weather == 'rainy' %}selected{% endif %}>🌧️ 雨</option>
+            <option value="snowy" {% if sheet.classroom_env and sheet.classroom_env.weather == 'snowy' %}selected{% endif %}>❄️ 雪</option>
+          </select>
+        </label>
+
+        <label class="flex items-center space-x-1 text-xs">
+          <span>室温:</span>
+          <input type="number" step="0.1" name="room_temperature" value="{{ sheet.classroom_env.room_temperature if sheet.classroom_env and sheet.classroom_env.room_temperature is not none else '22.0' }}" class="w-16 rounded border border-slate-300 px-2 py-1 text-xs bg-white text-right">
+          <span>℃</span>
+        </label>
+
+        <label class="flex items-center space-x-1 text-xs">
+          <span>湿度:</span>
+          <input type="number" step="1" name="humidity" value="{{ sheet.classroom_env.humidity if sheet.classroom_env and sheet.classroom_env.humidity is not none else '50' }}" class="w-14 rounded border border-slate-300 px-2 py-1 text-xs bg-white text-right">
+          <span>%</span>
+        </label>
+
+        <button type="submit" class="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm">
+          環境保存
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 5. 時間帯選択 & 一括確定バー -->
+  <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <!-- 時間帯ドロップダウン -->
+    <div class="flex items-center space-x-2">
+      <span class="text-xs font-bold text-slate-700">午睡 時間帯:</span>
+      <select onchange="location.href='/nap-checks/?date={{ sheet.target_date.isoformat() }}{% if sheet.classroom_id %}&classroom_id={{ sheet.classroom_id }}{% endif %}&hour=' + this.value + '&only_present={{ '1' if sheet.only_present else '0' }}'"
+              class="rounded-lg border border-emerald-500 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 focus:outline-none">
+        {% for h in sheet.hours_list %}
+        <option value="{{ h }}" {% if sheet.selected_hour == h %}selected{% endif %}>
+          午睡 {{ h }}〜
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- 差分ワンタップ一括記録（open-hoikuict 高速化） -->
+    <form method="post" action="/nap-checks/bulk-present" class="no-print flex items-center space-x-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="target_date" value="{{ sheet.target_date.isoformat() }}">
+      {% if sheet.classroom_id %}
+      <input type="hidden" name="classroom_id" value="{{ sheet.classroom_id }}">
+      {% endif %}
+      <input type="hidden" name="only_present" value="{{ '1' if sheet.only_present else '0' }}">
+
+      <span class="text-xs text-slate-600">一括記録:</span>
+      <select name="time_key" class="rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white font-medium">
+        {% for s in sheet.slots %}
+        <option value="{{ s }}" {% if s == current_nearest_slot %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+
+      <button type="submit" onclick="return confirm('選択したスロット（登園中の全園児）を一括で【仰向け・呼吸良好】に確定しますか？')"
+              class="inline-flex items-center space-x-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition">
+        <span>⚡ 全員「仰向け」一括確定</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- 体位凡例ガイド -->
+  <div class="no-print flex flex-wrap items-center gap-3 text-xs text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200">
+    <span class="font-bold text-slate-700">体位凡例:</span>
+    <span class="inline-flex items-center space-x-1"><span class="h-4 w-4 rounded bg-sky-100 text-sky-800 text-center font-bold text-[10px] leading-4 border border-sky-300">↑</span><span>仰向け (正常)</span></span>
+    <span class="inline-flex items-center space-x-1"><span class="h-4 w-4 rounded bg-emerald-100 text-emerald-800 text-center font-bold text-[10px] leading-4 border border-emerald-300">→</span><span>右向き</span></span>
+    <span class="inline-flex items-center space-x-1"><span class="h-4 w-4 rounded bg-amber-100 text-amber-800 text-center font-bold text-[10px] leading-4 border border-amber-300">←</span><span>左向き</span></span>
+    <span class="inline-flex items-center space-x-1"><span class="h-4 w-4 rounded bg-rose-100 text-rose-800 text-center font-bold text-[10px] leading-4 border border-rose-300 ring-1 ring-rose-400">↓</span><span class="text-rose-700 font-bold">うつ伏せ (要戻し)</span></span>
+    <span class="inline-flex items-center space-x-1"><span class="h-4 w-4 rounded bg-violet-100 text-violet-800 text-center font-bold text-[10px] leading-4 border border-violet-300">起</span><span>起床</span></span>
+    <span class="text-[11px] text-slate-400 ml-auto">※各マスをタップすると体位が順次切り替わります（差分修正）</span>
+  </div>
+
+  <!-- 6. コドモン互換 5分刻みタイムライン表 -->
+  <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+      <thead class="bg-slate-50 text-slate-700">
+        <tr>
+          <!-- 園児名列 -->
+          <th class="w-48 px-3 py-3 font-semibold text-xs border-r border-slate-200 sticky left-0 bg-slate-50 z-10">
+            園児名
+          </th>
+          <!-- 5分刻みスロット列 -->
+          {% for s in sheet.slots %}
+          <th class="px-1.5 py-2 text-center text-xs font-bold text-slate-700 {% if s == current_nearest_slot %}bg-indigo-50 text-indigo-900 border-b-2 border-indigo-600{% endif %}">
+            <div>{{ s.split(':')[1] }}</div>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200 bg-white">
+        {% for row in sheet.rows %}
+        <tr class="hover:bg-slate-50/80 transition">
+          <!-- 園児情報 & メモ -->
+          <td class="px-3 py-2.5 border-r border-slate-200 sticky left-0 bg-white z-10">
+            <div class="flex items-center space-x-2">
+              <div class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                👤
+              </div>
+              <div>
+                <a href="/children/{{ row.child.id }}" class="font-bold text-xs text-slate-900 hover:text-emerald-700">
+                  {{ row.child.full_name }}
+                </a>
+                <div class="flex items-center space-x-1 text-[10px]">
+                  {% if row.is_present %}
+                  <span class="text-emerald-700 font-semibold">登園中</span>
+                  {% else %}
+                  <span class="text-slate-400">欠席/未登園</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- メモ入力欄（コドモン互換: この日の体調・午睡のメモ） -->
+            <div class="mt-1.5">
+              <form hx-post="/nap-checks/memo" hx-trigger="change, keyup delay:800ms" hx-swap="none" class="flex items-center space-x-1">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="child_id" value="{{ row.child.id }}">
+                <input type="hidden" name="target_date" value="{{ sheet.target_date.isoformat() }}">
+                <input type="text" name="memo" value="{{ row.memo or '' }}" placeholder="✏️ 体調・午睡メモ..."
+                       class="w-full rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-700 placeholder-slate-400 focus:border-emerald-500 focus:outline-none">
+              </form>
+            </div>
+          </td>
+
+          <!-- 5分刻みスロットセル -->
+          {% for slot in row.slots %}
+          <td class="p-1 text-center align-top {% if slot.time == current_nearest_slot %}bg-indigo-50/40{% endif %}">
+            {% include "nap_checks/_slot_cell.html" %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ sheet.slots|length + 1 }}" class="px-4 py-8 text-center text-xs text-slate-500">
+            該当する園児がいません。（「登園中園児のみ表示」を解除するか、検索条件をお確かめください）
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

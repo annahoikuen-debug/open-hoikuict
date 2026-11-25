@@ -97,3 +97,34 @@ def test_dr_backup_corrupted_detection() -> None:
 
         with pytest.raises(Exception):
             verify_backup_restore(source_db_path, bkp)
+
+
+def test_health_ready_redacts_internal_exception_details(client: TestClient) -> None:
+    """/health/ready 異常時に内部例外メッセージや接続文字列を返さないこと。"""
+    import os
+    from unittest.mock import patch
+
+    with (
+        patch.dict(os.environ, {"HOIKUICT_ENV": "production"}),
+        patch("sqlmodel.Session.exec", side_effect=RuntimeError("secret_db_dsn_leak_check")),
+    ):
+        resp = client.get("/health/ready")
+
+    assert resp.status_code == 503
+    assert "secret_db_dsn_leak_check" not in resp.text
+    assert "error" not in resp.json()
+
+
+def test_metrics_requires_token_or_admin_in_production(client: TestClient) -> None:
+    """/metrics はトークン設定時または本番環境で認証なしアクセスを拒否すること。"""
+    import os
+    from unittest.mock import patch
+
+    with patch.dict(os.environ, {"HOIKUICT_METRICS_TOKEN": "metrics-secret-xyz"}):
+        assert client.get("/metrics").status_code == 401
+        assert client.get("/metrics", headers={"Authorization": "Bearer wrong-token"}).status_code == 401
+        ok_resp = client.get("/metrics", headers={"Authorization": "Bearer metrics-secret-xyz"})
+        assert ok_resp.status_code == 200
+
+    with patch.dict(os.environ, {"HOIKUICT_ENV": "production", "HOIKUICT_METRICS_TOKEN": ""}):
+        assert client.get("/metrics").status_code == 401

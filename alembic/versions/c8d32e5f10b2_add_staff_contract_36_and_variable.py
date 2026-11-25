@@ -19,13 +19,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("staff_contracts")}
     with op.batch_alter_table('staff_contracts', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('has_36_agreement', sa.Boolean(), server_default='1', nullable=False))
-        batch_op.add_column(sa.Column('variable_working_hours', sa.Boolean(), server_default='0', nullable=False))
+        if "has_36_agreement" not in cols:
+            batch_op.add_column(sa.Column('has_36_agreement', sa.Boolean(), server_default='1', nullable=False))
+        if "variable_working_hours" not in cols:
+            batch_op.add_column(sa.Column('variable_working_hours', sa.Boolean(), server_default='0', nullable=False))
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("staff_contracts")}
     with op.batch_alter_table('staff_contracts', schema=None) as batch_op:
-        batch_op.drop_column('variable_working_hours')
-        batch_op.drop_column('has_36_agreement')
+        if "variable_working_hours" in cols:
+            batch_op.drop_column('variable_working_hours')
+        if "has_36_agreement" in cols:
+            batch_op.drop_column('has_36_agreement')
 

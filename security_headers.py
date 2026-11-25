@@ -32,9 +32,9 @@ def build_csp_header(nonce: str | None = None) -> str:
     return (
         "default-src 'self'; "
         f"script-src {script_src}; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https://img.youtube.com https://i.ytimg.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "font-src 'self'; "
         "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "
         "connect-src 'self';"
     )

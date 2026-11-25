@@ -547,7 +547,10 @@ def test_csrf_is_required_for_public_requests_and_reception_changes(pilot, monke
     enable(pilot)
     app = FastAPI(dependencies=[Depends(verify_csrf)])
     app.add_middleware(CsrfTokenMiddleware)
+    from routers.parent_accounts import router as parent_accounts_router
+
     app.include_router(routes.router)
+    app.include_router(parent_accounts_router)
     app.dependency_overrides.update(pilot[3].dependency_overrides)
     with TestClient(app, base_url="https://testserver") as client:
         client.get(public.PUBLIC_PATH)

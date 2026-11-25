@@ -10,10 +10,15 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from auth import StaffUser, get_current_staff_user, require_admin
 from ..services.facility import add_closed_day, get_or_create_settings, list_closed_days, update_settings
 from ..store import ShiftRepository, ShiftRepositoryDep
 
-router = APIRouter(prefix="/shifts", tags=["shift_schedule"])
+router = APIRouter(
+    prefix="/shifts",
+    tags=["shift_schedule"],
+    dependencies=[Depends(get_current_staff_user), Depends(require_admin)],
+)
 
 
 @router.get("/facility", response_class=HTMLResponse)
@@ -93,6 +98,7 @@ async def update_constraint_weights_api(
     facility_id: int,
     request: Request,
     repo: ShiftRepository = Depends(ShiftRepositoryDep),
+    current_user: StaffUser = Depends(get_current_staff_user),
 ):
     """施設の制約重みを一括更新する。"""
     from ..services.weights import update_facility_constraint_weights
@@ -100,7 +106,7 @@ async def update_constraint_weights_api(
     body = await request.json()
     updates = body if isinstance(body, list) else body.get("weights", [])
 
-    user_id = getattr(request.state, "user_id", "admin")
+    user_id = str(current_user.user_id or current_user.name or "admin")
 
     updated = update_facility_constraint_weights(
         session=repo.session,

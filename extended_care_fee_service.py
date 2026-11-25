@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
+from common.csv_utils import sanitize_csv_cell
 from models import (
     AttendanceRecord,
     CareTimeCategory,
@@ -683,23 +684,26 @@ def build_monthly_csv(overview: ExtendedCareMonthlyOverview) -> bytes:
     for summary in overview.summaries:
         writer.writerow(
             [
-                overview.month,
-                summary.child_id,
-                summary.child_name,
-                summary.child_name_kana,
-                summary.classroom_name,
-                summary.extended_days,
-                summary.extended_minutes_total,
-                summary.auto_amount_total,
-                summary.adjustment_amount_total,
-                summary.final_amount_total,
-                summary.unconfirmed_count,
-                summary.standard_days,
-                summary.short_days,
-                summary.morning_minutes_total,
-                summary.morning_amount_total,
-                summary.evening_minutes_total,
-                summary.evening_amount_total,
+                sanitize_csv_cell(value)
+                for value in (
+                    overview.month,
+                    summary.child_id,
+                    summary.child_name,
+                    summary.child_name_kana,
+                    summary.classroom_name,
+                    summary.extended_days,
+                    summary.extended_minutes_total,
+                    summary.auto_amount_total,
+                    summary.adjustment_amount_total,
+                    summary.final_amount_total,
+                    summary.unconfirmed_count,
+                    summary.standard_days,
+                    summary.short_days,
+                    summary.morning_minutes_total,
+                    summary.morning_amount_total,
+                    summary.evening_minutes_total,
+                    summary.evening_amount_total,
+                )
             ]
         )
     return buffer.getvalue().encode("utf-8-sig")

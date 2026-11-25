@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 
 from auth import get_current_staff_user
 from database import get_session
+from kiosk_security import require_kiosk_or_staff_access
 from models.pims import PunchChild, PunchLog
 import pims_service
 from routers.document_exports import log_export
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/toukouen", tags=["toukouen"])
 templates = create_templates()
 
 
-@router.get("", response_class=HTMLResponse)
+@router.get("", response_class=HTMLResponse, dependencies=[Depends(require_kiosk_or_staff_access)])
 def toukouen_top(
     request: Request,
     session: Session = Depends(get_session),
@@ -51,7 +52,7 @@ def toukouen_top(
     )
 
 
-@router.get("/select", response_class=HTMLResponse)
+@router.get("/select", response_class=HTMLResponse, dependencies=[Depends(require_kiosk_or_staff_access)])
 def toukouen_select(
     request: Request,
     mode: Optional[str] = Query(default=None),
@@ -106,7 +107,7 @@ def toukouen_select(
     )
 
 
-@router.post("/punch")
+@router.post("/punch", dependencies=[Depends(require_kiosk_or_staff_access)])
 def toukouen_punch(
     request: Request,
     child_ids: List[str] = Form(...),
@@ -136,12 +137,12 @@ def toukouen_punch(
             "child_ids": child_ids,
             "updated_states": updated_states,
         })
-    except Exception as exc:
+    except Exception:
         logger.exception("打刻処理エラー")
-        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+        return JSONResponse({"success": False, "error": "打刻処理中にエラーが発生しました。"}, status_code=500)
 
 
-@router.post("/undo")
+@router.post("/undo", dependencies=[Depends(require_kiosk_or_staff_access)])
 def toukouen_undo(
     request: Request,
     log_ids: List[str] = Form(...),
@@ -157,9 +158,9 @@ def toukouen_undo(
             "message": msg,
             "updated_states": states,
         })
-    except Exception as exc:
+    except Exception:
         logger.exception("打刻取消エラー")
-        return JSONResponse({"success": False, "error": str(exc)}, status_code=500)
+        return JSONResponse({"success": False, "error": "打刻取消処理中にエラーが発生しました。"}, status_code=500)
 
 
 @router.get("/import/codmon", response_class=HTMLResponse)
@@ -190,12 +191,16 @@ async def toukouen_import_codmon_post(
             "toukouen/import_codmon.html",
             {"request": request, "result": result, "current_user": current_user},
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("コドモンCSV取込エラー")
         return templates.TemplateResponse(
             request,
             "toukouen/import_codmon.html",
-            {"request": request, "error": str(exc), "current_user": current_user},
+            {
+                "request": request,
+                "error": "コドモンCSVの取り込みに失敗しました。ファイル形式や文字コードをご確認ください。",
+                "current_user": current_user,
+            },
         )
 
 

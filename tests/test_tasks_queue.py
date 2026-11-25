@@ -51,3 +51,20 @@ class TaskQueueTests(unittest.TestCase):
         with patch("tasks.queue.get_redis_client", return_value=mock_client):
             job_id = dequeue_solve_job(timeout_sec=1)
             assert job_id is None
+
+
+def test_solve_queue_key_matches_distributed_worker_and_keda():
+    """Producer、分散ワーカー、KEDAオートスケーラー間で既定キューキーが一致すること。"""
+    import importlib
+    import os
+    from unittest.mock import patch
+
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("HOIKUICT_SOLVER_QUEUE_KEY", None)
+        import shift_schedule.services.distributed_worker as dw
+        import tasks.queue as tq
+
+        importlib.reload(tq)
+        importlib.reload(dw)
+        assert tq.SOLVE_QUEUE_KEY == "hoikuict:shift:solve_queue"
+        assert tq.SOLVE_QUEUE_KEY == dw.SOLVER_QUEUE_KEY

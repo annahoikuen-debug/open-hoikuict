@@ -530,13 +530,20 @@ def _run_solve_sync(
         for v in all_violations:
             session.add(v)
 
-        plan.status = PlanStatus.GENERATED
-        plan.updated_at = utc_now()
-        session.add(plan)
-
         import json
 
-        job.status = SolveJobStatus.CANCELLED if is_job_cancelled else SolveJobStatus.SUCCEEDED
+        result_status_name = getattr(getattr(result, "status", None), "name", "")
+        is_infeasible_empty = result_status_name == "INFEASIBLE" and not getattr(result, "shift_days", [])
+
+        if is_infeasible_empty:
+            job.status = SolveJobStatus.FAILED
+            job.error_message = "; ".join(getattr(result, "messages", []) or ["求解条件を満たすシフトを生成できませんでした。"])
+        else:
+            plan.status = PlanStatus.GENERATED
+            plan.updated_at = utc_now()
+            session.add(plan)
+            job.status = SolveJobStatus.CANCELLED if is_job_cancelled else SolveJobStatus.SUCCEEDED
+
         job.finished_at = utc_now()
         stats_payload = {
             "cells": len(all_cells),

@@ -14,6 +14,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
+from common.csv_utils import sanitize_csv_cell
 from family_support import apply_family_shared_data, sync_family_to_children, sync_parent_child_links
 from family_csv import GUARDIAN_HEADERS, family_csv_values, plan_family, preview_family_changes
 from import_state import ledger_state, state_revision, audit_changes
@@ -204,7 +205,7 @@ def template_rows(dataset: str) -> list[list[str]]:
 def build_csv_content(rows: list[list[str]]) -> bytes:
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\r\n")
-    writer.writerows(rows)
+    writer.writerows([[sanitize_csv_cell(cell) for cell in row] for row in rows])
     return buffer.getvalue().encode("utf-8-sig")
 
 
@@ -564,6 +565,22 @@ def _read_csv_matrix(content: bytes) -> list[list[str]]:
     return [list(row) for row in reader]
 
 
+_MAX_XLSX_ENTRIES = 500
+_MAX_XLSX_ENTRY_BYTES = 10 * 1024 * 1024
+_MAX_XLSX_TOTAL_BYTES = 20 * 1024 * 1024
+
+
+def _read_zip_member_bounded(archive: ZipFile, path: str, max_bytes: int = _MAX_XLSX_ENTRY_BYTES) -> bytes:
+    info = archive.getinfo(path)
+    if info.file_size > max_bytes:
+        raise ValueError("Excel ファイルのサイズが許容上限を超えています。")
+    with archive.open(info, "r") as stream:
+        data = stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError("Excel ファイルの展開サイズが許容上限を超えています。")
+    return data
+
+
 def _read_xlsx_matrix(content: bytes) -> list[list[str]]:
     try:
         archive = ZipFile(BytesIO(content))
@@ -571,6 +588,11 @@ def _read_xlsx_matrix(content: bytes) -> list[list[str]]:
         raise ValueError("Excel ファイルを読み込めません。") from exc
 
     with archive:
+        infos = archive.infolist()
+        if len(infos) > _MAX_XLSX_ENTRIES:
+            raise ValueError("Excel ファイルのエントリ数が許容上限を超えています。")
+        if sum(info.file_size for info in infos) > _MAX_XLSX_TOTAL_BYTES:
+            raise ValueError("Excel ファイルの展開合計サイズが許容上限を超えています。")
         sheet_paths = sorted(
             path
             for path in archive.namelist()
@@ -580,7 +602,7 @@ def _read_xlsx_matrix(content: bytes) -> list[list[str]]:
             raise ValueError("Excel ファイルは 1 シートのみ対応しています。")
 
         shared_strings = _read_shared_strings(archive)
-        sheet_xml = archive.read(sheet_paths[0])
+        sheet_xml = _read_zip_member_bounded(archive, sheet_paths[0])
 
     namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     root = ET.fromstring(sheet_xml)
@@ -603,7 +625,7 @@ def _read_shared_strings(archive: ZipFile) -> list[str]:
     if "xl/sharedStrings.xml" not in archive.namelist():
         return []
     namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+    root = ET.fromstring(_read_zip_member_bounded(archive, "xl/sharedStrings.xml"))
     strings = []
     for item in root.findall("main:si", namespace):
         strings.append("".join(text_node.text or "" for text_node in item.findall(".//main:t", namespace)))

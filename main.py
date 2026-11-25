@@ -26,6 +26,7 @@ from database import (
 from routers.attendance import router as attendance_router
 from routers.monitoring import router as monitoring_router
 from routers.attendance_checks import router as attendance_checks_router
+from routers.nap_checks import router as nap_checks_router
 from routers.pims_attendance import router as pims_attendance_router
 from routers.billing import router as billing_router
 from routers.backups import router as backups_router
@@ -212,6 +213,7 @@ app.include_router(child_health_router)
 app.include_router(child_change_requests_router)
 app.include_router(attendance_router)
 app.include_router(attendance_checks_router)
+app.include_router(nap_checks_router)
 app.include_router(pims_attendance_router)
 app.include_router(extended_care_fees_router)
 app.include_router(billing_router)

@@ -19,11 +19,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('attendance_records', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('planned_check_in_time', sa.VARCHAR(length=5), nullable=True))
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("attendance_records")}
+    if "planned_check_in_time" not in cols:
+        with op.batch_alter_table('attendance_records', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('planned_check_in_time', sa.VARCHAR(length=5), nullable=True))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('attendance_records', schema=None) as batch_op:
-        batch_op.drop_column('planned_check_in_time')
+    bind = op.get_bind()
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("attendance_records")}
+    if "planned_check_in_time" in cols:
+        with op.batch_alter_table('attendance_records', schema=None) as batch_op:
+            batch_op.drop_column('planned_check_in_time')
 
