@@ -1,6 +1,6 @@
 # コントリビューションガイド
 
-open-hoikuict への改善提案、Issue、Pull Request を歓迎します。
+改善提案、Issue、Pull Request を歓迎します。
 
 ## 基本方針
 
