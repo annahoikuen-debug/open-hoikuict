@@ -402,10 +402,124 @@
     <div class="flex items-center justify-between mb-3">
       <div>
         <h2 class="text-base font-bold text-slate-900">シフト割り当てセル ({{ cells|length }}件)</h2>
-        <p class="text-xs text-slate-500">ピン留めしたセルはソルバー再生成時にも変更されず保持されます。</p>
+        <p class="text-xs text-slate-500">ピン留めしたセルはソルバー再生成時にも変更されず保持されます。セルをクリックして編集できます。</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <input type="search" id="shift-staff-filter" placeholder="職員名で絞り込み..."
+               class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none">
+        <button type="button" id="toggle-shift-view-btn"
+                class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+          リスト表示に切替
+        </button>
       </div>
     </div>
-    <div class="overflow-x-auto max-h-[500px] overflow-y-auto rounded-xl border border-slate-200">
+
+    <!-- 2次元シフト表（職員 × 日付） -->
+    <div id="shift-matrix-panel" class="overflow-x-auto max-h-[560px] overflow-y-auto rounded-xl border border-slate-200">
+      <table class="min-w-full divide-y divide-slate-200 text-xs border-collapse">
+        <thead class="bg-slate-50 sticky top-0 z-20 text-slate-600">
+          <tr>
+            <th class="sticky left-0 z-30 bg-slate-100 px-3 py-2.5 text-left font-bold border-r border-slate-200 min-w-[140px]">職員名</th>
+            {% for d in matrix_dates %}
+            <th class="px-2 py-2 text-center font-semibold border-r border-slate-100 min-w-[76px] whitespace-nowrap">
+              {{ d.strftime('%m/%d') }}<br>
+              <span class="text-[11px] font-normal text-slate-400">{{ ['月','火','水','木','金','土','日'][d.weekday()] }}</span>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 bg-white">
+          {% for sid in matrix_staff %}
+          {% set sname = staff_names.get(sid, sid) %}
+          <tr class="shift-matrix-row hover:bg-slate-50/70" data-staff-name="{{ sname|lower }}">
+            <td class="sticky left-0 z-10 bg-white px-3 py-2 font-semibold text-slate-800 border-r border-slate-200 whitespace-nowrap" title="{{ sid }}">
+              {{ sname }}
+            </td>
+            {% for d in matrix_dates %}
+            {% set c = cell_matrix.get((sid, d)) %}
+            <td class="p-1 text-center border-r border-slate-100 align-middle">
+              {% if c %}
+                {% set badge_cls = 'bg-slate-100 text-slate-600 border-slate-200' %}
+                {% if c.cell_state == 'OFF' or c.slot_label == 'OFF' %}
+                  {% set badge_cls = 'bg-slate-100 text-slate-500 border-slate-200' %}
+                {% elif c.cell_state == 'BREAK' %}
+                  {% set badge_cls = 'bg-amber-50 text-amber-800 border-amber-200' %}
+                {% elif c.is_pinned or c.cell_state == 'pinned' %}
+                  {% set badge_cls = 'bg-purple-50 text-purple-800 border-purple-300 font-bold' %}
+                {% elif c.cell_state in ('WORK', 'specified') %}
+                  {% set badge_cls = 'bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold' %}
+                {% endif %}
+                {% if plan.status != "approved" %}
+                <button type="button"
+                        class="shift-matrix-cell-btn w-full rounded-md border px-1.5 py-1.5 text-[11px] leading-tight transition hover:ring-2 hover:ring-indigo-400 {{ badge_cls }}"
+                        data-staff-id="{{ c.staff_user_id }}"
+                        data-staff-name="{{ sname }}"
+                        data-target-date="{{ c.target_date }}"
+                        data-slot-label="{{ c.slot_label }}"
+                        data-cell-state="{{ c.cell_state }}"
+                        data-is-pinned="{{ 'true' if (c.is_pinned or c.cell_state == 'pinned') else 'false' }}"
+                        data-lock-version="{{ c.lock_version or 1 }}">
+                  {% if c.is_pinned or c.cell_state == 'pinned' %}📌{% endif %}{{ '公休' if (c.cell_state == 'OFF' or c.slot_label == 'OFF') else c.slot_label }}
+                </button>
+                {% else %}
+                <span class="inline-block w-full rounded-md border px-1.5 py-1.5 text-[11px] leading-tight {{ badge_cls }}">
+                  {% if c.is_pinned or c.cell_state == 'pinned' %}📌{% endif %}{{ '公休' if (c.cell_state == 'OFF' or c.slot_label == 'OFF') else c.slot_label }}
+                </span>
+                {% endif %}
+              {% else %}
+              <span class="text-slate-300">-</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- セル編集モーダル -->
+    {% if plan.status != "approved" %}
+    <dialog id="shift-cell-edit-dialog" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl max-w-md w-full">
+      <form method="post" action="/shifts/plans/{{ plan.id }}/cells" class="space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="text-base font-bold text-slate-900">シフトセル編集</h3>
+          <button type="button" id="close-cell-dialog-btn" class="text-slate-400 hover:text-slate-700 text-lg">&times;</button>
+        </div>
+        <p id="cell-dialog-subtitle" class="text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg px-3 py-2"></p>
+        <input type="hidden" name="staff_user_id" id="modal-staff-user-id">
+        <input type="hidden" name="target_date" id="modal-target-date">
+        <input type="hidden" name="lock_version" id="modal-lock-version" value="1">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">時間帯スロット</label>
+          <select name="slot_label" id="modal-slot-label" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            {% for opt in slot_options %}
+              <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+            <option value="OFF">公休 (OFF)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">勤務状態</label>
+          <select name="cell_state" id="modal-cell-state" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <option value="WORK">勤務</option>
+            <option value="BREAK">休憩</option>
+            <option value="OFF">公休</option>
+          </select>
+        </div>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="is_pinned" value="true" id="modal-is-pinned" class="h-4 w-4 rounded border-slate-300 text-indigo-600">
+          <span>再生成時に変更しない（ピン留め固定）</span>
+        </label>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="cancel-cell-dialog-btn" class="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">キャンセル</button>
+          <button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700">保存する</button>
+        </div>
+      </form>
+    </dialog>
+    {% endif %}
+
+    <!-- 従来の詳細リスト表示（切替用） -->
+    <div id="shift-cells-list-panel" class="hidden overflow-x-auto max-h-[500px] overflow-y-auto rounded-xl border border-slate-200">
       <table class="min-w-full divide-y divide-slate-200 text-xs">
         <thead class="bg-slate-50 sticky top-0 z-10 text-left uppercase tracking-wide text-slate-500">
           <tr>
@@ -418,7 +532,7 @@
         </thead>
         <tbody class="divide-y divide-slate-100">
           {% for cell in cells %}
-          <tr class="hover:bg-slate-50/50">
+          <tr class="hover:bg-slate-50/50" data-staff-name="{{ staff_names.get(cell.staff_user_id, cell.staff_user_id)|lower }}">
             <td class="px-3 py-2.5 font-medium text-slate-800" title="{{ cell.staff_user_id }}">
               {{ staff_names.get(cell.staff_user_id, cell.staff_user_id) }}
             </td>
@@ -442,6 +556,7 @@
               <form method="post" action="/shifts/plans/{{ plan.id }}/cells" class="flex items-center gap-1.5 m-0">
                 <input type="hidden" name="staff_user_id" value="{{ cell.staff_user_id }}">
                 <input type="hidden" name="target_date" value="{{ cell.target_date }}">
+                <input type="hidden" name="lock_version" value="{{ cell.lock_version or 1 }}">
                 <select name="slot_label" class="rounded border border-slate-300 py-0.5 px-1.5 text-xs">
                   <option value="{{ cell.slot_label }}">{{ cell.slot_label }} (現在)</option>
                   {% for opt in slot_options %}
@@ -471,6 +586,56 @@
         </tbody>
       </table>
     </div>
+    <script>
+    (() => {
+      const filterInput = document.getElementById('shift-staff-filter');
+      const toggleBtn = document.getElementById('toggle-shift-view-btn');
+      const matrixPanel = document.getElementById('shift-matrix-panel');
+      const listPanel = document.getElementById('shift-cells-list-panel');
+      if (filterInput) {
+        filterInput.addEventListener('input', () => {
+          const q = filterInput.value.trim().toLowerCase();
+          document.querySelectorAll('[data-staff-name]').forEach(row => {
+            row.style.display = (!q || row.dataset.staffName.includes(q)) ? '' : 'none';
+          });
+        });
+      }
+      if (toggleBtn && matrixPanel && listPanel) {
+        toggleBtn.addEventListener('click', () => {
+          const showingMatrix = !matrixPanel.classList.contains('hidden');
+          matrixPanel.classList.toggle('hidden', showingMatrix);
+          listPanel.classList.toggle('hidden', !showingMatrix);
+          toggleBtn.textContent = showingMatrix ? '2次元マトリクス表示に切替' : 'リスト表示に切替';
+        });
+      }
+      const dialog = document.getElementById('shift-cell-edit-dialog');
+      if (dialog) {
+        const closeBtn = document.getElementById('close-cell-dialog-btn');
+        const cancelBtn = document.getElementById('cancel-cell-dialog-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => dialog.close());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => dialog.close());
+        document.querySelectorAll('.shift-matrix-cell-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.getElementById('modal-staff-user-id').value = btn.dataset.staffId;
+            document.getElementById('modal-target-date').value = btn.dataset.targetDate;
+            document.getElementById('modal-lock-version').value = btn.dataset.lockVersion || '1';
+            document.getElementById('cell-dialog-subtitle').textContent = `${btn.dataset.staffName} ／ ${btn.dataset.targetDate}`;
+            const slotSel = document.getElementById('modal-slot-label');
+            const val = btn.dataset.slotLabel;
+            if (!Array.from(slotSel.options).some(o => o.value === val)) {
+              const opt = new Option(val, val);
+              slotSel.add(opt, 0);
+            }
+            slotSel.value = val;
+            const st = btn.dataset.cellState;
+            document.getElementById('modal-cell-state').value = (st === 'OFF' || st === 'BREAK') ? st : 'WORK';
+            document.getElementById('modal-is-pinned').checked = btn.dataset.isPinned === 'true';
+            dialog.showModal();
+          });
+        });
+      }
+    })();
+    </script>
   </section>
   {% endif %}
 </div>

@@ -176,6 +176,10 @@ def plans_detail(
 
     suggestion_state = get_plan_suggestions_with_state(repo.session, plan)
 
+    matrix_dates = sorted({c.target_date for c in cells})
+    matrix_staff = sorted({c.staff_user_id for c in cells}, key=lambda uid: staff_names.get(uid, uid))
+    cell_matrix = {(c.staff_user_id, c.target_date): c for c in cells}
+
     from template_utils import create_templates
 
     templates = create_templates()
@@ -186,6 +190,9 @@ def plans_detail(
             "request": request,
             "plan": plan,
             "cells": cells,
+            "matrix_dates": matrix_dates,
+            "matrix_staff": matrix_staff,
+            "cell_matrix": cell_matrix,
             "violations": violations,
             "audits": audits,
             "jobs": jobs,
