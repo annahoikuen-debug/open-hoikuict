@@ -591,6 +591,7 @@ def update_attendance_verification(
     layout: str = Form(default="flat"),
     status_filter: str = Form(default="all", alias="filter"),
     classroom_id: str = Form(default=""),
+    hud: Optional[str] = Form(default=None),
     notify_parent: bool = Form(default=False),
     reason: str = Form(default=""),
     session: Session = Depends(get_session),
@@ -623,12 +624,14 @@ def update_attendance_verification(
                 request=request, session=session, current_user=current_user,
                 target_day=target_day, selected_layout=selected_layout,
                 selected_filter=selected_filter, selected_classroom_id=selected_classroom_id,
+                hud=hud,
                 notice=notice,
             )
             return templates.TemplateResponse(request, "attendance_checks/_board.html", context)
         return RedirectResponse(url=_build_redirect_url(
             target_day=target_day, selected_layout=selected_layout,
             selected_filter=selected_filter, selected_classroom_id=selected_classroom_id,
+            hud=hud,
             notice=notice,
         ), status_code=303)
 

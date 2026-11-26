@@ -53,7 +53,6 @@
         <div class="flex gap-2">
           {{ reopen_button(req.export, req.year_month, pending=true, approver=true, requested_by=req.requested_by, requested_at=req.requested_at) }}
           <form method="post" action="/billing/zengin/exports/{{ req.export.id }}/reopen-request-cancel-ui" class="m-0">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50">申請を取り消す</button>
           </form>
         </div>
@@ -225,7 +224,7 @@
                 <p>再ダウンロード・銀行提出・結果取込はできません。</p>
               </div>
               {% endif %}
-              {% if current_user and current_user.can_edit and row.export.status.value == "submitted" %}
+              {% if current_user and (current_user.is_admin or current_user.can_export_zengin) and row.export.status.value == "submitted" %}
               <form method="post" action="/billing/zengin/exports/{{ row.export.id }}/import-paid-demo">
                 <button type="submit" class="rounded border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50">全件振替済みで取込</button>
               </form>

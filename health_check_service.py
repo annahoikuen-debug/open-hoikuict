@@ -152,7 +152,7 @@ def run_facility_health_check(session: Session) -> dict[str, Any]:
     # 6. 職員セッション維持時間 (Staff Session Policy)
     try:
         policy = get_staff_session_policy(session)
-        timeout_min = policy.idle_timeout_minutes if policy else 480
+        timeout_min = policy.idle_minutes if policy else 30
         diagnostics.append({
             "id": "staff_session_policy",
             "category": "セキュリティ",

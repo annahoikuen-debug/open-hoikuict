@@ -19,7 +19,7 @@
           value="{{ option.value }}">
         <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
           value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
-          value="{{ selected_classroom_id_value }}">
+          value="{{ selected_classroom_id_value }}"><input type="hidden" name="hud" value="{{ hud_param }}">
         <input type="hidden" name="notify_parent" value="false"><input type="hidden" name="reason" value="">
         <button type="button" data-status-key="{{ option.value }}" data-child-name="{{ row.child.full_name }}"
           data-requires-reason="{{ 'true' if row.verification else 'false' }}"
@@ -128,7 +128,7 @@
         <input type="hidden" name="date" value="{{ target_date_value }}">
         <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
           value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
-          value="{{ selected_classroom_id_value }}">
+          value="{{ selected_classroom_id_value }}"><input type="hidden" name="hud" value="{{ hud_param }}">
         <label class="text-sm">連絡方法<select name="method" required class="block rounded border p-2">
             <option value="phone">電話</option>
             <option value="in_person">口頭</option>
@@ -149,7 +149,7 @@
           value="revoked"><input type="hidden" name="confirmation_id" value="{{ row.contact_confirmation.id }}">
         <input type="hidden" name="layout" value="{{ selected_layout }}"><input type="hidden" name="filter"
           value="{{ selected_filter }}"><input type="hidden" name="classroom_id"
-          value="{{ selected_classroom_id_value }}">
+          value="{{ selected_classroom_id_value }}"><input type="hidden" name="hud" value="{{ hud_param }}">
         <label class="text-sm">取消理由<input name="note" required maxlength="1000" class="ml-2 rounded border p-2"></label>
         <button type="submit" class="rounded border border-rose-300 px-4 py-2 text-rose-700">受付を取り消す</button>
       </form>

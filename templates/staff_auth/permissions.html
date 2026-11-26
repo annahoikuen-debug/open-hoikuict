@@ -59,7 +59,7 @@
   {% for row in rows %}
   {% set user = row.user %}
   <form method="post" action="/staff/permissions/{{ user.id }}" class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-    <div class="grid gap-5 lg:grid-cols-2 2xl:grid-cols-[minmax(15rem,1.2fr)_12rem_minmax(14rem,1fr)_minmax(14rem,1fr)_auto] 2xl:items-start">
+    <div class="grid gap-4 lg:grid-cols-2 2xl:grid-cols-[minmax(14rem,1.2fr)_11rem_repeat(4,minmax(11rem,1fr))_auto] 2xl:items-start">
       <div>
         <div class="flex flex-wrap items-center gap-2">
           <p class="font-semibold text-slate-900">{{ user.display_name }}</p>
@@ -98,6 +98,22 @@
         <input type="checkbox" name="can_manage_billing_accounts" value="1" class="mt-0.5" {% if user.can_manage_billing_accounts_effective %}checked{% endif %} {% if user.staff_role in ['admin', 'view_only'] %}disabled{% endif %}>
         <span>
           <span class="block text-sm font-medium text-slate-800">請求・口座情報管理</span>
+          {% if user.staff_role == 'admin' %}<span class="block text-xs text-indigo-600">管理者には常に付与</span>{% elif user.staff_role == 'view_only' %}<span class="block text-xs text-slate-500">閲覧のみには付与不可</span>{% endif %}
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-200 px-4 py-3 {% if user.staff_role == 'view_only' %}bg-slate-50{% endif %}">
+        <input type="checkbox" name="can_export_documents" value="1" class="mt-0.5" {% if user.can_export_documents_effective %}checked{% endif %} {% if user.staff_role in ['admin', 'view_only'] %}disabled{% endif %}>
+        <span>
+          <span class="block text-sm font-medium text-slate-800">帳票出力</span>
+          {% if user.staff_role == 'admin' %}<span class="block text-xs text-indigo-600">管理者には常に付与</span>{% elif user.staff_role == 'view_only' %}<span class="block text-xs text-slate-500">閲覧のみには付与不可</span>{% endif %}
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 rounded-lg border border-slate-200 px-4 py-3 {% if user.staff_role == 'view_only' %}bg-slate-50{% endif %}">
+        <input type="checkbox" name="can_export_zengin" value="1" class="mt-0.5" {% if user.can_export_zengin_effective %}checked{% endif %} {% if user.staff_role in ['admin', 'view_only'] %}disabled{% endif %}>
+        <span>
+          <span class="block text-sm font-medium text-slate-800">全銀Zengin出力</span>
           {% if user.staff_role == 'admin' %}<span class="block text-xs text-indigo-600">管理者には常に付与</span>{% elif user.staff_role == 'view_only' %}<span class="block text-xs text-slate-500">閲覧のみには付与不可</span>{% endif %}
         </span>
       </label>

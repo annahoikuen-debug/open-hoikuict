@@ -221,8 +221,9 @@
 
   form.addEventListener('submit', event => {
     event.preventDefault();
-    if (event.submitter?.value !== 'publish') {
-      save('draft');
+    const action = event.submitter?.value || 'draft';
+    if (action !== 'publish') {
+      save(action === 'request_review' ? 'request_review' : 'draft');
       return;
     }
     const preview = document.getElementById('reply-publish-preview');

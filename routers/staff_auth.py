@@ -1186,6 +1186,8 @@ def update_staff_permissions(
     staff_role: str = Form("can_edit"),
     can_manage_child_records: str = Form(""),
     can_manage_billing_accounts: str = Form(""),
+    can_export_documents: str = Form(""),
+    can_export_zengin: str = Form(""),
     session: Session = Depends(get_session),
     current_user=Depends(get_current_staff_user),
 ):
@@ -1208,12 +1210,18 @@ def update_staff_permissions(
     if next_role == "admin":
         next_can_manage_child_records = target_user.can_manage_child_records
         next_can_manage_billing_accounts = target_user.can_manage_billing_accounts
+        next_can_export_documents = target_user.can_export_documents
+        next_can_export_zengin = target_user.can_export_zengin
     elif next_role == "can_edit" and target_user.staff_role != "admin":
         next_can_manage_child_records = _checked(can_manage_child_records)
         next_can_manage_billing_accounts = _checked(can_manage_billing_accounts)
+        next_can_export_documents = _checked(can_export_documents)
+        next_can_export_zengin = _checked(can_export_zengin)
     else:
         next_can_manage_child_records = False
         next_can_manage_billing_accounts = False
+        next_can_export_documents = False
+        next_can_export_zengin = False
 
     changes = [
         ("staff_role", target_user.staff_role, next_role),
@@ -1227,6 +1235,16 @@ def update_staff_permissions(
             target_user.can_manage_billing_accounts,
             next_can_manage_billing_accounts,
         ),
+        (
+            "can_export_documents",
+            target_user.can_export_documents,
+            next_can_export_documents,
+        ),
+        (
+            "can_export_zengin",
+            target_user.can_export_zengin,
+            next_can_export_zengin,
+        ),
     ]
     add_permission_change_logs(
         session,
@@ -1238,6 +1256,8 @@ def update_staff_permissions(
     target_user.is_calendar_admin = next_role == "admin"
     target_user.can_manage_child_records = next_can_manage_child_records
     target_user.can_manage_billing_accounts = next_can_manage_billing_accounts
+    target_user.can_export_documents = next_can_export_documents
+    target_user.can_export_zengin = next_can_export_zengin
     target_user.updated_at = utc_now()
     session.add(target_user)
     session.commit()
