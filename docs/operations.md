@@ -32,6 +32,16 @@
 
 正式な停止方式、施設文例DB・設定・秘密情報の保護、別系統複製、保持、復元は[バックアップ仕様](backup-restore-spec.md)と[運用試験仕様](pilot-deployment-spec-v2.md)に従います。
 
+### 自動 DR バックアップ・復元検証（CLI）
+
+単一園構成（`HOIKUICT_PROFILE=embedded` / SQLite）では、定期タスク（Windows タスクスケジューラや cron）から以下の検証スクリプトを実行し、`integrity_check` と全テーブル復元の健全性を自動確認できます。
+
+```bash
+python -m scripts.backup_and_verify --source-db ./hoikuict.db --output-dir ./backups/dr
+```
+
+また、本番起動前には `.env` の設定値が本番セキュリティ要件を満たしているか `security_config.validate_runtime_security()` で事前確認してください。
+
 ## アカウントの管理
 
 初期管理者はローカル認証CLIで作成し、本人が有効化コードからパスワードを設定します。管理者は職員の基本ロール・業務別権限・担当クラス、保護者の状態・園児リンクを確認します。
