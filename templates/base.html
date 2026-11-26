@@ -1021,6 +1021,10 @@ current_path.startswith('/parent-accounts/registration-qr') %}
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/child-records/progress') or '/progress-records' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">児童票作成状況</a>
                   <a href="/plans/" data-tour-step="5"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/plans') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">指導計画</a>
+                  {% if staff_session_user and staff_session_user.can_export_documents %}
+                  <a href="/document-exports"
+                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/document-exports') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">帳票出力センター</a>
+                  {% endif %}
                   <a href="/health"
                     class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/health') or '/health' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">健康管理</a>
                   <a href="/attendance" data-shortcut="a" data-tour-step="2"

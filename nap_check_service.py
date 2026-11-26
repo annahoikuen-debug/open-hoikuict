@@ -160,13 +160,17 @@ def bulk_set_slot_for_children(
     posture: str = "back",
     breathing: str = "normal",
     staff_name: str = "",
+    overwrite_existing: bool = False,
 ) -> int:
-    """複数園児の特定スロットを一括セット（差分ベースのベース登録）する。"""
+    """複数園児の特定スロットを一括セット（既存記録を保護する差分登録）する。"""
     updated_count = 0
     now = utc_now()
     for cid in child_ids:
         rec = get_or_create_nap_record(session, cid, target_date, created_by=staff_name)
         slots = dict(rec.slots or {})
+        existing = slots.get(time_key)
+        if not overwrite_existing and isinstance(existing, dict) and existing.get("posture"):
+            continue
         slots[time_key] = {
             "posture": posture,
             "breathing": breathing,

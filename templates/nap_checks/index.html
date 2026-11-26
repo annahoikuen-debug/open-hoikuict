@@ -271,12 +271,12 @@
 
             <!-- メモ入力欄（コドモン互換: この日の体調・午睡のメモ） -->
             <div class="mt-1.5">
-              <form hx-post="/nap-checks/memo" hx-trigger="change, keyup delay:800ms" hx-swap="none" class="flex items-center space-x-1">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <form hx-post="/nap-checks/memo" hx-trigger="change, keyup delay:800ms" hx-target="#nap-memo-status-{{ row.child.id }}" hx-swap="innerHTML" class="flex items-center space-x-1">
                 <input type="hidden" name="child_id" value="{{ row.child.id }}">
                 <input type="hidden" name="target_date" value="{{ sheet.target_date.isoformat() }}">
                 <input type="text" name="memo" value="{{ row.memo or '' }}" placeholder="✏️ 体調・午睡メモ..."
                        class="w-full rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-700 placeholder-slate-400 focus:border-emerald-500 focus:outline-none">
+                <span id="nap-memo-status-{{ row.child.id }}" class="shrink-0 text-[10px]"></span>
               </form>
             </div>
           </td>

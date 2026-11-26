@@ -4,12 +4,13 @@
 <div class="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
     <div>
         <h1 class="text-2xl font-bold text-slate-800">帳票出力履歴</h1>
-        <p class="text-slate-600">すべての帳票出力ログを一覧できます。</p>
+        <p class="text-slate-600">すべての帳票出力ログを一覧できます（全 {{ total or 0 }} 件）。</p>
     </div>
+    <a href="/document-exports" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">&larr; 帳票出力センターへ戻る</a>
 </div>
 
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
-    <form class="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4" method="get"
+    <form class="px-5 py-4 flex flex-wrap items-center gap-4" method="get"
         action="/document-exports/history">
         <div class="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
             <label class="text-sm font-medium text-slate-700">帳票種別:</label>
@@ -30,6 +31,16 @@
                 <option value="{{ key }}" {% if status==key %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+            <label class="text-sm font-medium text-slate-700">対象月:</label>
+            <input type="month" name="target_month" value="{{ target_month or '' }}"
+                class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+            <label class="text-sm font-medium text-slate-700">出力者:</label>
+            <input type="text" name="exported_by" value="{{ exported_by or '' }}" placeholder="氏名で検索"
+                class="border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
         </div>
         <button type="submit"
             class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium transition">
@@ -92,12 +103,21 @@
     </div>
 </div>
 
-{% if has_next %}
-<div class="mt-6">
-    <a href="/document-exports/history?page={{ page + 1 }}{% if export_type %}&export_type={{ export_type }}{% endif %}{% if status %}&status={{ status }}{% endif %}"
+{% if has_prev or has_next %}
+<div class="mt-6 flex items-center gap-4">
+    {% if has_prev %}
+    <a href="/document-exports/history?page={{ page - 1 }}{% if export_type %}&export_type={{ export_type }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if target_month %}&target_month={{ target_month }}{% endif %}{% if exported_by %}&exported_by={{ exported_by|urlencode }}{% endif %}"
+        class="text-sm font-medium text-emerald-600 hover:underline">
+        &larr; 前へ
+    </a>
+    {% endif %}
+    <span class="text-sm text-slate-500">ページ {{ page }}</span>
+    {% if has_next %}
+    <a href="/document-exports/history?page={{ page + 1 }}{% if export_type %}&export_type={{ export_type }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if target_month %}&target_month={{ target_month }}{% endif %}{% if exported_by %}&exported_by={{ exported_by|urlencode }}{% endif %}"
         class="text-sm font-medium text-emerald-600 hover:underline">
         次へ &rarr;
     </a>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

@@ -18,10 +18,10 @@ from sqlmodel import Session, func, select
 
 from auth import get_current_staff_user
 from database import get_session
-from models import Child, Classroom, DocumentExportLog
+from models import Child, ChildStatus, Classroom, DocumentExportLog, User
 from models.organization import Facility
 from plan_docs.contracts import DocumentType
-from plan_docs.db_models import PlanDocumentRow
+from plan_docs.db_models import PlanDailyReflectionRow, PlanDocumentAttachmentRow, PlanDocumentRow
 from plan_docs.services.monthly_export import pdf_bytes
 from plan_docs.services.monthly_export_layout import make_layout
 from plan_docs.services.monthly_library import new_sheet
@@ -110,6 +110,8 @@ def document_export_history(
     page: int = Query(default=1, ge=1),
     export_type: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
+    target_month: Optional[str] = Query(default=None),
+    exported_by: Optional[str] = Query(default=None),
 ):
     require_document_exporter(session, current_user)
 
@@ -121,6 +123,13 @@ def document_export_history(
     if status:
         base_query = base_query.where(DocumentExportLog.status == status)
         count_query = count_query.where(DocumentExportLog.status == status)
+    if target_month:
+        base_query = base_query.where(DocumentExportLog.target_month == target_month.strip())
+        count_query = count_query.where(DocumentExportLog.target_month == target_month.strip())
+    if exported_by:
+        actor_kw = f"%{exported_by.strip()}%"
+        base_query = base_query.where(DocumentExportLog.exported_by_name.ilike(actor_kw))
+        count_query = count_query.where(DocumentExportLog.exported_by_name.ilike(actor_kw))
 
     total = session.exec(count_query).one()
 
@@ -140,9 +149,13 @@ def document_export_history(
             "current_user": current_user,
             "logs": paginated_logs,
             "page": page,
+            "total": total,
+            "has_prev": page > 1,
             "has_next": has_next,
             "export_type": export_type,
             "status": status,
+            "target_month": target_month or "",
+            "exported_by": exported_by or "",
             "export_type_labels": EXPORT_TYPE_LABELS,
             "export_format_labels": EXPORT_FORMAT_LABELS,
             "status_labels": STATUS_LABELS,
@@ -167,69 +180,97 @@ def get_document_preview(
 
     month_str = target_month or utc_now().strftime("%Y-%m")
     warnings: list[dict[str, str]] = []
+    facility = session.exec(select(Facility)).first()
+    facility_name = facility.name if facility and facility.name else "保育園"
+    classroom = session.get(Classroom, classroom_id) if classroom_id else None
+    cls_name = classroom.name if classroom else "全クラス"
+
     preview_data: dict[str, Any] = {
         "export_type": export_type,
         "export_type_label": EXPORT_TYPE_LABELS.get(export_type, export_type),
         "target_month": month_str,
-        "facility_name": "社会福祉法人 ぬのはな保育園",
-        "is_sample": True,
-        "sample_notice": "※表示されている内容は書面レイアウトおよび配置基準の確認用サンプルです。",
+        "facility_name": facility_name,
+        "is_sample": False,
+        "sample_notice": "",
     }
 
     if export_type == "attendance":
+        active_staff_count = session.exec(select(func.count(User.id)).where(User.is_active == True)).one()  # noqa: E712
+        preview_data["is_sample"] = True
+        preview_data["sample_notice"] = "※表示されている明細行は書式レイアウト確認用のサンプルプレビューです。"
         preview_data["title"] = "勤 務 割 実 績 表（監 査 提 出 用）"
         preview_data["sections"] = [
             {"label": "対象期間", "value": f"{month_str} (1日〜末日)"},
-            {"label": "集計対象職員", "value": "常勤・非常勤 全18名"},
+            {"label": "集計対象職員", "value": f"有効職員 全{active_staff_count}名"},
             {"label": "配置基準連動", "value": "厚生労働省告示第49号 準拠"},
         ]
         preview_data["sample_headers"] = ["日付・曜日", "早番 (7:00-)", "日勤 (8:30-)", "遅番 (10:00-)", "配置充足率"]
         preview_data["sample_rows"] = [
             [f"{month_str}-01 (月)", "2名", "6名", "3名", "100% (基準クリア)"],
             [f"{month_str}-02 (火)", "2名", "7名", "2名", "100% (基準クリア)"],
-            [f"{month_str}-03 (水)", "2名", "6名", "3名", "100% (基準クリア)"],
         ]
 
     elif export_type == "monthly_plan":
-        preview_data["title"] = "月 次 指 導 計 画 書（月 案）"
+        doc_stmt = select(PlanDocumentRow).where(PlanDocumentRow.document_type == DocumentType.MONTHLY_PLAN)
+        if classroom_id:
+            doc_stmt = doc_stmt.where(PlanDocumentRow.classroom_id == classroom_id)
+        doc = session.exec(doc_stmt.order_by(PlanDocumentRow.updated_at.desc())).first()
+        preview_data["title"] = doc.title if doc else "月 次 指 導 計 画 書（月 案）"
         preview_data["sections"] = [
-            {"label": "対象クラス", "value": "3歳児 すみれ組"},
-            {"label": "対象月", "value": month_str},
-            {"label": "作成担当者", "value": current_user.name or "担任保育士"},
+            {"label": "対象クラス", "value": cls_name},
+            {"label": "対象月", "value": doc.target_period if doc and doc.target_period else month_str},
+            {"label": "作成担当者", "value": (doc.owner_name if doc else None) or current_user.name or "担任保育士"},
         ]
-        preview_data["fields"] = [
-            {"name": "今月のねらい", "content": "秋の自然物に触れ、落ち葉や木の実を使って見立て遊びや集団遊びを楽しむ。"},
-            {"name": "養護（生命・情緒）", "content": "手洗い・うがいを丁寧に行い、衣服の調節を自分で試みる。"},
-            {"name": "教育（5領域）", "content": "散歩先で拾った自然物を使って造形遊びを行い、形や色の違いに気づく機会を設ける。"},
-            {"name": "保護者・地域支援", "content": "感染症予防の呼びかけを行い、家庭での健康管理についての情報共有を図る。"},
-        ]
+        if doc and doc.sections:
+            preview_data["fields"] = [
+                {"name": str(s.get("title") or "項目"), "content": str(s.get("content") or "")}
+                for s in doc.sections[:6]
+                if isinstance(s, dict)
+            ]
+        else:
+            preview_data["is_sample"] = True
+            preview_data["sample_notice"] = "※対象月の月案データ未登録のため、書式サンプルプレビューを表示しています。"
+            preview_data["fields"] = [
+                {"name": "今月のねらい", "content": "季節の自然物に触れ、見立て遊びや集団遊びを楽しむ。"},
+                {"name": "養護（生命・情緒）", "content": "手洗い・うがいを丁寧に行い、衣服の調節を自分で試みる。"},
+                {"name": "教育（5領域）", "content": "自然物を使った造形遊びを通じ、形や色の違いに気づく機会を設ける。"},
+            ]
 
     elif export_type == "daily_plan":
-        preview_data["title"] = "デ イ リ ー 指 導 計 画（日 案）"
+        doc_stmt = select(PlanDocumentRow).where(PlanDocumentRow.document_type == DocumentType.DAILY_PLAN)
+        if classroom_id:
+            doc_stmt = doc_stmt.where(PlanDocumentRow.classroom_id == classroom_id)
+        doc = session.exec(doc_stmt.order_by(PlanDocumentRow.updated_at.desc())).first()
+        preview_data["title"] = doc.title if doc else "デ イ リ ー 指 導 計 画（日 案）"
         preview_data["sections"] = [
-            {"label": "対象クラス", "value": "3歳児 さくら組"},
-            {"label": "対象日", "value": f"{month_str}-16 (月)"},
-            {"label": "作成担当者", "value": current_user.name or "担任保育士"},
+            {"label": "対象クラス", "value": cls_name},
+            {"label": "対象日", "value": doc.target_date if doc and doc.target_date else month_str},
+            {"label": "作成担当者", "value": (doc.owner_name if doc else None) or current_user.name or "担任保育士"},
         ]
-        preview_data["fields"] = [
-            {"name": "本日のねらい", "content": "秋の自然物に親しみながら、友達と一緒に集めた落ち葉や木の実を使って見立て遊びを楽しむ。"},
-            {"name": "健康・安全への配慮", "content": "気温の変化に合わせた衣服の調整を行い、外遊び後の手洗い・うがいを丁寧に行う。"},
-            {"name": "1日の主な活動", "content": "近隣公園への散歩（落ち葉拾い）、見立て遊び、給食指導"},
-            {"name": "評価・反省", "content": "公園での落ち葉集めはどの子も意欲的に参加し、見立て遊びへ発展させることができた。"},
-        ]
+        if doc and doc.sections:
+            preview_data["fields"] = [
+                {"name": str(s.get("title") or "項目"), "content": str(s.get("content") or "")}
+                for s in doc.sections[:6]
+                if isinstance(s, dict)
+            ]
+        else:
+            preview_data["is_sample"] = True
+            preview_data["sample_notice"] = "※対象クラスの日案データ未登録のため、書式サンプルプレビューを表示しています。"
+            preview_data["fields"] = [
+                {"name": "本日のねらい", "content": "季節の自然物に親しみながら、友達と一緒に遊びを楽しむ。"},
+                {"name": "健康・安全への配慮", "content": "気温の変化に合わせた衣服の調整と手洗い・うがいを行う。"},
+                {"name": "1日の主な活動", "content": "戸外遊び、給食指導、午睡"},
+            ]
 
     elif export_type == "billing":
+        enrolled_count = session.exec(
+            select(func.count(Child.id)).where(Child.status == ChildStatus.enrolled)
+        ).one()
         preview_data["title"] = "延 長 保 育 料 ・ 請 求 明 細 書"
         preview_data["sections"] = [
             {"label": "対象月", "value": month_str},
-            {"label": "請求対象児童", "value": "全園児 84名"},
+            {"label": "請求対象児童", "value": f"在籍園児 {enrolled_count}名"},
             {"label": "振替指定日", "value": f"{month_str}-27"},
-        ]
-        preview_data["sample_headers"] = ["園児氏名", "基本保育料", "延長保育料", "実費・給食費", "請求合計"]
-        preview_data["sample_rows"] = [
-            ["山田 太郎", "¥0 (無償化)", "¥3,500 (7時間)", "¥5,500", "¥9,000"],
-            ["佐藤 健太", "¥0 (無償化)", "¥1,500 (3時間)", "¥5,500", "¥7,000"],
-            ["高橋 蓮", "¥0 (無償化)", "¥0 (延長なし)", "¥5,500", "¥5,500"],
         ]
 
     elif export_type == "zengin":
@@ -433,7 +474,7 @@ def download_daily_plan_pdf_route(
     """日案のA4縦PDF帳票を出力・ダウンロードする (P2-1, P2-2)。"""
     require_document_exporter(session, current_user)
     from plan_docs.services.daily_export_layout import render_daily_plan_pdf
-    from plan_docs.db_models import PlanDocumentAttachmentRow, PlanDocumentRow
+    from plan_docs.db_models import PlanDocumentRow
 
     target_date_val = date_str or utc_now().strftime("%Y-%m-%d")
     cls_name = "さくら組"
@@ -495,6 +536,52 @@ def download_daily_plan_pdf_route(
             sample_plan["title"] = doc.title
             sample_plan["target_date"] = doc.target_date or target_date_val
             sample_plan["owner_name"] = doc.owner_name or sample_plan["owner_name"]
+            if doc.classroom_id:
+                doc_cls = session.get(Classroom, doc.classroom_id)
+                if doc_cls:
+                    sample_plan["classroom_name"] = doc_cls.name
+            # 実DBのセクション内容を日案帳票へ反映
+            aims_parts: list[str] = []
+            health_parts: list[str] = []
+            activity_rows: list[dict[str, str]] = []
+            reflection_parts: list[str] = []
+            for sec in doc.sections or []:
+                if not isinstance(sec, dict):
+                    continue
+                sec_title = str(sec.get("title") or "").strip()
+                sec_content = str(sec.get("content") or "").strip()
+                if not sec_content:
+                    continue
+                if any(k in sec_title for k in ("ねらい", "目標")):
+                    aims_parts.append(sec_content)
+                elif any(k in sec_title for k in ("健康", "安全", "養護", "配慮")):
+                    health_parts.append(sec_content)
+                elif any(k in sec_title for k in ("反省", "評価", "振り返り")):
+                    reflection_parts.append(sec_content)
+                else:
+                    activity_rows.append(
+                        {
+                            "time_label": sec_title or "活動",
+                            "child_state": sec_content,
+                            "support": "",
+                            "considerations": "",
+                        }
+                    )
+            if aims_parts:
+                sample_plan["daily_aims"] = "\n".join(aims_parts)
+            if health_parts:
+                sample_plan["daily_health_safety"] = "\n".join(health_parts)
+            if activity_rows:
+                sample_plan["timeline_rows"] = activity_rows
+            if reflection_parts:
+                sample_plan["reflection"] = "\n".join(reflection_parts)
+
+            daily_reflection = session.exec(
+                select(PlanDailyReflectionRow).where(PlanDailyReflectionRow.document_id == doc.id)
+            ).first()
+            if daily_reflection and getattr(daily_reflection, "summary", None):
+                sample_plan["reflection"] = daily_reflection.summary
+
             attachments = session.exec(
                 select(PlanDocumentAttachmentRow).where(PlanDocumentAttachmentRow.plan_document_id == doc.id)
             ).all()

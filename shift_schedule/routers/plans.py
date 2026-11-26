@@ -90,7 +90,7 @@ def plans_detail(
         from ..services.gap_detector import detect_day_gap
 
         target_dates = sorted({c.target_date for c in cells})
-        for td in target_dates[:3]:  # 最大3日分プレビュー
+        for td in target_dates:
             try:
                 gap_warnings.extend(detect_day_gap(repo.session, plan_id, td))
             except Exception:
