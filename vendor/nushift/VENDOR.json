@@ -1,6 +1,6 @@
 {
   "source_repo": "E:\\nushift\\nushift",
-  "source_commit": "976f3a0",
+  "source_commit": "0133f4b",
   "files": {
     "__init__.py": "2b60071fd84e877a49d9505f7f5e571a28aef58ec8a513ff0014d9d0576595b7",
     "__main__.py": "0b89873abf98b990c0cc0e3a72b0ff10a5505a8ea047ab4bd68cbfeebf69ac1d",
@@ -37,8 +37,9 @@
     "score.py": "fcde7025bc84a60c1b795fd2d6362e315f9d61546ff4685742bb8e6a8aeedf56",
     "shadow_state.py": "816d3fc2e90206aad5a5902b322ec9bdb69c4183c1debf1312c4042d9e379d76",
     "shift_patterns.py": "3e554c034168024aa3418c9c04b695fba4be5f80e9ab9b83e53aa544a3d685a4",
-    "solver.py": "c875d3cd1641ec184dfa330db50e230710c23c104d9e8e71936e57941c10c7e1",
+    "solver.py": "b9e7d976e89c681dd1a356724fcbb050f8732ff1007e2078e75c917c0145e55e",
     "solver_core/__init__.py": "66d80d255eed1c824e302d7fbf637518175e2257207495c985683bf694ea3253",
+    "solver_core/backend.py": "37a688f074f0ef99ee803bad89917a996b4c1d1b98154b07411ef707b442a5dd",
     "solver_core/constraints/classrooms.py": "86dd58b23c4bbbf177a4200cf4fbf4f77e6f63ea329fa2da1e49c807a258a4eb",
     "solver_core/constraints_util.py": "0e06ddd740e7666aa274c2de08fd2523fe9d8ea2d35425c8a1f20ae3d22dd2fd",
     "solver_core/repair.py": "ae50c87931581a9e8118b8aeb8a3067854209b72702780eb85c65af9f1c370ea",
