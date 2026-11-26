@@ -3,10 +3,9 @@ from decimal import Decimal
 import re
 from typing import Optional
 import unicodedata
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy.orm import selectinload
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
@@ -42,23 +41,7 @@ from daily_contact_service import (
     extract_copyable_fields,
     save_bulk_parent_contacts,
 )
-from facility_settings_service import (
-    get_board_qr_version,
-    is_board_qr_enabled,
-    is_parent_billing_enabled,
-)
-from guardian_qr_service import (
-    execute_sibling_qr_punch,
-    generate_parent_qr_token,
-    generate_parent_qr_svg,
-    get_sibling_qr_punch_info,
-    verify_board_qr_token,
-)
-from parent_billing_service import (
-    get_parent_billing_claims_list,
-    get_parent_claim_detail,
-    get_parent_realtime_extended_care_summary,
-)
+from facility_settings_service import is_parent_billing_enabled
 from database import get_session
 from models import (
     Child,
@@ -88,9 +71,6 @@ from models import (
     SurveyAudienceType,
     SurveyQuestion,
     SurveyStatus,
-    Video,
-    VideoStatus,
-    VideoTargetType,
 )
 from notice_content import notice_attachment_path, render_notice_body_html
 from parent_push_subscription_service import (
@@ -2604,297 +2584,10 @@ def parent_pickup_save(request: Request, child_id: int, date: str = Form(...), r
     return RedirectResponse(f"/parent-portal/?date={day.isoformat()}&notice=pickup_saved", status_code=303)
 
 
-@router.get("/videos", response_class=HTMLResponse)
-def parent_videos_list(
-    request: Request,
-    page: int = Query(1, ge=1),
-    per_page: int = Query(9, ge=1, le=50),
-    session: Session = Depends(get_session),
-):
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        return RedirectResponse(url="/parent-portal/login", status_code=303)
+from routers.parent_portal.billing import router as _billing_router  # noqa: E402
+from routers.parent_portal.qr_checkin import router as _qr_checkin_router  # noqa: E402
+from routers.parent_portal.videos import router as _videos_router  # noqa: E402
 
-    classroom_ids = _classroom_ids(current_parent_user)
-    now = utc_now()
-
-    # Load all published videos
-    videos = session.exec(
-        select(Video)
-        .options(selectinload(Video.target_classroom))
-        .where(Video.status == VideoStatus.published)
-        .order_by(Video.published_at.desc())
-    ).all()
-
-    # Filter active and accessible videos
-    accessible_videos = []
-    for video in videos:
-        if not video.is_currently_active(now):
-            continue
-        if video.target_type == VideoTargetType.all:
-            accessible_videos.append(video)
-        elif video.target_type == VideoTargetType.classroom and video.target_classroom_id in classroom_ids:
-            accessible_videos.append(video)
-
-    total_count = len(accessible_videos)
-    total_pages = max(1, (total_count + per_page - 1) // per_page)
-    offset = (page - 1) * per_page
-    paged_videos = accessible_videos[offset : offset + per_page]
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/videos.html",
-        {
-            "request": request,
-            "current_parent_user": current_parent_user,
-            "videos": paged_videos,
-            "total_count": total_count,
-            "page": page,
-            "total_pages": total_pages,
-            "per_page": per_page,
-            "now": now,
-        },
-    )
-
-
-@router.get("/videos/{video_id}", response_class=HTMLResponse)
-def parent_video_detail(
-    video_id: int,
-    request: Request,
-    session: Session = Depends(get_session),
-):
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        return RedirectResponse(url="/parent-portal/login", status_code=303)
-
-    video = session.get(Video, video_id)
-    if not video:
-        raise HTTPException(status_code=404, detail="指定された動画が見つかりません。")
-
-    now = utc_now()
-    if not video.is_currently_active(now):
-        raise HTTPException(status_code=404, detail="この動画は現在公開されていません。")
-
-    classroom_ids = _classroom_ids(current_parent_user)
-    if video.target_type == VideoTargetType.classroom and video.target_classroom_id not in classroom_ids:
-        raise HTTPException(status_code=403, detail="この動画はお子様のクラス向けに限定公開されています。")
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/video_detail.html",
-        {
-            "request": request,
-            "current_parent_user": current_parent_user,
-            "video": video,
-            "now": now,
-        },
-    )
-
-
-@router.get("/qr-code.svg")
-def parent_qr_code_image(
-    request: Request,
-    session: Session = Depends(get_session),
-):
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        raise HTTPException(status_code=401, detail="ログインが必要です")
-
-    token = generate_parent_qr_token(
-        parent_account_id=current_parent_user.id,
-        family_id=current_parent_user.family_id,
-        expires_in_days=30,
-    )
-    svg_str = generate_parent_qr_svg(token)
-    response = Response(content=svg_str, media_type="image/svg+xml")
-    response.headers["Cache-Control"] = "private, max-age=3600"
-    return response
-
-
-@router.get("/board-check-in", response_class=HTMLResponse)
-def parent_board_check_in_page(
-    request: Request,
-    t: str = Query(default=""),
-    session: Session = Depends(get_session),
-):
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        next_path = f"/parent-portal/board-check-in?t={quote(t, safe='')}" if t else "/parent-portal/board-check-in"
-        return RedirectResponse(url=f"/parent-portal/login?redirect={quote(next_path, safe='')}", status_code=303)
-
-    error_message = ""
-    punch_info = None
-    try:
-        verify_board_qr_token(
-            t,
-            expected_version=get_board_qr_version(session),
-            enabled=is_board_qr_enabled(session),
-        )
-        punch_info = get_sibling_qr_punch_info(session, parent_account_id=current_parent_user.id)
-    except ValueError as exc:
-        error_message = str(exc)
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/board_check_in.html",
-        {
-            "current_parent_user": current_parent_user,
-            "parent_portal_mode": True,
-            "board_token": t,
-            "error_message": error_message,
-            "punch_info": punch_info,
-            "completed": False,
-            "completed_action": "",
-            "punched_count": 0,
-        },
-        status_code=400 if error_message else 200,
-        headers={"Cache-Control": "private, no-store"},
-    )
-
-
-@router.post("/board-check-in", response_class=HTMLResponse)
-async def parent_board_check_in_submit(
-    request: Request,
-    session: Session = Depends(get_session),
-):
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        return RedirectResponse(url="/parent-portal/login", status_code=303)
-
-    form = await request.form()
-    token = str(form.get("t") or "").strip()
-    action = str(form.get("action") or "").strip()
-    actual_pickup_person = str(form.get("actual_pickup_person") or "").strip()
-    raw_child_ids = form.getlist("child_ids")
-
-    error_message = ""
-    punch_info = None
-    completed = False
-    punched_count = 0
-
-    try:
-        verify_board_qr_token(
-            token,
-            expected_version=get_board_qr_version(session),
-            enabled=is_board_qr_enabled(session),
-        )
-        punch_info = get_sibling_qr_punch_info(session, parent_account_id=current_parent_user.id)
-        allowed_ids = {int(c["child_id"]) for c in punch_info["children"]}
-        selected_ids = []
-        for raw_id in raw_child_ids:
-            try:
-                cid = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            if cid in allowed_ids and cid not in selected_ids:
-                selected_ids.append(cid)
-
-        if action not in {"check_in", "check_out"}:
-            raise ValueError("打刻種別（登園・降園）を選択してください。")
-        if not selected_ids:
-            raise ValueError("打刻対象のお子さまを1名以上選択してください。")
-
-        records = execute_sibling_qr_punch(
-            session,
-            child_ids=selected_ids,
-            action=action,
-            actual_pickup_person=actual_pickup_person,
-            actor_name=f"掲示板QR({current_parent_user.display_name})",
-        )
-        session.commit()
-        punched_count = len(records)
-        completed = True
-        punch_info = get_sibling_qr_punch_info(session, parent_account_id=current_parent_user.id)
-    except ValueError as exc:
-        error_message = str(exc)
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/board_check_in.html",
-        {
-            "current_parent_user": current_parent_user,
-            "parent_portal_mode": True,
-            "board_token": token,
-            "error_message": error_message,
-            "punch_info": punch_info,
-            "completed": completed,
-            "completed_action": action,
-            "punched_count": punched_count,
-        },
-        status_code=400 if error_message else 200,
-        headers={"Cache-Control": "private, no-store"},
-    )
-
-
-@router.get("/billing", response_class=HTMLResponse)
-def parent_billing_index(
-    request: Request,
-    year_month: Optional[str] = Query(default=None),
-    tab: Optional[str] = Query(default="realtime"),
-    session: Session = Depends(get_session),
-):
-    if not is_parent_billing_enabled(session):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        return RedirectResponse(url="/parent-portal/login", status_code=303)
-
-    realtime_summary = get_parent_realtime_extended_care_summary(
-        session,
-        family_id=current_parent_user.family_id,
-        year_month=year_month,
-    )
-    claims = get_parent_billing_claims_list(
-        session,
-        family_id=current_parent_user.family_id,
-    )
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/billing.html",
-        {
-            "request": request,
-            "current_parent_user": current_parent_user,
-            "parent_portal_mode": True,
-            "realtime_summary": realtime_summary,
-            "claims": claims,
-            "active_tab": tab,
-            "target_year_month": realtime_summary["year_month"],
-        },
-    )
-
-
-@router.get("/billing/claims/{claim_id}", response_class=HTMLResponse)
-def parent_billing_claim_detail_view(
-    request: Request,
-    claim_id: int,
-    session: Session = Depends(get_session),
-):
-    if not is_parent_billing_enabled(session):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    current_parent_user = _get_parent_account(request, session)
-    if not current_parent_user:
-        return RedirectResponse(url="/parent-portal/login", status_code=303)
-
-    claim_detail = get_parent_claim_detail(
-        session,
-        family_id=current_parent_user.family_id,
-        claim_id=claim_id,
-    )
-    if not claim_detail:
-        raise HTTPException(status_code=404, detail="請求明細が見つかりません")
-
-    return templates.TemplateResponse(
-        request,
-        "parent_portal/billing_claim_detail.html",
-        {
-            "request": request,
-            "current_parent_user": current_parent_user,
-            "parent_portal_mode": True,
-            "claim": claim_detail,
-        },
-    )
-
-
+router.include_router(_videos_router)
+router.include_router(_qr_checkin_router)
+router.include_router(_billing_router)
