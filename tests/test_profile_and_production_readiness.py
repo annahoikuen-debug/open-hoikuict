@@ -49,6 +49,15 @@ def test_profile_cloud_enables_distributed_subsystems(monkeypatch):
 
 
 def _load_production_example_env(monkeypatch) -> None:
+    for var in (
+        "HOIKUICT_ENABLE_MOCK_AUTH",
+        "HOIKUICT_KIOSK_TOKEN",
+        "HOIKUICT_ALLOW_MULTIWORKER_RATE_LIMIT",
+        "HOIKUICT_PUSH_VAPID_PUBLIC_KEY",
+        "HOIKUICT_PUSH_VAPID_PRIVATE_KEY",
+        "HOIKUICT_PUSH_VAPID_SUBJECT",
+    ):
+        monkeypatch.delenv(var, raising=False)
     env_file = Path(__file__).resolve().parent.parent / ".env.production.example"
     for line in env_file.read_text(encoding="utf-8").splitlines():
         line = line.strip()
