@@ -51,6 +51,7 @@ def test_profile_cloud_enables_distributed_subsystems(monkeypatch):
 def _load_production_example_env(monkeypatch) -> None:
     for var in (
         "HOIKUICT_ENABLE_MOCK_AUTH",
+        "HOIKUICT_ENABLE_MOCK_ROLE_OVERRIDE",
         "HOIKUICT_KIOSK_TOKEN",
         "HOIKUICT_ALLOW_MULTIWORKER_RATE_LIMIT",
         "HOIKUICT_PUSH_VAPID_PUBLIC_KEY",
