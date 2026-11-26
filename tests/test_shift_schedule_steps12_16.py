@@ -22,19 +22,27 @@ def client():
 
 
 def _ensure_test_user():
+    import uuid
+    from sqlalchemy.exc import IntegrityError
     from models import User
+
     with Session(engine) as session:
         user = session.exec(select(User)).first()
         if not user:
+            suffix = uuid.uuid4().hex[:8]
             user = User(
-                username="teststaff",
+                username=f"teststaff_{suffix}",
                 display_name="テスト職員",
-                email="staff@example.test",
+                email=f"staff-{suffix}@example.test",
                 role="staff",
             )
             session.add(user)
-            session.commit()
-            session.refresh(user)
+            try:
+                session.commit()
+                session.refresh(user)
+            except IntegrityError:
+                session.rollback()
+                user = session.exec(select(User)).first()
         return user.id.hex if hasattr(user.id, "hex") else str(user.id)
 
 

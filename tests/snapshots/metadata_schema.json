@@ -661,6 +661,8 @@
   ],
   "facility_settings": [
     "attendance_smart_hud_enabled",
+    "board_qr_enabled",
+    "board_qr_version",
     "contact_reply_review_required",
     "fever_caution_c",
     "fever_return_days",

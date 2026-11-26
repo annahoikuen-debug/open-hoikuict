@@ -767,8 +767,23 @@
       "valid_from",
       "valid_to"
     ],
+    "facilities": [
+      "address",
+      "code",
+      "created_at",
+      "facility_type",
+      "id",
+      "is_active",
+      "name",
+      "organization_id",
+      "phone_number",
+      "postal_code",
+      "updated_at"
+    ],
     "facility_settings": [
       "attendance_smart_hud_enabled",
+      "board_qr_enabled",
+      "board_qr_version",
       "contact_reply_review_required",
       "fever_caution_c",
       "fever_return_days",
@@ -1119,6 +1134,30 @@
       "room_id",
       "updated_at"
     ],
+    "nap_check_records": [
+      "child_id",
+      "created_at",
+      "created_by",
+      "daily_memo",
+      "id",
+      "slots",
+      "target_date",
+      "updated_at",
+      "updated_by"
+    ],
+    "nap_classroom_environments": [
+      "classroom_id",
+      "created_at",
+      "created_by",
+      "humidity",
+      "id",
+      "notes",
+      "room_temperature",
+      "target_date",
+      "updated_at",
+      "updated_by",
+      "weather"
+    ],
     "notice_attachments": [
       "content_type",
       "created_at",
@@ -1167,30 +1206,6 @@
       "title",
       "updated_at"
     ],
-    "nap_check_records": [
-      "child_id",
-      "created_at",
-      "created_by",
-      "daily_memo",
-      "id",
-      "slots",
-      "target_date",
-      "updated_at",
-      "updated_by"
-    ],
-    "nap_classroom_environments": [
-      "classroom_id",
-      "created_at",
-      "created_by",
-      "humidity",
-      "id",
-      "notes",
-      "room_temperature",
-      "target_date",
-      "updated_at",
-      "updated_by",
-      "weather"
-    ],
     "notification_jobs": [
       "created_at",
       "id",
@@ -1203,6 +1218,15 @@
       "status",
       "updated_at",
       "user_id"
+    ],
+    "organizations": [
+      "code",
+      "created_at",
+      "description",
+      "id",
+      "is_active",
+      "name",
+      "updated_at"
     ],
     "parent_accounts": [
       "created_at",
@@ -1801,6 +1825,22 @@
       "payload",
       "plan_id"
     ],
+    "shift_suggestion_actions": [
+      "action",
+      "actor_name",
+      "actor_user_id",
+      "created_at",
+      "facility_id",
+      "id",
+      "notified_staff_ids",
+      "plan_id",
+      "reason_code",
+      "reason_note",
+      "snapshot_id",
+      "suggestion_id",
+      "suggestion_type",
+      "target_date"
+    ],
     "shift_violations": [
       "code",
       "id",
@@ -2118,28 +2158,6 @@
       "total_amount",
       "total_count",
       "withdrawal_date"
-    ],
-    "facilities": [
-      "address",
-      "code",
-      "created_at",
-      "facility_type",
-      "id",
-      "is_active",
-      "name",
-      "organization_id",
-      "phone_number",
-      "postal_code",
-      "updated_at"
-    ],
-    "organizations": [
-      "code",
-      "created_at",
-      "description",
-      "id",
-      "is_active",
-      "name",
-      "updated_at"
     ]
   },
   "photos": true

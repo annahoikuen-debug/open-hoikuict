@@ -216,8 +216,6 @@ def enrich_solve_job_with_diagnostics(
 
 def get_plan_diagnostics(session: Session, plan_id: int) -> dict[str, Any]:
     """プランIDに関連する最新の診断レポートを取得する。"""
-    import json
-
     latest_job = session.exec(
         select(ShiftSolveJobs)
         .where(ShiftSolveJobs.plan_id == plan_id)
