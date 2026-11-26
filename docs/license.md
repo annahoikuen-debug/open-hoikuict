@@ -4,11 +4,11 @@
 
 依存ライブラリや外部から持ち込む素材・データについては、それぞれの利用条件も確認します。
 
-## 不具合・改善提案
+## 不具合・サポート連絡
 
-[GitHub Issues](https://github.com/hoikuict/open-hoikuict/issues)へ、利用している版、操作手順、期待する動作、実際の動作を記載してください。実在の個人情報や認証情報は含めません。
+契約に基づくサポート範囲および不具合報告の手順は [SUPPORT.md](https://github.com/hoikuict/open-hoikuict/blob/main/SUPPORT.md) を参照してください。問い合わせ時には利用している版、操作手順、期待する動作、実際の動作を記載し、実在の個人情報や認証情報は含めないでください。
 
-コードの変更は[CONTRIBUTING.md](https://github.com/hoikuict/open-hoikuict/blob/main/CONTRIBUTING.md)、サポート範囲は[SUPPORT.md](https://github.com/hoikuict/open-hoikuict/blob/main/SUPPORT.md)を参照してください。
+開発チーム内の変更手順は [CONTRIBUTING.md](https://github.com/hoikuict/open-hoikuict/blob/main/CONTRIBUTING.md) を参照してください。
 
 ## セキュリティの連絡
 

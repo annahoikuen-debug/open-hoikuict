@@ -9,11 +9,10 @@
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](pyproject.toml)
 [![Security: MFA & Audit](https://img.shields.io/badge/Security-MFA%20%7C%20Audit%20%7C%20RateLimit-orange.svg)](security_config.py)
 [![CI](https://img.shields.io/badge/CI-Tests%20%7C%20Lint-blueviolet.svg)](.github/)
-[![Support](https://img.shields.io/badge/Support-Email%20%7C%20Issues-7b1fa2.svg)](SUPPORT.md)
-[![Community](https://img.shields.io/badge/Community-Discussions-9cf.svg)](https://github.com/hoikuict/open-hoikuict/discussions)
+[![Support](https://img.shields.io/badge/Support-Email%20%7C%20Contact-7b1fa2.svg)](SUPPORT.md)
 [![SECURITY.md](https://img.shields.io/badge/Security-Policy-ff3e00.svg)](SECURITY.md)
 
-**[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [操作マニュアル](MANUAL.md) | [Q&A (よくある質問)](Q_AND_A.md) | [ランディングページ](landing_page/index.html) | [技術ガイド](docs/technical-guide.md) | [セキュリティポリシー](SECURITY.md) | [コントリビューション](CONTRIBUTING.md)**
+**[デモ環境](https://demo.hoikuict.net/) | [本番環境](https://open.hoikuict.net/) | [操作マニュアル](MANUAL.md) | [Q&A (よくある質問)](Q_AND_A.md) | [ランディングページ](landing_page/index.html) | [技術ガイド](docs/technical-guide.md) | [セキュリティポリシー](SECURITY.md) | [サポート窓口](SUPPORT.md)**
 
 ---
 
@@ -31,7 +30,7 @@
    - **📞 園児別・世帯別の緊急連絡先優先順位指定 (Phase 1)**: 平常時の連絡順に加え、当日の日次連絡や職員による口頭受付に基づく一時的な連絡順変更に対応。
    - **🥣 朝夕の食欲・献立入力 ＆ 閉園時刻チェック (Phase 1)**: 朝食・夕食の食欲（旺盛/普通/少なめ/ない）と献立を記録可能。閉園時刻（`closing_time`）以降の誤ったお迎え予定時刻入力を未然に防止。
    - **💴 延長保育料・請求明細のリアルタイム確認（施設別ON/OFFオプトイン対応）**: 日々の打刻から今月の暫定延長料金・分数をリアルタイム算出。確定した月次請求書および口座振替予定を兄弟別に内訳表示し、A4領収書印刷に対応。自治体一括徴収の園に配慮し、園側で機能の有効/無効をワンタップで切り替え可能（無効時は404完全ガード）。
-3. **⚡ 日本初・法令配置基準連動 シフト自動作成 (NuShift Core v0.8.0 統合)**
+3. **⚡ 日本初・法令配置基準連動 シフト自動作成 (NuShift Core v0.8.1 統合)**
    - 厚生労働省告示第49号（全国基準）および各自治体の独自基準（東京都、福岡市など）に完全対応。
    - **Timefold 思想に基づく独自 MILP ソルバー（PuLP/CBC / HiGHS）**: Hard/Medium/Soft 3階層スコアリング（`HardMediumSoftScore`）、局所探索多様化（LAHC）、および過剰制約計画（Overconstrained Planning）を統合。本システムはTimefold社製ソルバーを使用せず、Python標準MILPフレームワーク（PuLP経由CBC/HiGHS）で同等のスコアリング・最適化機能を提供します。
    - **過剰制約計画 & 自動診断サジェスト (v0.8.0 新機能)**: 人員不足時でも求解不能（Infeasible）に陥らず、不足コマ数（Mediumペナルティ）を最小化しながら最大限充足された安全なシフトを生成。さらに不足要因と「パート延長」「希望休出勤打診」などの自然言語サジェストを自動生成。
@@ -101,7 +100,7 @@
 | **ストレージ基盤** | `StorageDriver` 抽象化 | ローカル保存 / 将来の S3 オブジェクトストレージ対応 |
 | **APIルーター (`routers/`)** | 41 ファイル (全50+ルーター) | FastAPI 構成 (QR打刻・保護者請求・医療同意含む) |
 | **テストスイート** | 210+ ファイル / 1,600+ 件 | pytest / 全件パス・回帰防止テスト完備 |
-| **シフトソルバー統合** | `vendor/nushift/shiftai` | NuShift v0.8.0+ 独自MILP最適化・突発リペア・即時Re-plan・分散ワーカー連動 |
+| **シフトソルバー統合** | `vendor/nushift/shiftai` | NuShift v0.8.1 独自MILP最適化・突発リペア・即時Re-plan・分散ワーカー連動 |
 
 ### アーキテクチャ概要図
 
