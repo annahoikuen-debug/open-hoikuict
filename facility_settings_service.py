@@ -51,6 +51,8 @@ DEFAULTS = dict(
     simple_mode_custom_tiles=json.dumps(DEFAULT_SIMPLE_TILES),
     nap_check_smart_enabled=True,
     nap_check_interval_minutes=5,
+    board_qr_enabled=True,
+    board_qr_version=1,
 )
 
 
@@ -86,6 +88,8 @@ def record_change_history(
         simple_mode_custom_tiles=str(settings.simple_mode_custom_tiles or ""),
         nap_check_smart_enabled=str(settings.nap_check_smart_enabled),
         nap_check_interval_minutes=str(settings.nap_check_interval_minutes),
+        board_qr_enabled=str(settings.board_qr_enabled),
+        board_qr_version=str(settings.board_qr_version),
     )
     now = utc_now()
     for field, new_value in current.items():
@@ -189,4 +193,16 @@ def nap_check_interval_minutes(session: Session) -> int:
     """午睡チェック間隔（分: 5 または 10）。"""
     settings = get_facility_settings(session)
     return int(getattr(settings, "nap_check_interval_minutes", 5))
+
+
+def is_board_qr_enabled(session: Session) -> bool:
+    """掲示板QRコードでの登降園打刻が有効か判定する。"""
+    settings = get_facility_settings(session)
+    return bool(getattr(settings, "board_qr_enabled", True))
+
+
+def get_board_qr_version(session: Session) -> int:
+    """現在有効な掲示板QRコードの世代番号を返す。"""
+    settings = get_facility_settings(session)
+    return int(getattr(settings, "board_qr_version", 1) or 1)
 

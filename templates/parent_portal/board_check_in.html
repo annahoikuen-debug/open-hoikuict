@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}掲示板QR 登降園チェックイン | open-hoikuict{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md space-y-5">
+  <div class="flex items-center justify-between">
+    <a href="/parent-portal/" class="text-sm font-medium text-indigo-700 hover:underline">← 保護者ホームへ</a>
+    <span class="text-xs font-medium text-slate-500">{{ current_parent_user.display_name }} さん</span>
+  </div>
+
+  <div class="rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-500 p-5 text-white shadow-sm">
+    <p class="text-xs font-bold uppercase tracking-wider text-indigo-100">登降園チェックイン</p>
+    <h1 class="mt-1 text-xl font-bold">登園・降園の打刻</h1>
+    {% if punch_info %}
+    <p class="mt-1 text-xs text-indigo-100">対象日: {{ punch_info.target_date }}</p>
+    {% endif %}
+  </div>
+
+  {% if completed %}
+  <div role="status" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900 shadow-sm">
+    <p class="text-base font-bold">
+      {{ '登園' if completed_action == 'check_in' else '降園' }}の打刻が完了しました
+    </p>
+    <p class="mt-1 text-sm">
+      {% if punched_count > 0 %}
+      {{ punched_count }}名分の打刻を記録しました。
+      {% else %}
+      すでに同じ種別の打刻が記録済みでした。
+      {% endif %}
+    </p>
+    <div class="mt-4">
+      <a href="/parent-portal/" class="inline-flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700">
+        保護者ホームへ戻る
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if error_message %}
+  <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900 shadow-sm space-y-2">
+    <p class="font-bold">QRコードを確認できませんでした</p>
+    <p class="text-sm">{{ error_message }}</p>
+    <p class="text-xs text-rose-700">
+      お急ぎの場合は、玄関のキオスク端末をご利用いただくか、職員へお声がけください。
+    </p>
+  </div>
+  {% endif %}
+
+  {% if punch_info and punch_info.children %}
+  <form method="post" action="/parent-portal/board-check-in" class="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+    <input type="hidden" name="t" value="{{ board_token }}">
+
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-bold text-slate-900">1. 打刻種別を選択</legend>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-bold transition has-[:checked]:border-indigo-600 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700">
+          <input type="radio" name="action" value="check_in" class="sr-only" {{ 'checked' if punch_info.suggested_action == 'check_in' else '' }}>
+          <span>🌅 登園する</span>
+        </label>
+        <label class="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 p-3 text-sm font-bold transition has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50 has-[:checked]:text-sky-700">
+          <input type="radio" name="action" value="check_out" class="sr-only" {{ 'checked' if punch_info.suggested_action == 'check_out' else '' }}>
+          <span>🏠 降園する</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-bold text-slate-900">2. 対象のお子さま</legend>
+      <div class="space-y-2">
+        {% for child in punch_info.children %}
+        <label class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-3.5 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" name="child_ids" value="{{ child.child_id }}" checked class="h-5 w-5 rounded border-slate-300 text-indigo-600">
+            <div>
+              <p class="font-bold text-slate-900">{{ child.full_name }}</p>
+              <p class="text-xs text-slate-500">{{ child.classroom_name }}</p>
+            </div>
+          </div>
+          <div class="text-right text-xs">
+            {% if child.status == 'not_arrived' %}
+            <span class="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-600">未登園</span>
+            {% elif child.status == 'present' %}
+            <span class="rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-700">在園中 ({{ child.check_in_time }})</span>
+            {% else %}
+            <span class="rounded-full bg-indigo-100 px-2.5 py-1 font-bold text-indigo-700">降園済 ({{ child.check_out_time }})</span>
+            {% endif %}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div>
+      <label class="block text-sm font-bold text-slate-900" for="actual_pickup_person">
+        お迎えの方（降園時・任意）
+      </label>
+      <input
+        id="actual_pickup_person"
+        name="actual_pickup_person"
+        type="text"
+        value="{{ current_parent_user.display_name }}"
+        class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+        placeholder="例: 母、父、祖母"
+      >
+    </div>
+
+    <button type="submit" class="w-full rounded-xl bg-indigo-600 px-4 py-3.5 text-base font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-[0.99] transition">
+      打刻を確定する
+    </button>
+  </form>
+  {% elif punch_info %}
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+    打刻対象として紐づいている在園児が見つかりません。園へお問い合わせください。
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

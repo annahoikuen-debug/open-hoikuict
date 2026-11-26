@@ -43,6 +43,45 @@ def _b64url_decode(raw: str) -> bytes:
     return base64.urlsafe_b64decode(raw.encode("ascii"))
 
 
+def _sign_payload(payload: dict[str, Any]) -> str:
+    """ペイロードをJSON化し、HMAC-SHA256署名付きトークンを返す。"""
+    payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    payload_b64 = _b64url_encode(payload_bytes)
+    sig = hmac.new(_qr_secret_key(), payload_b64.encode("ascii"), hashlib.sha256).digest()
+    sig_b64 = _b64url_encode(sig)
+    return f"{payload_b64}.{sig_b64}"
+
+
+def _verify_signed_token(token: str) -> dict[str, Any]:
+    """HMAC署名付きQRトークンの署名と有効期限を検証し、ペイロードを返す。不正時はValueError。"""
+    if not token or "." not in token:
+        raise ValueError("QRトークンのフォーマットが不正です。")
+
+    parts = token.split(".")
+    if len(parts) != 2:
+        raise ValueError("QRトークンの構成要素が不正です。")
+
+    payload_b64, sig_b64 = parts[0], parts[1]
+
+    expected_sig = hmac.new(_qr_secret_key(), payload_b64.encode("ascii"), hashlib.sha256).digest()
+    expected_sig_b64 = _b64url_encode(expected_sig)
+
+    if not hmac.compare_digest(sig_b64, expected_sig_b64):
+        raise ValueError("QRトークンの署名が一致しません（改ざんの可能性があります）。")
+
+    try:
+        payload_bytes = _b64url_decode(payload_b64)
+        payload = json.loads(payload_bytes.decode("utf-8"))
+    except Exception as exc:
+        raise ValueError("QRトークンのデコードに失敗しました。") from exc
+
+    exp = payload.get("exp")
+    if exp is not None and time.time() > exp:
+        raise ValueError("QRトークンの有効期限が切れています。")
+
+    return payload
+
+
 def generate_parent_qr_token(
     parent_account_id: int,
     family_id: Optional[int] = None,
@@ -58,54 +97,60 @@ def generate_parent_qr_token(
         "iat": now,
         "exp": exp,
     }
-    payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    payload_b64 = _b64url_encode(payload_bytes)
-
-    sig = hmac.new(_qr_secret_key(), payload_b64.encode("ascii"), hashlib.sha256).digest()
-    sig_b64 = _b64url_encode(sig)
-
-    return f"{payload_b64}.{sig_b64}"
+    return _sign_payload(payload)
 
 
 def verify_parent_qr_token(token: str) -> dict[str, Any]:
     """登降園QRトークンの署名および有効期限を検証し、ペイロードを返す。不正時はValueError。"""
-    if not token or "." not in token:
-        raise ValueError("QRトークンのフォーマットが不正です。")
+    payload = _verify_signed_token(token)
+    if payload.get("kind") == "facility_board" or "pid" not in payload:
+        raise ValueError("保護者用QRトークンではありません。")
+    return payload
 
-    parts = token.split(".")
-    if len(parts) != 2:
-        raise ValueError("QRトークンの構成要素が不正です。")
 
-    payload_b64, sig_b64 = parts[0], parts[1]
+def generate_board_qr_token(version: int) -> str:
+    """保育園の掲示板に印刷する登降園チェックイン用QRトークンを生成する（年度内固定・世代管理）。"""
+    payload = {
+        "v": 1,
+        "kind": "facility_board",
+        "ver": int(version),
+        "iat": int(time.time()),
+    }
+    return _sign_payload(payload)
 
-    # 署名検証
-    expected_sig = hmac.new(_qr_secret_key(), payload_b64.encode("ascii"), hashlib.sha256).digest()
-    expected_sig_b64 = _b64url_encode(expected_sig)
 
-    if not hmac.compare_digest(sig_b64, expected_sig_b64):
-        raise ValueError("QRトークンの署名が一致しません（改ざんの可能性があります）。")
+def verify_board_qr_token(
+    token: str,
+    *,
+    expected_version: int,
+    enabled: bool = True,
+) -> dict[str, Any]:
+    """掲示板QRトークンの署名・受付状態・世代番号を検証する。不正時はValueError。"""
+    if not enabled:
+        raise ValueError("現在、掲示板QRコードでの登降園受付は停止中です。")
 
-    try:
-        payload_bytes = _b64url_decode(payload_b64)
-        payload = json.loads(payload_bytes.decode("utf-8"))
-    except Exception as exc:
-        raise ValueError("QRトークンのデコードに失敗しました。") from exc
+    payload = _verify_signed_token(token)
+    if payload.get("kind") != "facility_board":
+        raise ValueError("掲示板用の登降園QRコードではありません。")
 
-    # 有効期限検証
-    exp = payload.get("exp")
-    if exp is not None and time.time() > exp:
-        raise ValueError("QRトークンの有効期限が切れています。")
+    if payload.get("ver") != int(expected_version):
+        raise ValueError("このQRコードは再発行により無効になっています。掲示板の新しいQRコードを読み取ってください。")
 
     return payload
 
 
-def generate_parent_qr_svg(token: str) -> str:
-    """QRトークンをSVG画像形式で生成する（完全CDNフリー・ローカル生成）。"""
+def generate_qr_svg(content: str, *, border: int = 2) -> str:
+    """任意の文字列をSVG形式のQRコードとして生成する（完全CDNフリー・ローカル生成）。"""
     import qrcode
     from qrcode.image.svg import SvgPathFillImage
 
-    qr = qrcode.make(token, image_factory=SvgPathFillImage, border=2)
+    qr = qrcode.make(content, image_factory=SvgPathFillImage, border=border)
     return qr.to_string().decode("utf-8") if isinstance(qr.to_string(), bytes) else qr.to_string()
+
+
+def generate_parent_qr_svg(token: str) -> str:
+    """QRトークンをSVG画像形式で生成する（完全CDNフリー・ローカル生成）。"""
+    return generate_qr_svg(token, border=2)
 
 
 def get_sibling_qr_punch_info(

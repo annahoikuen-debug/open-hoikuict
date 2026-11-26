@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlmodel import Session, select
 
 from auth import get_current_staff_user
 from database import get_session
-from models import GuardianHoursAudit, GuardianHoursSetting, StaffSessionPolicyAudit
+from facility_settings_service import (
+    DEFAULTS as FACILITY_DEFAULTS,
+    get_board_qr_version,
+    is_board_qr_enabled,
+    record_change_history,
+)
+from guardian_qr_service import generate_board_qr_token, generate_qr_svg
+from models import FacilitySettings, GuardianHoursAudit, GuardianHoursSetting, StaffSessionPolicyAudit
 from guardian_hours import closing_time, parse_closing_time
 from time_utils import utc_now
 from health_check_service import run_facility_health_check
@@ -47,6 +54,98 @@ def save_guardian_hours(request: Request, closing: str = Form("", alias="closing
                                   changed_by_name=actor.display_name, changed_by_user_id=actor.id))
     session.commit()
     return RedirectResponse("/settings/guardian-hours?saved=true", status_code=303)
+
+
+def _board_checkin_url(request: Request, version: int) -> str:
+    token = generate_board_qr_token(version)
+    base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}/parent-portal/board-check-in?t={token}"
+
+
+@router.get("/board-qr", response_class=HTMLResponse)
+def board_qr_page(
+    request: Request,
+    saved: bool = False,
+    reissued: bool = False,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_live_admin(session, current_user)
+    enabled = is_board_qr_enabled(session)
+    version = get_board_qr_version(session)
+    checkin_url = _board_checkin_url(request, version)
+    return templates.TemplateResponse(
+        request,
+        "settings/board_qr.html",
+        {
+            "current_user": current_user,
+            "board_qr_enabled": enabled,
+            "board_qr_version": version,
+            "checkin_url": checkin_url,
+            "saved": saved,
+            "reissued": reissued,
+        },
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.get("/board-qr.svg")
+def board_qr_svg(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    require_live_admin(session, current_user)
+    version = get_board_qr_version(session)
+    checkin_url = _board_checkin_url(request, version)
+    svg_str = generate_qr_svg(checkin_url, border=4)
+    response = Response(content=svg_str, media_type="image/svg+xml")
+    response.headers["Content-Disposition"] = f'inline; filename="board-checkin-qr-v{version}.svg"'
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@router.post("/board-qr")
+def update_board_qr_settings(
+    request: Request,
+    action: str = Form(...),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    actor = require_live_admin(session, current_user)
+    settings = session.exec(select(FacilitySettings).where(FacilitySettings.id == 1)).first()
+    if settings is None:
+        settings = FacilitySettings(id=1, **FACILITY_DEFAULTS)
+        session.add(settings)
+        session.flush()
+
+    previous = {
+        "board_qr_enabled": str(settings.board_qr_enabled),
+        "board_qr_version": str(settings.board_qr_version),
+    }
+
+    if action == "toggle":
+        settings.board_qr_enabled = not bool(settings.board_qr_enabled)
+        redirect_target = "/settings/board-qr?saved=true"
+    elif action == "reissue":
+        settings.board_qr_version = int(settings.board_qr_version or 1) + 1
+        redirect_target = "/settings/board-qr?reissued=true"
+    else:
+        return RedirectResponse("/settings/board-qr", status_code=303)
+
+    settings.updated_at = utc_now()
+    settings.updated_by_user_id = actor.id
+    settings.updated_by_name = actor.display_name
+    record_change_history(
+        session,
+        settings,
+        previous,
+        actor_name=actor.display_name,
+        actor_user_id=actor.id,
+    )
+    session.commit()
+    return RedirectResponse(redirect_target, status_code=303)
 
 
 @router.get("", response_class=HTMLResponse)

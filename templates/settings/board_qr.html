@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}掲示板の登降園QR | open-hoikuict{% endblock %}
+{% block content %}
+<style>
+  @media print {
+    .no-print, header, nav, aside, footer { display: none !important; }
+    main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+    .qr-poster-card { border: 0 !important; box-shadow: none !important; padding: 1.5rem 0 !important; }
+    .qr-poster-img { width: 75mm !important; height: 75mm !important; }
+  }
+</style>
+
+<div class="mx-auto max-w-3xl space-y-6">
+  <div class="no-print flex flex-wrap items-center justify-between gap-3">
+    <a href="/settings" class="text-sm font-medium text-indigo-700 hover:underline">← 設定に戻る</a>
+    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold {{ 'bg-emerald-100 text-emerald-800' if board_qr_enabled else 'bg-amber-100 text-amber-800' }}">
+      {{ '受付中' if board_qr_enabled else '停止中' }}（第 {{ board_qr_version }} 版）
+    </span>
+  </div>
+
+  {% if saved %}
+  <p role="status" class="no-print rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+    掲示板QRの受付設定を更新しました。
+  </p>
+  {% endif %}
+  {% if reissued %}
+  <p role="status" class="no-print rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800">
+    掲示板QRを再発行しました（第 {{ board_qr_version }} 版）。以前のQRコードは無効になりましたので、新しいポスターを印刷して貼り替えてください。
+  </p>
+  {% endif %}
+
+  <section class="qr-poster-card rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" aria-label="掲示用の登降園QRポスター">
+    <p class="text-xs font-bold tracking-widest text-indigo-600 uppercase">登降園チェックイン</p>
+    <h1 class="mt-2 text-2xl font-bold text-slate-900">登降園QRコード</h1>
+    <p class="mt-2 text-sm text-slate-600">スマートフォンのカメラでQRコードを読み取り、登園・降園の打刻を行ってください。</p>
+
+    <div class="my-6 flex justify-center">
+      <div class="rounded-2xl border-4 border-indigo-100 bg-white p-4">
+        <img src="/settings/board-qr.svg?v={{ board_qr_version }}" alt="登降園チェックイン用QRコード" class="qr-poster-img h-64 w-64 object-contain">
+      </div>
+    </div>
+
+    <ol class="mx-auto max-w-md list-decimal space-y-1.5 pl-5 text-left text-sm text-slate-700">
+      <li>スマートフォンのカメラで上のQRコードを読み取る</li>
+      <li>保護者ポータルにログイン（初回のみ）</li>
+      <li>お子さまの「登園」または「降園」を確認して打刻</li>
+    </ol>
+
+    <p class="mt-6 text-xs text-slate-500">
+      ※スマートフォンをお持ちでない場合や読み取れない場合は、玄関のキオスク端末または職員へお声がけください。
+    </p>
+    <p class="mt-2 text-[11px] text-slate-400">管理番号: 第 {{ board_qr_version }} 版（年度内固定）</p>
+  </section>
+
+  <section class="no-print space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" aria-label="印刷と再発行の管理">
+    <h2 class="text-base font-bold text-slate-900">印刷・運用の管理</h2>
+    <p class="text-sm text-slate-600">
+      このQRコードは年度内固定でご利用いただけます。既存のキオスク端末・職員打刻とも併用できます。
+    </p>
+
+    <div class="flex flex-wrap gap-3">
+      <button type="button" onclick="window.print()" class="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+        掲示用ポスターを印刷
+      </button>
+      <a href="/settings/board-qr.svg?v={{ board_qr_version }}" download="board-checkin-qr-v{{ board_qr_version }}.svg" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        SVG画像を保存
+      </a>
+    </div>
+
+    <div class="border-t border-slate-200 pt-4 flex flex-wrap items-center gap-3">
+      <form method="post" action="/settings/board-qr">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="action" value="toggle">
+        <button type="submit" class="rounded-lg border px-4 py-2 text-sm font-semibold {{ 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' if board_qr_enabled else 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' }}">
+          {{ '掲示板QRの受付を停止する' if board_qr_enabled else '掲示板QRの受付を再開する' }}
+        </button>
+      </form>
+
+      <form method="post" action="/settings/board-qr" onsubmit="return confirm('新しいQRコードを発行しますか？現在掲示中のQRコードは即座に無効になります。');">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="hidden" name="action" value="reissue">
+        <button type="submit" class="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
+          QRコードを再発行する（旧QRを無効化）
+        </button>
+      </form>
+    </div>
+
+    <p class="break-all text-xs text-slate-400">チェックインURL: {{ checkin_url }}</p>
+  </section>
+</div>
+{% endblock %}

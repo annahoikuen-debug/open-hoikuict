@@ -3423,6 +3423,8 @@ class FacilitySettings(SQLModel, table=True):
     simple_mode_custom_tiles: Optional[str] = Field(default=None)
     nap_check_smart_enabled: bool = Field(default=True)
     nap_check_interval_minutes: int = Field(default=5)
+    board_qr_enabled: bool = Field(default=True)
+    board_qr_version: int = Field(default=1)
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by_user_id: Optional[UUID] = Field(default=None, foreign_key="users.id")
     updated_by_name: Optional[str] = None
