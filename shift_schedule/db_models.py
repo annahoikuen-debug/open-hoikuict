@@ -272,3 +272,27 @@ class ShiftSolveSnapshots(SQLModel, table=True):
     payload: str = Field(sa_column=Column(Text))  # 不変 JSON スナップショット
     created_at: datetime = Field(default_factory=utc_now)
 
+
+class ShiftSuggestionActions(SQLModel, table=True):
+    """過剰制約サジェストへの判断履歴（採用・保留・却下・自動解消）。"""
+
+    __tablename__ = "shift_suggestion_actions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    facility_id: UUID = Field(default=DEFAULT_FACILITY_ID, index=True)
+    plan_id: int = Field(foreign_key="shift_plans.id", index=True)
+    snapshot_id: Optional[int] = Field(
+        default=None, foreign_key="shift_solve_snapshots.id", index=True
+    )
+    suggestion_id: str = Field(max_length=64, index=True)
+    suggestion_type: str = Field(max_length=64, index=True)
+    target_date: Optional[str] = Field(default=None, max_length=16, index=True)
+    action: str = Field(max_length=16, index=True)  # adopted / hold / rejected / resolved
+    reason_code: Optional[str] = Field(default=None, max_length=64)
+    reason_note: Optional[str] = Field(default=None, max_length=500)
+    notified_staff_ids: Optional[Any] = Field(default=None, sa_column=Column(JSON))
+    actor_user_id: Optional[str] = Field(default=None, max_length=64, index=True)
+    actor_name: Optional[str] = Field(default=None, max_length=100)
+    created_at: datetime = Field(default_factory=utc_now, index=True)
+
+

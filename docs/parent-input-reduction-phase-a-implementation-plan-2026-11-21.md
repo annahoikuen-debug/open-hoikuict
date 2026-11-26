@@ -1,20 +1,18 @@
-# 保護者・管理者の入力負担低減 実装計画書（フェーズA/B）（2026-11-21 作成 / 2026-11-23 更新）
+# 保護者・管理者の入力負担低減 実装計画書（フェーズA/B）（2026-11-21 作成 / 2026-11-26 スリム化改定）
 
-> ステータス: **フェーズA 実装済み（W4・配備を除く）／フェーズB 計画**。AGENTS.md の進め方に従い、
-> フェーズB は **モック作成 → ユーザー試用・認識合わせ → 実装** の順で進める。配備はユーザーの指示に従う。
+> ステータス: **フェーズA（W4含む）・フェーズB（スリム化版：B1・B2軽量版・B4・B5軽量版）全項目完了（B3は見送り）**。
 
-## 0. 実装状況（2026-11-23 時点）
+## 0. 実装状況（2026-11-26 時点）
 
 | マイルストーン | 状態 | 証跡 |
 |---|---|---|
-| M1 モック（日次連絡フォーム） | 完了 | ユーザー試用・合意済み |
-| M2 食欲スケール統一（W2） | 完了 | `home_care_details.py` に `APPETITES_V2 = ("完食", "ほぼ完食", "半分", "少なめ")`、`validate_meals` が旧新両スケール受理（home_care_details.py:6,19） |
-| M3 フォームレイヤー化（W1） | 完了 | `routers/parent_portal.py` に `contact_layout_version`（:1360）、「◯◯日の内容を引き継いで送信しました。」notice（:1678） |
-| M4 夕食リマインド（W2） | 完了 | `notification_hub.py` `notify_dinner_reminder`（:412、`dinner_reminder_time` 設定・`#meal-dinner` ディープリンク・`dinner_reminder_enabled` 保護者設定） |
-| M5 医療同意引き継ぎ（W3） | 完了 | `parent_medical_service.diff_from_baseline`、`facility_settings_service.medical_consent_auto_approve`（初期 False）、`tests/test_medical_consent_inherit.py` |
-| テスト | **37 passed** | `test_medical_consent_inherit.py` / `test_home_care_meal_scale.py` / `test_contact_form_layout_v2.py` / `test_dinner_reminder.py` / `test_contact_template_render.py` |
-| M6 W4 ドキュメント更新 | **未着手** | MANUAL.md / README.md に新 UI・新スケールの記載なし |
-| 配備 | 未実施 | ユーザー指示待ち |
+| M1〜M5 フェーズA実装 | 完了 | 連絡フォームレイヤー化・食欲スケール統一・夕食リマインド・医療同意引き継ぎ（37 passed） |
+| B1 段階的請求締め解除（L0/L1/L2） | 完了 | `0d9e114`（`zengin_service.py` / `routers/billing.py` / `tests/routers/test_billing_reopen.py`） |
+| B4 サジェスト3ボタン・履歴・打診通知 | 完了 | モック合意後実装（`diagnostics_service.py` / `plans.py` / `tests/test_shift_suggestion_actions.py` 6 passed） |
+| B2（軽量版）検算レポート不一致チェック | 完了 | `routers/billing.py` `audit_billing_cycle` への不一致チェック追加＋`tests/test_sibling_discount_preview.py` |
+| B3 医療同意年度一斉収集 | 見送り | 定員30名規模では既存「お知らせ」＋医療同意一覧で代替するため対象外 |
+| B5（軽量版）権限ガイダンスリンク | 完了 | `staff_permissions.py` `PERMISSION_GUIDANCE` へ `settings_url`（`/staff/permissions`）追加 |
+| M6 W4 ドキュメント更新 | 完了 | `MANUAL.md` / `README.md` にフェーズA＋B1・B4・B2 の要点を追記 |
 
 フェーズAの設計内容（合意済み方針5項目・W1〜W5・テスト計画）は第4〜6節にそのまま維持している。
 
@@ -115,7 +113,9 @@
 2. 確定前検算レポート（billing.py:1630 以降）に「自動判定と実際の免除設定の不一致」検出を追加。
 3. オーバーライドは既存 `BillingExemption` 登録フローに理由必須を強化する形で対応（新画面なし）。
 
-**B2 画面仕様**: 世帯カードは「有効な減免が存在する世帯」または「第2子以降が在園する世帯」のみ
+**B2 画面仕様**: 世帯カードは「有効な減免が存在する世帯」または「第2子以降
+
+が在園する世帯」のみ
 展開（既定は折りたたみ、不一致検出時は赤バッジで強制展開）。表示は確定済み月を開いた場合も
 **当時の判定**を表示（現在の在園状況で再判定し直さない）。
 

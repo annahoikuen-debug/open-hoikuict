@@ -1853,27 +1853,52 @@ def audit_billing_cycle(session: Session, cycle_id: int) -> dict[str, object]:
                 "message": f"減免期限満了: {c_name}（{ex.name}）の適用期限が {ex.valid_to.strftime('%Y/%m/%d')} で満了します。翌月以降の更新要否を確認してください。",
             })
 
-    # 5. 兄弟割引・出生順位自動判定チェック (P8-6)
+    # 5. 兄弟割引・出生順位自動判定チェック (P8-6 / B2軽量版不一致チェック)
     sibling_discount_count = 0
-    claim_child_ids = set()
+    sibling_mismatch_count = 0
+    claim_lines_by_child: dict[int, list[BillingChargeLine]] = {}
     for claim in claims:
         lines = session.exec(
             select(BillingChargeLine).where(BillingChargeLine.billing_claim_id == claim.id)
         ).all()
         for line in lines:
             if line.child_id:
-                claim_child_ids.add(line.child_id)
+                claim_lines_by_child.setdefault(line.child_id, []).append(line)
 
-    for cid in claim_child_ids:
+    active_exemption_child_ids = {
+        ex.child_id
+        for ex in active_exemptions
+        if ex.valid_from <= cycle.period_end and (ex.valid_to is None or ex.valid_to >= cycle.period_start)
+    }
+
+    for cid, child_lines in claim_lines_by_child.items():
         s_info = calculate_sibling_discount_for_child(session, cid, cycle.year_month)
-        if s_info.get("discount_percentage", 0) > 0:
+        discount_pct = s_info.get("discount_percentage", 0)
+        child = session.get(Child, cid)
+        c_name = child.full_name if child else f"園児ID:{cid}"
+        has_sibling_note = any("多子" in (ln.description or "") for ln in child_lines)
+        has_manual_exemption = cid in active_exemption_child_ids
+
+        if discount_pct > 0:
             sibling_discount_count += 1
-            child = session.get(Child, cid)
-            c_name = child.full_name if child else f"園児ID:{cid}"
             warnings.append({
                 "type": "sibling_discount_applied",
                 "level": "info",
-                "message": f"兄弟割引判定: {c_name}（{s_info['rank_label']} - 軽減率{s_info['discount_percentage']}%）",
+                "message": f"兄弟割引判定: {c_name}（{s_info['rank_label']} - 軽減率{discount_pct}%）",
+            })
+            if not has_sibling_note and not has_manual_exemption and any(ln.amount > 0 for ln in child_lines):
+                sibling_mismatch_count += 1
+                warnings.append({
+                    "type": "sibling_discount_mismatch",
+                    "level": "warning",
+                    "message": f"兄弟割引不一致: {c_name} は自動判定で {s_info['rank_label']}（{discount_pct}%軽減）ですが、請求明細に多子軽減の適用が見当たりません。再計算または個別減免を確認してください。",
+                })
+        elif has_sibling_note and not has_manual_exemption:
+            sibling_mismatch_count += 1
+            warnings.append({
+                "type": "sibling_discount_mismatch",
+                "level": "warning",
+                "message": f"兄弟割引不一致: {c_name} は自動判定では対象外（{s_info['rank_label']}）ですが、請求明細に多子軽減が含まれています。在園変動を確認してください。",
             })
 
     is_valid = not any(w["level"] == "error" for w in warnings)
@@ -1890,6 +1915,7 @@ def audit_billing_cycle(session: Session, cycle_id: int) -> dict[str, object]:
         "prorated_count": prorated_count,
         "exemptions_count": exemptions_count,
         "sibling_discount_count": sibling_discount_count,
+        "sibling_mismatch_count": sibling_mismatch_count,
         "warnings": warnings,
     }
 

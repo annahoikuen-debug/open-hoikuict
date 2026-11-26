@@ -2153,7 +2153,11 @@ def _migrate_shift_schedule_tables() -> None:
 def _migrate_shift_timefold_enhancements() -> None:
     """Add priority column to shift_solve_jobs and ensure timefold tables exist."""
     try:
-        from shift_schedule.db_models import ShiftFacilityConstraintWeights, ShiftPlanProposals
+        from shift_schedule.db_models import (
+            ShiftFacilityConstraintWeights,
+            ShiftPlanProposals,
+            ShiftSuggestionActions,
+        )
         with engine.begin() as conn:
             job_cols = _table_columns("shift_solve_jobs")
             if job_cols and "priority" not in job_cols:
@@ -2167,6 +2171,7 @@ def _migrate_shift_timefold_enhancements() -> None:
                 conn, tables=[
                     ShiftFacilityConstraintWeights.__table__,
                     ShiftPlanProposals.__table__,
+                    ShiftSuggestionActions.__table__,
                 ]
             )
     except Exception as exc:
@@ -2296,6 +2301,8 @@ def _migrate_smart_hud_simple_mode_and_nap_checks() -> None:
             "simple_mode_custom_tiles": "VARCHAR",
             "nap_check_smart_enabled": "BOOLEAN NOT NULL DEFAULT 1",
             "nap_check_interval_minutes": "INTEGER NOT NULL DEFAULT 5",
+            "board_qr_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "board_qr_version": "INTEGER NOT NULL DEFAULT 1",
         }
         with engine.begin() as conn:
             columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(facility_settings)")}

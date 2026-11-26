@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>シフトプラン詳細（B4 処方箋3ボタン確認モック） | open-hoikuict</title>
+  <style>
+    :root {
+      --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0; --slate-300: #cbd5e1;
+      --slate-400: #94a3b8; --slate-500: #64748b; --slate-600: #475569; --slate-700: #334155;
+      --slate-800: #1e293b; --slate-900: #0f172a;
+      --indigo-50: #eef2ff; --indigo-100: #e0e7ff; --indigo-200: #c7d2fe; --indigo-600: #4f46e5;
+      --indigo-700: #4338ca; --indigo-900: #312e81;
+      --amber-50: #fffbeb; --amber-100: #fef3c7; --amber-200: #fde68a; --amber-300: #fcd34d;
+      --amber-700: #b45309; --amber-800: #92400e; --amber-900: #78350f;
+      --emerald-50: #ecfdf5; --emerald-100: #d1fae5; --emerald-200: #a7f3d0; --emerald-300: #6ee7b7;
+      --emerald-600: #059669; --emerald-700: #047857; --emerald-800: #065f46;
+      --rose-50: #fff1f2; --rose-100: #ffe4e6; --rose-200: #fecdd3; --rose-300: #fda4af;
+      --rose-600: #e11d48; --rose-700: #be123c; --rose-800: #9f1239; --rose-900: #881337;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: var(--slate-50);
+      color: var(--slate-800);
+      line-height: 1.5;
+    }
+    /* 確認用黒帯（本番画面には非表示） */
+    .mock-bar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #111827;
+      color: #f9fafb;
+      padding: 10px 16px;
+      border-bottom: 2px solid #4f46e5;
+      font-size: 12px;
+    }
+    .mock-bar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      justify-content: space-between;
+    }
+    .mock-badge {
+      background: #4f46e5;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .mock-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .mock-btn {
+      background: #1f2937;
+      color: #e5e7eb;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mock-btn:hover { background: #374151; }
+    .mock-btn.active {
+      background: #4f46e5;
+      border-color: #818cf8;
+      color: #fff;
+      font-weight: 700;
+    }
+    .mock-reset {
+      background: #7f1d1d;
+      border-color: #991b1b;
+      color: #fecaca;
+    }
+    .mock-reset:hover { background: #991b1b; }
+
+    /* メインコンテナ */
+    .container {
+      max-width: 1180px;
+      margin: 24px auto;
+      padding: 0 16px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid var(--slate-200);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .header-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .pill-indigo { background: var(--indigo-50); color: var(--indigo-700); border-color: var(--indigo-200); }
+    .pill-amber { background: var(--amber-100); color: var(--amber-800); border-color: var(--amber-300); }
+    .pill-emerald { background: var(--emerald-100); color: var(--emerald-800); border-color: var(--emerald-300); }
+    .pill-rose { background: var(--rose-100); color: var(--rose-800); border-color: var(--rose-300); }
+    .pill-slate { background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-300); }
+
+    h1 { margin: 8px 0 4px; font-size: 22px; color: var(--slate-900); }
+    .meta { font-size: 12px; color: var(--slate-500); margin: 0; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--slate-300);
+      background: #fff;
+      color: var(--slate-700);
+      transition: all 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--slate-50); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--indigo-600); color: #fff; border-color: var(--indigo-600); }
+    .btn-primary:hover:not(:disabled) { background: var(--indigo-700); }
+    .btn-emerald { background: var(--emerald-600); color: #fff; border-color: var(--emerald-600); }
+    .btn-emerald:hover:not(:disabled) { background: var(--emerald-700); }
+    .btn-amber { background: var(--amber-100); color: var(--amber-900); border-color: var(--amber-300); }
+    .btn-amber:hover:not(:disabled) { background: var(--amber-200); }
+    .btn-rose-outline { background: #fff; color: var(--rose-700); border-color: var(--rose-300); }
+    .btn-rose-outline:hover:not(:disabled) { background: var(--rose-50); }
+    .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 8px; }
+
+    .notice-banner {
+      border-radius: 12px;
+      border: 1px solid var(--amber-200);
+      background: #fffbebcc;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--amber-800);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    /* 処方箋パネル */
+    .rx-section {
+      border-radius: 16px;
+      border: 1px solid var(--amber-300);
+      background: #fffbebee;
+      padding: 18px;
+      box-shadow: 0 1px 3px rgba(180, 83, 9, 0.06);
+    }
+    .rx-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .rx-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--amber-900);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rx-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 520px) {
+      .rx-grid { grid-template-columns: 1fr; }
+    }
+    .rx-card {
+      background: #fff;
+      border: 1px solid var(--amber-200);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rx-card.is-adopted { border-color: var(--emerald-300); background: #f0fdf4; }
+    .rx-card.is-rejected { border-color: var(--slate-300); background: var(--slate-50); opacity: 0.85; }
+    .rx-card.is-hold { border-color: var(--amber-300); background: #fffdf5; }
+
+    .rx-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .rx-card-title { font-weight: 700; font-size: 13px; color: var(--slate-900); }
+    .rx-card-desc { font-size: 12px; color: var(--slate-600); margin: 0; }
+    .rx-prev-reject {
+      font-size: 11px;
+      background: var(--rose-50);
+      border: 1px solid var(--rose-200);
+      color: var(--rose-800);
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .rx-actions {
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid var(--slate-100);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .rx-btn-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+    .toast {
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .toast.show { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .toast-success { background: var(--emerald-100); color: var(--emerald-800); border: 1px solid var(--emerald-300); }
+    .toast-error { background: var(--rose-100); color: var(--rose-900); border: 1px solid var(--rose-300); }
+    .toast-info { background: var(--indigo-50); color: var(--indigo-900); border: 1px solid var(--indigo-200); }
+
+    /* 履歴テーブル */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--slate-100); }
+    th { background: var(--slate-50); color: var(--slate-500); font-size: 11px; text-transform: uppercase; }
+
+    /* モーダル */
+    dialog {
+      border: 1px solid var(--slate-200);
+      border-radius: 16px;
+      padding: 0;
+      max-width: 480px;
+      width: 92%;
+      box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.15);
+    }
+    dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+    .modal-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--slate-200);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .modal-body { padding: 16px 18px; font-size: 13px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-foot {
+      padding: 12px 18px;
+      border-top: 1px solid var(--slate-200);
+      background: var(--slate-50);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    textarea, select {
+      width: 100%;
+      border: 1px solid var(--slate-300);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .radio-list { display: flex; flex-direction: column; gap: 6px; }
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--slate-200);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .radio-item:hover { background: var(--slate-50); }
+  </style>
+</head>
+<body>
+
+  <!-- 確認用コントロールバー（本番非表示） -->
+  <div class="mock-bar">
+    <div class="mock-bar-inner">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="mock-badge">確認用モック (N1 / B4)</span>
+        <span>本番DB・通知送信なし / 架空データ</span>
+      </div>
+      <div class="mock-btn-group">
+        <span>状態切替:</span>
+        <button class="mock-btn active" data-preset="shortfall" onclick="loadPreset('shortfall')">1. 不足あり（初期）</button>
+        <button class="mock-btn" data-preset="resolved" onclick="loadPreset('resolved')">2. 解消済み（自動消滅）</button>
+        <button class="mock-btn" data-preset="prev_rejected" onclick="loadPreset('prev_rejected')">3. 前回却下あり</button>
+        <button class="mock-btn" data-preset="adopted" onclick="loadPreset('adopted')">4. 打診済み（二重防止確認）</button>
+        <button class="mock-btn" data-preset="stale_hold" onclick="loadPreset('stale_hold')">5. 長期保留（30日超）</button>
+        <button class="mock-btn" data-preset="approved_plan" onclick="loadPreset('approved_plan')">6. 確定済みプラン（閲覧のみ）</button>
+        <button class="mock-btn mock-reset" onclick="resetCurrent()">初期化</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    <!-- ヘッダーエリア -->
+    <section class="card">
+      <div class="header-row">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="pill pill-indigo">⚡ Timefold MILP Engine</span>
+            <span id="planStatusPill" class="pill pill-amber">ステータス: draft（未承認）</span>
+          </div>
+          <h1>2026-12 シフト詳細（架空：ひだまり保育園）</h1>
+          <p class="meta">基準: 厚労省告示第49号（全国基準） ｜ セル数: 420 ｜ 権限: シフト管理権限あり（園長・主任）</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" type="button" onclick="showToast('info', 'モック画面のため再計算は実行されません。')">⚡ 全月再生成</button>
+          <button id="approvePlanBtn" class="btn btn-emerald" type="button" onclick="loadPreset('approved_plan')">✓ シフト確定</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 免責事項 -->
+    <div class="notice-banner">
+      <span>ℹ️</span>
+      <div>
+        <strong>【免責事項】</strong>
+        本シフト案は法令（労働基準法等）および認可配置基準を満たすための下書きです。登降園予定の突発的変更や現場状況に応じた最終確認および配置責任は施設長にあります。
+      </div>
+    </div>
+
+    <!-- 処方箋（人員不足の解消アシスト）パネル：B4 対象領域 -->
+    <section class="rx-section">
+      <div class="rx-header">
+        <h2 class="rx-title">
+          <span>💡</span> 人員不足の解消アシスト（処方箋）
+          <span id="rxCountPill" class="pill pill-amber">提案あり</span>
+        </h2>
+        <span style="font-size:11px;color:var(--amber-800);">
+          ※「採用」は対象職員への出勤打診通知の送信まで行います（希望休の強制取消は行いません）
+        </span>
+      </div>
+
+      <div id="rxToast" class="toast">
+        <span id="rxToastText"></span>
+        <button class="btn btn-sm" onclick="hideToast()">閉じる</button>
+      </div>
+
+      <div id="rxCardsContainer" class="rx-grid"></div>
+
+      <!-- 判断履歴（監査・引き継ぎ用） -->
+      <div style="margin-top:16px;background:#fff;border:1px solid var(--amber-200);border-radius:12px;padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="font-size:12px;color:var(--slate-800);">📋 サジェスト判断履歴（ShiftSolveSuggestions）</strong>
+          <span style="font-size:11px;color:var(--slate-500);">facility_id 分離 / 確定済みプランでは編集不可</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>日時</th>
+                <th>サジェストID / 種別</th>
+                <th>判断</th>
+                <th>理由・補足</th>
+                <th>判断者</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 検出された制約違反（既存画面構成の文脈確認用） -->
+    <section class="card" style="background:#fff1f299;border-color:var(--rose-200);">
+      <h2 style="margin:0 0 10px;font-size:14px;color:var(--rose-900);">検出された制約違反（参考表示）</h2>
+      <div id="violationsContainer" style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;"></div>
+    </section>
+
+    <!-- シフトセル一覧（長さ・スクロール確認用サンプル） -->
+    <section class="card">
+      <h2 style="margin:0 0 4px;font-size:15px;">シフト割り当てセル（抜粋プレビュー）</h2>
+      <p class="meta" style="margin-bottom:10px;">画面全体の長さと入力順を確認するためのサンプル表示です。</p>
+      <table>
+        <thead>
+          <tr><th>職員名</th><th>日付</th><th>時間帯スロット</th><th>状態</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>佐藤 美咲（常勤）</td><td>2026-12-08</td><td><span class="pill pill-indigo">早番 (07:30-16:30)</span></td><td><span class="pill pill-slate">自動割り当て</span></td></tr>
+          <tr><td>鈴木 健太（常勤）</td><td>2026-12-08</td><td><span class="pill pill-indigo">日勤 (08:30-17:30)</span></td><td><span class="pill pill-emerald">ピン留め済</span></td></tr>
+          <tr><td>高橋 陽子（パート）</td><td>2026-12-12</td><td><span class="pill pill-indigo">遅番 (10:00-19:00)</span></td><td><span class="pill pill-slate">自動割り当て</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- 採用（打診通知送信）モーダル -->
+  <dialog id="adoptDialog">
+    <div class="modal-head">
+      <span>📩 出勤打診通知の送信（採用）</span>
+      <button class="btn btn-sm" onclick="closeModal('adoptDialog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0;color:var(--slate-600);">
+        以下の職員へ、希望休の調整（出勤打診）通知を送信します。<strong>職員の希望休（StaffShiftUnavailability）は自動取消されません。</strong>
+      </p>
+      <div style="background:var(--slate-50);border:1px solid var(--slate-200);border-radius:10px;padding:10px 12px;font-size:12px;">
+        <div><strong>対象サジェスト:</strong> <span id="adoptTitle"></span></div>
+        <div style="margin-top:4px;"><strong>送信対象職員:</strong> <span id="adoptStaff"></span></div>
+      </div>
+      <label style="font-size:12px;font-weight:600;">
+        打診メッセージ補足（任意）
+        <textarea id="adoptNote" rows="2" placeholder="例: 午前中のみでも助かります。ご検討よろしくお願いします。"></textarea>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('adoptDialog')">キャンセル</button>
+      <button class="btn btn-emerald" onclick="confirmAdopt()">打診通知を送信する</button>
+    </div>
+  </dialog>
+
+  <!-- 却下理由モーダル -->
+  <dialog id="rejectDialog">
+    <div class="modal-head">
+      <span>✕ サジェストを却下</span>
+      <button class="btn btn-sm" onclick="closeModal('rejectDialog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0;font-size:12px;color:var(--slate-600);">
+        却下理由を選択してください。以後の同じ種別のサジェストに「前回却下（理由）」として表示されます。
+      </p>
+      <div class="radio-list">
+        <label class="radio-item"><input type="radio" name="rejectReason" value="職員の事情（冠婚葬祭・体調等）により打診不可" checked> 職員の事情（冠婚葬祭・体調等）により打診不可</label>
+        <label class="radio-item"><input type="radio" name="rejectReason" value="他クラスの応援・フリー配置で調整済み"> 他クラスの応援・フリー配置で調整済み</label>
+        <label class="radio-item"><input type="radio" name="rejectReason" value="園児登園予定の確認中（欠席見込み）"> 園児登園予定の確認中（欠席見込み）</label>
+        <label class="radio-item"><input type="radio" name="rejectReason" value="その他"> その他（下に補足を入力）</label>
+      </div>
+      <label style="font-size:12px;font-weight:600;">
+        補足メモ（任意、「その他」の場合は必須）
+        <textarea id="rejectNote" rows="2" placeholder="具体的な理由を入力..."></textarea>
+      </label>
+      <div id="rejectError" style="display:none;color:var(--rose-700);font-size:12px;font-weight:600;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('rejectDialog')">キャンセル</button>
+      <button class="btn btn-rose-outline" onclick="confirmReject()">この内容で却下を記録</button>
+    </div>
+  </dialog>
+
+  <script>
+    let currentPreset = 'shortfall';
+    let state = {};
+    let activeSuggestionId = null;
+
+    const PRESETS = {
+      shortfall: {
+        planStatus: 'draft',
+        suggestions: [
+          {
+            id: 'sg_concession_20261208_a1b2',
+            type: 'SHIFT_REQUEST_CONCESSION',
+            target_date: '2026-12-08',
+            severity: 'HIGH',
+            title: '2026-12-08 の希望休・有休の調整検討',
+            description: '2026-12-08 に 2 コマの人員不足が発生しています。同日に 田中 花子, 山田 太郎 が「希望休」を取得しています。一部職員への出勤打診を推奨します。',
+            action_staff_names: ['田中 花子', '山田 太郎'],
+            status: 'pending_action', // pending_action | adopted | hold | rejected
+            hold_days: 0,
+            prev_rejected_reason: null
+          },
+          {
+            id: 'sg_external_20261212_c3d4',
+            type: 'EXTERNAL_OR_OVERTIME',
+            target_date: '2026-12-12',
+            severity: 'MEDIUM',
+            title: '2026-12-12 のパート延長または応援要請',
+            description: '2026-12-12 に 1 コマの人員不足が発生しています。在籍パート職員の勤務時間延長（契約変更）またはフリー保育士・派遣応援の配置を検討してください。',
+            action_staff_names: [],
+            status: 'pending_action',
+            hold_days: 0,
+            prev_rejected_reason: null
+          }
+        ],
+        history: [],
+        violations: ['[WARNING] SHORTFALL: 2026-12-08 朝延長枠 2名不足', '[WARNING] SHORTFALL: 2026-12-12 夕方枠 1名不足']
+      },
+      resolved: {
+        planStatus: 'draft',
+        suggestions: [],
+        history: [
+          { at: '2026-11-26 10:15', id: 'sg_concession_20261208_a1b2', type: 'SHIFT_REQUEST_CONCESSION', decision: '保留 → 不足解消により自動消滅', reason: '翌求解で配置充足', actor: 'システム（自動）' }
+        ],
+        violations: []
+      },
+      prev_rejected: {
+        planStatus: 'draft',
+        suggestions: [
+          {
+            id: 'sg_concession_20261215_e5f6',
+            type: 'SHIFT_REQUEST_CONCESSION',
+            target_date: '2026-12-15',
+            severity: 'HIGH',
+            title: '2026-12-15 の希望休・有休の調整検討',
+            description: '2026-12-15 に 1 コマの人員不足が発生しています。同日に 田中 花子 が「希望休」を取得しています。',
+            action_staff_names: ['田中 花子'],
+            status: 'pending_action',
+            hold_days: 0,
+            prev_rejected_reason: '職員の事情（冠婚葬祭・体調等）により打診不可'
+          }
+        ],
+        history: [
+          { at: '2026-11-24 16:40', id: 'sg_concession_20261208_a1b2', type: 'SHIFT_REQUEST_CONCESSION', decision: '却下', reason: '職員の事情（冠婚葬祭・体調等）により打診不可', actor: '桐生 園長' }
+        ],
+        violations: ['[WARNING] SHORTFALL: 2026-12-15 日勤枠 1名不足']
+      },
+      adopted: {
+        planStatus: 'draft',
+        suggestions: [
+          {
+            id: 'sg_concession_20261208_a1b2',
+            type: 'SHIFT_REQUEST_CONCESSION',
+            target_date: '2026-12-08',
+            severity: 'HIGH',
+            title: '2026-12-08 の希望休・有休の調整検討',
+            description: '2026-12-08 に 2 コマの人員不足が発生しています。同日に 田中 花子, 山田 太郎 が「希望休」を取得しています。',
+            action_staff_names: ['田中 花子', '山田 太郎'],
+            status: 'adopted',
+            hold_days: 0,
+            prev_rejected_reason: null
+          }
+        ],
+        history: [
+          { at: '2026-11-26 14:05', id: 'sg_concession_20261208_a1b2', type: 'SHIFT_REQUEST_CONCESSION', decision: '採用（打診済み）', reason: '午前中のみでも助かります（対象: 田中 花子, 山田 太郎）', actor: '桐生 園長' }
+        ],
+        violations: ['[WARNING] SHORTFALL: 2026-12-08 朝延長枠 2名不足']
+      },
+      stale_hold: {
+        planStatus: 'draft',
+        suggestions: [
+          {
+            id: 'sg_external_20261212_c3d4',
+            type: 'EXTERNAL_OR_OVERTIME',
+            target_date: '2026-12-12',
+            severity: 'MEDIUM',
+            title: '2026-12-12 のパート延長または応援要請',
+            description: '2026-12-12 に 1 コマの人員不足が発生しています。在籍パート職員の勤務時間延長または応援配置を検討してください。',
+            action_staff_names: [],
+            status: 'hold',
+            hold_days: 34,
+            prev_rejected_reason: null
+          }
+        ],
+        history: [
+          { at: '2026-10-23 09:10', id: 'sg_external_20261212_c3d4', type: 'EXTERNAL_OR_OVERTIME', decision: '保留', reason: '他クラス調整の様子見', actor: '早乙女 主任' }
+        ],
+        violations: ['[WARNING] SHORTFALL: 2026-12-12 夕方枠 1名不足']
+      },
+      approved_plan: {
+        planStatus: 'approved',
+        suggestions: [
+          {
+            id: 'sg_concession_20261208_a1b2',
+            type: 'SHIFT_REQUEST_CONCESSION',
+            target_date: '2026-12-08',
+            severity: 'HIGH',
+            title: '2026-12-08 の希望休・有休の調整検討',
+            description: '2026-12-08 に 2 コマの人員不足が発生しています。（確定済みプランのため閲覧のみ）',
+            action_staff_names: ['田中 花子'],
+            status: 'hold',
+            hold_days: 2,
+            prev_rejected_reason: null
+          }
+        ],
+        history: [
+          { at: '2026-11-24 11:00', id: 'sg_concession_20261208_a1b2', type: 'SHIFT_REQUEST_CONCESSION', decision: '保留', reason: '確定後に園長対応', actor: '桐生 園長' }
+        ],
+        violations: []
+      }
+    };
+
+    function loadPreset(name) {
+      currentPreset = name;
+      state = JSON.parse(JSON.stringify(PRESETS[name]));
+      document.querySelectorAll('.mock-btn[data-preset]').forEach(b => {
+        b.classList.toggle('active', b.dataset.preset === name);
+      });
+      hideToast();
+      render();
+    }
+
+    function resetCurrent() {
+      loadPreset(currentPreset);
+      showToast('info', '現在の状態を初期化しました。');
+    }
+
+    function render() {
+      const isApproved = state.planStatus === 'approved';
+      const statusPill = document.getElementById('planStatusPill');
+      statusPill.className = 'pill ' + (isApproved ? 'pill-emerald' : 'pill-amber');
+      statusPill.textContent = isApproved ? 'ステータス: approved（確定済み・編集不可）' : 'ステータス: draft（未承認）';
+      document.getElementById('approvePlanBtn').style.display = isApproved ? 'none' : 'inline-flex';
+
+      const countPill = document.getElementById('rxCountPill');
+      if (state.suggestions.length === 0) {
+        countPill.className = 'pill pill-emerald';
+        countPill.textContent = '不足解消済み（提案なし）';
+      } else {
+        countPill.className = 'pill pill-amber';
+        countPill.textContent = `提案 ${state.suggestions.length}件`;
+      }
+
+      const container = document.getElementById('rxCardsContainer');
+      if (state.suggestions.length === 0) {
+        container.innerHTML = `
+          <div class="rx-card" style="grid-column:1/-1;background:#f0fdf4;border-color:var(--emerald-200);">
+            <div style="font-weight:700;color:var(--emerald-800);font-size:13px;">✓ 現在の人員不足サジェストはありません</div>
+            <p class="rx-card-desc">不足コマがすべて充足されたため、保留中だったサジェストは自動的に消滅しました。</p>
+          </div>`;
+      } else {
+        container.innerHTML = state.suggestions.map(s => {
+          const cardClass = s.status === 'adopted' ? 'is-adopted' : (s.status === 'rejected' ? 'is-rejected' : (s.status === 'hold' ? 'is-hold' : ''));
+          const sevPill = s.severity === 'HIGH' ? 'pill-rose' : 'pill-amber';
+          let statusBadge = '';
+          if (s.status === 'adopted') statusBadge = '<span class="pill pill-emerald">✓ 打診済み</span>';
+          else if (s.status === 'rejected') statusBadge = '<span class="pill pill-slate">✕ 却下済み</span>';
+          else if (s.status === 'hold') {
+            statusBadge = `<span class="pill pill-amber">⏸ 保留中${s.hold_days > 30 ? `（保留から ${s.hold_days} 日）` : ''}</span>`;
+          }
+
+          const prevRejectHtml = s.prev_rejected_reason
+            ? `<div class="rx-prev-reject"><strong>⚠ 前回却下（同種別）:</strong> ${escapeHtml(s.prev_rejected_reason)}</div>`
+            : '';
+
+          let actionsHtml = '';
+          if (isApproved) {
+            actionsHtml = `<span style="font-size:11px;color:var(--slate-500);">確定済みプランのため判断ボタンは非表示（閲覧のみ）</span>`;
+          } else if (s.status === 'adopted') {
+            actionsHtml = `
+              <span style="font-size:12px;font-weight:600;color:var(--emerald-700);">✓ 打診通知を送信済みです（再送信不可）</span>
+              <button class="btn btn-sm btn-rose-outline" onclick="simulateDoubleAdopt('${s.id}')">二重採用テスト (409確認)</button>
+            `;
+          } else {
+            const canAdopt = s.type === 'SHIFT_REQUEST_CONCESSION' && s.action_staff_names.length > 0;
+            actionsHtml = `
+              <div class="rx-btn-row">
+                ${canAdopt ? `<button class="btn btn-sm btn-emerald" onclick="openAdopt('${s.id}')">✓ 採用（打診通知）</button>` : `<button class="btn btn-sm btn-emerald" disabled title="対象職員がいないため手動対応">✓ 採用（対象なし）</button>`}
+                <button class="btn btn-sm btn-amber" onclick="markHold('${s.id}')">⏸ 保留</button>
+                <button class="btn btn-sm btn-rose-outline" onclick="openReject('${s.id}')">✕ 却下</button>
+              </div>
+              <span style="font-size:11px;color:var(--slate-400);">ID: ${s.id}</span>
+            `;
+          }
+
+          return `
+            <div class="rx-card ${cardClass}">
+              <div class="rx-card-top">
+                <span class="rx-card-title">${escapeHtml(s.title)}</span>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                  ${statusBadge}
+                  <span class="pill ${sevPill}">${s.severity}</span>
+                </div>
+              </div>
+              <p class="rx-card-desc">${escapeHtml(s.description)}</p>
+              ${prevRejectHtml}
+              <div class="rx-actions">${actionsHtml}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const tbody = document.getElementById('historyTableBody');
+      if (state.history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--slate-400);text-align:center;">まだ判断履歴はありません</td></tr>';
+      } else {
+        tbody.innerHTML = state.history.map(h => `
+          <tr>
+            <td>${escapeHtml(h.at)}</td>
+            <td><code>${escapeHtml(h.id)}</code><br><span style="color:var(--slate-400);font-size:11px;">${escapeHtml(h.type)}</span></td>
+            <td><strong>${escapeHtml(h.decision)}</strong></td>
+            <td>${escapeHtml(h.reason)}</td>
+            <td>${escapeHtml(h.actor)}</td>
+          </tr>
+        `).join('');
+      }
+
+      const vContainer = document.getElementById('violationsContainer');
+      if (state.violations.length === 0) {
+        vContainer.innerHTML = '<span class="pill pill-emerald">違反なし</span>';
+      } else {
+        vContainer.innerHTML = state.violations.map(v => `<span class="pill pill-amber">${escapeHtml(v)}</span>`).join('');
+      }
+    }
+
+    function openAdopt(id) {
+      activeSuggestionId = id;
+      const s = state.suggestions.find(x => x.id === id);
+      document.getElementById('adoptTitle').textContent = s.title;
+      document.getElementById('adoptStaff').textContent = s.action_staff_names.join('、');
+      document.getElementById('adoptNote').value = '';
+      document.getElementById('adoptDialog').showModal();
+    }
+
+    function confirmAdopt() {
+      const s = state.suggestions.find(x => x.id === activeSuggestionId);
+      if (!s) return;
+      if (s.status === 'adopted') {
+        closeModal('adoptDialog');
+        simulateDoubleAdopt(s.id);
+        return;
+      }
+      const note = document.getElementById('adoptNote').value.trim();
+      s.status = 'adopted';
+      state.history.unshift({
+        at: nowStr(),
+        id: s.id,
+        type: s.type,
+        decision: '採用（打診済み）',
+        reason: (note ? note + ' ' : '') + `(対象: ${s.action_staff_names.join(', ')})`,
+        actor: '桐生 園長'
+      });
+      closeModal('adoptDialog');
+      render();
+      showToast('success', `${s.action_staff_names.join('・')} へ出勤打診通知を送信しました（モック）。`);
+    }
+
+    function simulateDoubleAdopt(id) {
+      showToast('error', `HTTP 409 Conflict: サジェスト (${id}) は既に打診済みのため二重送信できません。`);
+    }
+
+    function markHold(id) {
+      const s = state.suggestions.find(x => x.id === id);
+      if (!s) return;
+      s.status = 'hold';
+      state.history.unshift({
+        at: nowStr(),
+        id: s.id,
+        type: s.type,
+        decision: '保留',
+        reason: '次回求解まで様子見（不足解消で自動消滅）',
+        actor: '桐生 園長'
+      });
+      render();
+      showToast('info', 'サジェストを「保留」にしました。不足が解消されると自動で消滅します。');
+    }
+
+    function openReject(id) {
+      activeSuggestionId = id;
+      document.getElementById('rejectNote').value = '';
+      document.getElementById('rejectError').style.display = 'none';
+      document.querySelector('input[name="rejectReason"]').checked = true;
+      document.getElementById('rejectDialog').showModal();
+    }
+
+    function confirmReject() {
+      const selected = document.querySelector('input[name="rejectReason"]:checked').value;
+      const note = document.getElementById('rejectNote').value.trim();
+      const err = document.getElementById('rejectError');
+      if (selected === 'その他' && !note) {
+        err.textContent = '「その他」を選択した場合は補足メモを入力してください。';
+        err.style.display = 'block';
+        return;
+      }
+      const s = state.suggestions.find(x => x.id === activeSuggestionId);
+      if (!s) return;
+      const fullReason = selected === 'その他' ? `その他: ${note}` : (note ? `${selected}（${note}）` : selected);
+      s.status = 'rejected';
+      state.history.unshift({
+        at: nowStr(),
+        id: s.id,
+        type: s.type,
+        decision: '却下',
+        reason: fullReason,
+        actor: '桐生 園長'
+      });
+      closeModal('rejectDialog');
+      render();
+      showToast('info', '却下理由を記録しました。以後の同種別サジェストに「前回却下」が表示されます。');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).close();
+    }
+
+    function showToast(kind, msg) {
+      const el = document.getElementById('rxToast');
+      el.className = 'toast show toast-' + kind;
+      document.getElementById('rxToastText').textContent = msg;
+    }
+
+    function hideToast() {
+      document.getElementById('rxToast').className = 'toast';
+    }
+
+    function nowStr() {
+      const d = new Date();
+      return d.toISOString().slice(0, 16).replace('T', ' ');
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    }
+
+    loadPreset('shortfall');
+  </script>
+</body>
+</html>

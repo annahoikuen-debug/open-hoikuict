@@ -46,31 +46,37 @@ PERMISSION_GUIDANCE: dict[str, dict[str, str]] = {
         "title": "管理者権限が必要です",
         "description": "システム設定や職員の権限管理を行うには、施設管理者（園長・主任等）のアカウントが必要です。",
         "contact": "園長またはシステム管理者へ権限の付与をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
     "can_manage_child_records": {
         "title": "園児台帳管理権限が必要です",
         "description": "園児情報や保護者情報の登録・更新を行うには、園児台帳管理の権限が必要です。",
         "contact": "園長または主任へ権限の付与をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
     "can_manage_billing_accounts": {
         "title": "請求・口座情報管理権限が必要です",
         "description": "保護者の口座情報や振替設定を閲覧・変更するには、請求・口座情報管理の権限が必要です。",
         "contact": "園長または経理担当管理者へ権限の付与をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
     "can_export_documents": {
         "title": "帳票出力権限が必要です",
         "description": "各種公的書類・監査帳票・出勤簿・月案等のエクスポートを行うには、帳票出力の権限が必要です。",
         "contact": "園長または主任へ権限の付与をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
     "can_export_zengin": {
         "title": "Zengin出力権限が必要です",
         "description": "銀行伝送用Zenginデータの作成・ダウンロード・振替結果の取込には、Zengin出力の権限が必要です。",
         "contact": "園長または経理担当管理者へ権限の付与をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
     "zengin_reopen_director": {
         "title": "園長の確認が必要です",
         "description": "再計算で請求額が変わる（差額あり・L1）締め解除は、Zengin出力権限に加えて園長の確認が必要です。確認を依頼するか、園長に承認をご依頼ください。",
         "contact": "園長へ承認をご依頼ください。",
+        "settings_url": "/staff/permissions",
     },
 }
 
@@ -83,6 +89,7 @@ def get_permission_guidance(permission_key: str) -> dict[str, str]:
             "title": "アクセス権限が不足しています",
             "description": "この操作を実行するための権限がアカウントに付与されていません。",
             "contact": "施設管理者へお問い合わせください。",
+            "settings_url": "/staff/permissions",
         },
     )
 

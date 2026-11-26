@@ -172,6 +172,10 @@ def plans_detail(
     fac_setting = repo.facility_settings()
     facility_id = fac_setting.id if fac_setting else 1
 
+    from ..services.diagnostics_service import get_plan_suggestions_with_state
+
+    suggestion_state = get_plan_suggestions_with_state(repo.session, plan)
+
     from template_utils import create_templates
 
     templates = create_templates()
@@ -192,6 +196,8 @@ def plans_detail(
             "all_users": all_users,
             "gap_warnings": gap_warnings,
             "prescriptions": prescriptions,
+            "ai_suggestions": suggestion_state["suggestions"],
+            "suggestion_history": suggestion_state["history"],
             "slot_options": slot_options,
             "staff_names": staff_names,
             "solver_available": solver_available(),
@@ -462,6 +468,132 @@ def get_plan_diagnostics_endpoint(
     from ..services.diagnostics_service import get_plan_diagnostics
 
     return get_plan_diagnostics(repo.session, plan_id)
+
+
+def _handle_suggestion_action(
+    plan_id: int,
+    suggestion_id: str,
+    action: str,
+    request: Request,
+    repo: ShiftRepository,
+    reason_code: str | None = None,
+    reason_note: str | None = None,
+):
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+    from audit_logger import record_audit_event
+    from auth import get_current_staff_user
+    from ..services.diagnostics_service import SuggestionActionError, record_suggestion_action
+
+    plan = repo.get_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    staff_user = get_current_staff_user(request)
+    actor_user_id = str(staff_user.user_id) if staff_user.user_id else None
+    actor_name = staff_user.name
+
+    try:
+        row = record_suggestion_action(
+            session=repo.session,
+            plan=plan,
+            suggestion_id=suggestion_id,
+            action=action,
+            actor_user_id=actor_user_id,
+            actor_name=actor_name,
+            reason_code=reason_code,
+            reason_note=reason_note,
+        )
+    except SuggestionActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+
+    record_audit_event(
+        actor_user_id=actor_user_id,
+        actor_role=str(staff_user.role.value if hasattr(staff_user.role, "value") else staff_user.role),
+        target_resource="shift_suggestion",
+        resource_id=f"{plan_id}:{suggestion_id}",
+        action=f"suggestion_{action}",
+        detail={
+            "plan_id": plan_id,
+            "suggestion_id": suggestion_id,
+            "reason_code": reason_code,
+            "reason_note": reason_note,
+            "notified_staff_ids": row.notified_staff_ids,
+        },
+    )
+
+    accept_header = request.headers.get("accept", "")
+    if "application/json" in accept_header or request.headers.get("x-requested-with") == "fetch":
+        return JSONResponse(
+            {
+                "ok": True,
+                "id": row.id,
+                "suggestion_id": row.suggestion_id,
+                "action": row.action,
+                "notified_staff_ids": row.notified_staff_ids,
+            }
+        )
+    return RedirectResponse(url=f"/shifts/plans/{plan_id}#suggestion-panel", status_code=303)
+
+
+@router.post("/plans/{plan_id}/suggestions/{suggestion_id}/adopt", dependencies=[Depends(require_can_edit)])
+def adopt_plan_suggestion(
+    plan_id: int,
+    suggestion_id: str,
+    request: Request,
+    reason_note: str | None = Form(default=None),
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """過剰制約サジェストを採用し、対象職員へ打診通知を送信する。"""
+    return _handle_suggestion_action(
+        plan_id=plan_id,
+        suggestion_id=suggestion_id,
+        action="adopted",
+        request=request,
+        repo=repo,
+        reason_note=reason_note,
+    )
+
+
+@router.post("/plans/{plan_id}/suggestions/{suggestion_id}/hold", dependencies=[Depends(require_can_edit)])
+def hold_plan_suggestion(
+    plan_id: int,
+    suggestion_id: str,
+    request: Request,
+    reason_note: str | None = Form(default=None),
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """過剰制約サジェストを保留にする。"""
+    return _handle_suggestion_action(
+        plan_id=plan_id,
+        suggestion_id=suggestion_id,
+        action="hold",
+        request=request,
+        repo=repo,
+        reason_note=reason_note,
+    )
+
+
+@router.post("/plans/{plan_id}/suggestions/{suggestion_id}/reject", dependencies=[Depends(require_can_edit)])
+def reject_plan_suggestion(
+    plan_id: int,
+    suggestion_id: str,
+    request: Request,
+    reason_code: str = Form(...),
+    reason_note: str | None = Form(default=None),
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+):
+    """過剰制約サジェストを却下理由付きで却下する。"""
+    return _handle_suggestion_action(
+        plan_id=plan_id,
+        suggestion_id=suggestion_id,
+        action="rejected",
+        request=request,
+        repo=repo,
+        reason_code=reason_code,
+        reason_note=reason_note,
+    )
+
 
 
 

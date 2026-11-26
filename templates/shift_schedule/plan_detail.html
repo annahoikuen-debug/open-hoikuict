@@ -257,6 +257,128 @@
   </section>
   {% endif %}
 
+  <!-- B4: 過剰制約サジェスト 3ボタン（採用 / 保留 / 却下）＆判断履歴 -->
+  {% if ai_suggestions or suggestion_history %}
+  <section id="suggestion-panel" class="rounded-xl border border-amber-300 bg-amber-50/90 p-4 shadow-sm space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-bold text-amber-900 flex items-center gap-1.5 text-sm">
+        <span>💡</span> 過剰制約診断サジェスト（処方箋アクション）
+        {% if ai_suggestions %}
+        <span class="text-xs bg-amber-200 text-amber-800 px-2.5 py-0.5 rounded-full font-semibold">提案 {{ ai_suggestions|length }}件</span>
+        {% else %}
+        <span class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-semibold">不足解消済み</span>
+        {% endif %}
+      </h2>
+      <span class="text-[11px] text-amber-800">※「採用」は対象職員への出勤打診通知の送信まで行います（希望休の自動取消は行いません）</span>
+    </div>
+
+    {% if ai_suggestions %}
+    <div class="grid gap-3 sm:grid-cols-2">
+      {% for sg in ai_suggestions %}
+      <div class="rounded-xl border p-3.5 shadow-xs space-y-2
+        {% if sg.status == 'adopted' %}border-emerald-300 bg-emerald-50/60
+        {% elif sg.status == 'rejected' %}border-slate-300 bg-slate-50 opacity-85
+        {% else %}border-amber-200 bg-white{% endif %}">
+        <div class="flex items-start justify-between gap-2">
+          <span class="font-bold text-xs text-slate-900">{{ sg.title }}</span>
+          <div class="flex flex-wrap items-center gap-1">
+            {% if sg.status == 'adopted' %}
+            <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ 打診済み</span>
+            {% elif sg.status == 'hold' %}
+            <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+              ⏸ 保留中{% if sg.hold_days > 30 %}（保留から {{ sg.hold_days }} 日）{% endif %}
+            </span>
+            {% elif sg.status == 'rejected' %}
+            <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700 border border-slate-300">✕ 却下済み</span>
+            {% endif %}
+            <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold
+              {% if sg.severity == 'HIGH' %}bg-rose-100 text-rose-800 border border-rose-200{% else %}bg-amber-100 text-amber-800 border border-amber-200{% endif %}">
+              {{ sg.severity }}
+            </span>
+          </div>
+        </div>
+        <p class="text-xs text-slate-600">{{ sg.description }}</p>
+        {% if sg.prev_rejected_reason %}
+        <div class="text-[11px] bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-2.5 py-1.5">
+          <strong>⚠ 前回却下（同種別）:</strong> {{ sg.prev_rejected_reason }}
+        </div>
+        {% endif %}
+        <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          {% if plan.status == 'approved' %}
+          <span class="text-[11px] text-slate-500">確定済みプランのため判断ボタンは非表示（閲覧のみ）</span>
+          {% elif sg.status == 'adopted' %}
+          <span class="text-xs font-semibold text-emerald-700">✓ 打診通知を送信済みです</span>
+          {% else %}
+          <div class="flex flex-wrap items-center gap-1.5">
+            {% if sg.type == 'SHIFT_REQUEST_CONCESSION' and sg.action_staff_names %}
+            <button type="button"
+              onclick="openSuggestionAdoptModal('{{ sg.id }}', '{{ sg.title|e }}', '{{ sg.action_staff_names|join('、')|e }}')"
+              class="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700">
+              ✓ 採用（打診通知）
+            </button>
+            {% else %}
+            <button type="button" disabled title="対象職員がいないため手動対応"
+              class="rounded-lg bg-emerald-600/40 px-2.5 py-1 text-[11px] font-semibold text-white cursor-not-allowed">
+              ✓ 採用（対象なし）
+            </button>
+            {% endif %}
+            <button type="button"
+              onclick="submitSuggestionHold('{{ sg.id }}')"
+              class="rounded-lg bg-amber-100 border border-amber-300 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-200">
+              ⏸ 保留
+            </button>
+            <button type="button"
+              onclick="openSuggestionRejectModal('{{ sg.id }}')"
+              class="rounded-lg bg-white border border-rose-300 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">
+              ✕ 却下
+            </button>
+          </div>
+          {% endif %}
+          <span class="text-[10px] font-mono text-slate-400">{{ sg.id }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if suggestion_history %}
+    <div class="rounded-xl border border-amber-200 bg-white p-3">
+      <h3 class="text-xs font-bold text-slate-800 mb-2">📋 サジェスト判断履歴</h3>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 text-xs">
+          <thead class="bg-slate-50 text-left text-slate-500">
+            <tr>
+              <th class="px-2.5 py-1.5">日時</th>
+              <th class="px-2.5 py-1.5">種別 / ID</th>
+              <th class="px-2.5 py-1.5">判断</th>
+              <th class="px-2.5 py-1.5">理由・補足</th>
+              <th class="px-2.5 py-1.5">判断者</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for h in suggestion_history %}
+            <tr>
+              <td class="px-2.5 py-1.5 text-slate-500">{{ h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '-' }}</td>
+              <td class="px-2.5 py-1.5 font-mono text-[11px]">{{ h.suggestion_type }}<br><span class="text-slate-400">{{ h.suggestion_id }}</span></td>
+              <td class="px-2.5 py-1.5 font-semibold">
+                {% if h.action == 'adopted' %}採用（打診済み）
+                {% elif h.action == 'hold' %}保留
+                {% elif h.action == 'rejected' %}却下
+                {% elif h.action == 'resolved' %}不足解消（自動消滅）
+                {% else %}{{ h.action }}{% endif %}
+              </td>
+              <td class="px-2.5 py-1.5 text-slate-600">{{ h.reason_code or '' }}{% if h.reason_code and h.reason_note %} / {% endif %}{{ h.reason_note or '-' }}</td>
+              <td class="px-2.5 py-1.5 text-slate-700">{{ h.actor_name or '-' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <!-- 検出違反一覧 -->
   {% if violations %}
   <section class="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
@@ -718,6 +840,67 @@ async function saveConstraintWeights() {
   } finally {
     btn.disabled = false;
     btn.textContent = "設定を保存";
+  }
+}
+
+function openSuggestionAdoptModal(sgId, title, staffNames) {
+  const note = prompt(
+    `以下の職員へ出勤打診通知を送信します（希望休は自動取消されません）。\n\n対象: ${title}\n職員: ${staffNames}\n\n補足メッセージ（任意）:`,
+    ""
+  );
+  if (note === null) return;
+  submitSuggestionForm(`/shifts/plans/{{ plan.id }}/suggestions/${encodeURIComponent(sgId)}/adopt`, { reason_note: note });
+}
+
+function submitSuggestionHold(sgId) {
+  submitSuggestionForm(`/shifts/plans/{{ plan.id }}/suggestions/${encodeURIComponent(sgId)}/hold`, {});
+}
+
+function openSuggestionRejectModal(sgId) {
+  const presets = [
+    "職員の事情（冠婚葬祭・体調等）により打診不可",
+    "他クラスの応援・フリー配置で調整済み",
+    "園児登園予定の確認中（欠席見込み）",
+    "その他"
+  ];
+  const choice = prompt(
+    "却下理由番号を入力してください:\n1: " + presets[0] + "\n2: " + presets[1] + "\n3: " + presets[2] + "\n4: " + presets[3],
+    "1"
+  );
+  if (choice === null) return;
+  const idx = parseInt(choice, 10) - 1;
+  const reasonCode = presets[idx] || "その他";
+  const note = prompt("補足メモ（任意、「その他」の場合は必須）:", "");
+  if (note === null) return;
+  if (reasonCode === "その他" && !note.trim()) {
+    alert("「その他」を選択した場合は補足メモを入力してください。");
+    return;
+  }
+  submitSuggestionForm(`/shifts/plans/{{ plan.id }}/suggestions/${encodeURIComponent(sgId)}/reject`, {
+    reason_code: reasonCode,
+    reason_note: note
+  });
+}
+
+async function submitSuggestionForm(url, fields) {
+  const body = new URLSearchParams(fields);
+  const csrfMatch = document.cookie.match(/(?:^|;\s*)hoikuict_csrf=([^;]+)/);
+  const headers = { "Accept": "application/json", "X-Requested-With": "fetch" };
+  if (csrfMatch) headers["X-CSRF-Token"] = decodeURIComponent(csrfMatch[1]);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      alert(err.detail || "操作に失敗しました");
+      return;
+    }
+    window.location.reload();
+  } catch (e) {
+    alert("通信エラー: " + e.message);
   }
 }
 </script>
