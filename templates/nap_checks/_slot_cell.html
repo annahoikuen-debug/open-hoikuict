@@ -2,12 +2,12 @@
   hx-post="/nap-checks/cycle-slot"
   hx-vals='{"child_id": {{ child_id }}, "target_date": "{{ target_date }}", "time_key": "{{ slot.time }}", "current_posture": "{{ slot.posture }}"}'
   hx-swap="outerHTML"
-  class="group relative flex h-10 w-11 flex-col items-center justify-center rounded-lg border text-xs transition duration-150 active:scale-95 {{ slot.badge_class }}"
+  class="group relative flex h-11 w-11 flex-col items-center justify-center rounded-lg border text-xs transition duration-150 active:scale-95 {{ slot.badge_class }}"
   title="{{ slot.time }} {{ slot.label or '未記録' }} (タップで体位切替)">
   <span class="text-sm leading-none font-bold">
     {{ slot.symbol or '・' }}
   </span>
-  <span class="text-[9px] scale-90 text-slate-500 group-hover:text-slate-800">
+  <span class="text-[11px] leading-tight text-slate-600 group-hover:text-slate-900">
     {{ slot.time.split(':')[1] }}
   </span>
 </button>

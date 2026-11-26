@@ -92,7 +92,7 @@
           </button>
           {% endfor %}
         </div>
-        <input type="hidden" id="sibling-actual-pickup-person" value="母">
+        <input type="hidden" id="sibling-actual-pickup-person" value="">
       </div>
 
       <div class="mt-6 flex gap-3">
@@ -436,7 +436,11 @@ main button[data-punch] { min-height: 96px; font-size: 30px; }
       }
 
       const action = actionCheckin && actionCheckin.checked ? "check_in" : "check_out";
-      const pickupPerson = pickupPersonInput ? pickupPersonInput.value : "";
+      const pickupPerson = pickupPersonInput ? pickupPersonInput.value.trim() : "";
+      if (action === "check_out" && !pickupPerson) {
+        alert("実際にお迎えに来た方を選択してください。");
+        return;
+      }
 
       btnCommitSibling.disabled = true;
       btnCommitSibling.textContent = "打刻処理中...";

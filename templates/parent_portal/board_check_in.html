@@ -91,7 +91,7 @@
       </div>
     </fieldset>
 
-    <div>
+    <div id="board-pickup-person-wrapper">
       <label class="block text-sm font-bold text-slate-900" for="actual_pickup_person">
         お迎えの方（降園時・任意）
       </label>
@@ -109,6 +109,20 @@
       打刻を確定する
     </button>
   </form>
+  <script>
+  (() => {
+    const wrapper = document.getElementById('board-pickup-person-wrapper');
+    const radios = document.querySelectorAll('input[name="action"]');
+    const syncPickup = () => {
+      const checked = document.querySelector('input[name="action"]:checked');
+      if (wrapper && checked) {
+        wrapper.classList.toggle('hidden', checked.value === 'check_in');
+      }
+    };
+    radios.forEach(r => r.addEventListener('change', syncPickup));
+    syncPickup();
+  })();
+  </script>
   {% elif punch_info %}
   <div class="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
     打刻対象として紐づいている在園児が見つかりません。園へお問い合わせください。

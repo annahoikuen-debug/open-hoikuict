@@ -25,10 +25,22 @@
   </div>
 
   {% if items %}
+  <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50/70 px-4 py-3">
+    <label class="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-800 cursor-pointer">
+      <input type="checkbox" id="bulk-select-all" class="h-4 w-4 rounded border-slate-300 text-indigo-600" checked>
+      <span>すべて選択（全 {{ items|length }} 件）</span>
+    </label>
+    <button type="button" id="btn-bulk-approve"
+      class="rounded-lg bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition">
+      選択した返信を一括承認して公開
+    </button>
+  </div>
   <div class="bg-white rounded-xl shadow-sm border border-slate-200 divide-y divide-slate-200">
     {% for item in items %}
     <div class="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/80 transition">
-      <div class="space-y-1.5 flex-1">
+      <div class="flex items-start gap-3 flex-1">
+        <input type="checkbox" name="bulk_reply_ids" value="{{ item.reply_id }}" class="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 bulk-reply-cb" checked>
+        <div class="space-y-1.5 flex-1">
         <div class="flex items-center space-x-2">
           <span class="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
             対象日: {{ item.target_date }}
@@ -46,6 +58,7 @@
         <div class="text-[11px] text-slate-400">
           申請日時: {{ item.updated_at }}
         </div>
+        </div>
       </div>
 
       <div class="flex items-center space-x-2 shrink-0">
@@ -62,6 +75,38 @@
     </div>
     {% endfor %}
   </div>
+  <script>
+  (() => {
+    const selectAll = document.getElementById('bulk-select-all');
+    const cbs = Array.from(document.querySelectorAll('.bulk-reply-cb'));
+    const btn = document.getElementById('btn-bulk-approve');
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        cbs.forEach(cb => { cb.checked = selectAll.checked; });
+      });
+    }
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        const selected = cbs.filter(cb => cb.checked).map(cb => cb.value);
+        if (!selected.length) return;
+        btn.disabled = true;
+        const body = new FormData();
+        selected.forEach(id => body.append('reply_ids', id));
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const res = await fetch('/daily-contacts/replies/bulk-approve', {
+          method: 'POST',
+          body,
+          headers: csrf ? { 'X-CSRF-Token': csrf } : {},
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          btn.disabled = false;
+        }
+      });
+    }
+  })();
+  </script>
   {% else %}
   <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
     <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-bold">

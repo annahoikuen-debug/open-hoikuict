@@ -971,7 +971,7 @@ current_path.startswith('/parent-accounts/registration-qr') %}
       <span>現在オフラインです。直近にキャッシュされた連絡帳・お知らせを表示しています。</span>
     </div>
 
-    <main class="mx-auto max-w-7xl px-4 pt-6 pb-24 safe-pb-main-content sm:px-6">
+    <main id="main-content" class="mx-auto max-w-7xl px-4 pt-6 pb-24 safe-pb-main-content sm:px-6">
       {% else %}
       <div class="min-h-screen lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
         <aside id="staff-sidebar"
@@ -1177,19 +1177,19 @@ current_path.startswith('/parent-accounts/registration-qr') %}
             {% if is_parent_portal %}
             <!-- 保護者向け下部固定ナビゲーション (スマホ操作を想定・セーフエリア対応) -->
             <nav class="fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white/95 backdrop-blur-md z-40 flex justify-center items-center gap-1 px-2 pt-1.5 safe-pb-bottom-nav shadow-lg" aria-label="モバイル下部ナビゲーション">
-              <a href="/parent-portal/" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-[10px] px-1 py-1 rounded-lg transition {% if current_path == '/parent-portal/' %}bg-indigo-50 text-indigo-700 font-bold shadow-sm{% else %}text-slate-500 hover:bg-slate-50{% endif %}">
+              <a href="/parent-portal/" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-xs px-1 py-1 rounded-lg transition {% if current_path == '/parent-portal/' %}bg-indigo-50 text-indigo-700 font-bold shadow-sm{% else %}text-slate-600 hover:bg-slate-50{% endif %}">
                 <span class="text-base leading-none" aria-hidden="true">🏠</span>
                 <span>ホーム</span>
               </a>
-              <a href="/parent-portal/history" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-[10px] px-1 py-1 rounded-lg transition {% if current_path.startswith('/parent-portal/history') %}bg-indigo-50 text-indigo-700 font-bold shadow-sm{% else %}text-slate-500 hover:bg-slate-50{% endif %}">
+              <a href="/parent-portal/history" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-xs px-1 py-1 rounded-lg transition {% if current_path.startswith('/parent-portal/history') %}bg-indigo-50 text-indigo-700 font-bold shadow-sm{% else %}text-slate-600 hover:bg-slate-50{% endif %}">
                 <span class="text-base leading-none" aria-hidden="true">📖</span>
                 <span>連絡履歴</span>
               </a>
-              <a href="/parent-portal/notices" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-[10px] px-1 py-1 rounded-lg transition {% if current_path.startswith('/parent-portal/notices') %}bg-purple-50 text-purple-700 font-bold shadow-sm{% else %}text-slate-500 hover:bg-slate-50{% endif %}">
+              <a href="/parent-portal/notices" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-xs px-1 py-1 rounded-lg transition {% if current_path.startswith('/parent-portal/notices') %}bg-purple-50 text-purple-700 font-bold shadow-sm{% else %}text-slate-600 hover:bg-slate-50{% endif %}">
                 <span class="text-base leading-none" aria-hidden="true">📢</span>
                 <span>お知らせ</span>
               </a>
-              <a href="/parent-portal/attention" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-[10px] px-1 py-1 rounded-lg transition {% if current_path == '/parent-portal/attention' %}bg-amber-50 text-amber-700 font-bold shadow-sm{% else %}text-slate-500 hover:bg-slate-50{% endif %}">
+              <a href="/parent-portal/attention" class="flex-[1_1_0] max-w-[76px] flex flex-col items-center gap-0.5 text-xs px-1 py-1 rounded-lg transition {% if current_path == '/parent-portal/attention' %}bg-amber-50 text-amber-700 font-bold shadow-sm{% else %}text-slate-600 hover:bg-slate-50{% endif %}">
                 <span class="text-base leading-none" aria-hidden="true">🔔</span>
                 <span>未読</span>
               </a>
@@ -1370,6 +1370,9 @@ current_path.startswith('/parent-accounts/registration-qr') %}
       window.addEventListener('online', syncStatus);
       window.addEventListener('offline', syncStatus);
       syncStatus();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/parent-portal/push-service-worker.js').catch(() => {});
+      }
     })();
   </script>
   {% endif %}
