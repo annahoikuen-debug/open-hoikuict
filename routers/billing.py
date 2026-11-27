@@ -2161,3 +2161,43 @@ def calculate_prorated_meal_fee(
     # 四捨五入
     prorated = int(round((full_amount * enrolled_weekdays) / total_weekdays))
     return prorated, enrolled_weekdays, total_weekdays
+
+
+@router.get("/cycles/{cycle_id}/preflight")
+def billing_cycle_preflight(
+    cycle_id: int,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """月末締め・全銀出力前の失敗ゼロ事前チェック結果を返す。"""
+    require_billing_account_manager(session, current_user)
+    cycle = session.get(BillingCycle, cycle_id)
+    if not cycle:
+        raise HTTPException(status_code=404, detail="請求月サイクルが見つかりません")
+
+    claims = session.exec(select(BillingClaim).where(BillingClaim.billing_cycle_id == cycle_id)).all()
+    draft_claims = [c for c in claims if c.status == BillingClaimStatus.draft]
+    confirmed_claims = [c for c in claims if c.status == BillingClaimStatus.confirmed]
+
+    direct_debit_profiles = session.exec(
+        select(FamilyBillingProfile).where(
+            FamilyBillingProfile.payment_method == BillingPaymentMethod.direct_debit
+        )
+    ).all()
+    missing_bank_account_count = sum(
+        1
+        for p in direct_debit_profiles
+        if not (p.bank_code and p.branch_code and p.account_number)
+    )
+
+    can_export = len(draft_claims) == 0 and len(confirmed_claims) > 0
+    return {
+        "cycle_id": cycle_id,
+        "year_month": cycle.year_month,
+        "status": cycle.status.value if hasattr(cycle.status, "value") else str(cycle.status),
+        "total_claims": len(claims),
+        "draft_claims_count": len(draft_claims),
+        "confirmed_claims_count": len(confirmed_claims),
+        "missing_bank_account_count": missing_bank_account_count,
+        "can_export": can_export,
+    }

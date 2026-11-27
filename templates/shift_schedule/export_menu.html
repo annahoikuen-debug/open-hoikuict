@@ -3,18 +3,85 @@
 {% block title %}シフト結果エクスポート | open-hoikuict{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-6">
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-sm font-semibold text-indigo-600">エクスポート</p>
+      <p class="text-sm font-semibold text-indigo-600">シフト表の出力・共有</p>
       <h1 class="mt-1 text-2xl font-bold text-slate-900">シフト結果エクスポート</h1>
-      <p class="mt-2 text-sm text-slate-600">プラン #{{ plan_id }} の結果を出力します。</p>
+      <p class="mt-2 text-sm text-slate-600">
+        {% if plan %}{{ plan.target_month }} シフト表{% else %}プラン #{{ plan_id }}{% endif %}
+        を、用途に応じた形式でダウンロード・印刷できます。
+      </p>
     </div>
+    <a href="/shifts/plans/{{ plan_id }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+      ← シフト詳細へ戻る
+    </a>
   </div>
 
-  <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-slate-900">未実装</h2>
-    <p class="mt-2 text-sm text-slate-600">CSV / Excel / iCal エクスポートはPhase 3.1の次のステップで実装予定です。</p>
-  </section>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <section class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Excel</span>
+          <h2 class="text-base font-bold text-slate-900">勤務記号マトリクス表 (.xlsx)</h2>
+        </div>
+        <p class="mt-2 text-sm text-slate-600">職員×日付の一覧表と、日別の詳細シフト表をまとめたExcelファイルを出力します。職員室での加工・集計に最適です。</p>
+      </div>
+      <div class="mt-5">
+        <a href="/shifts/plans/{{ plan_id }}/export.xlsx" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+          Excel をダウンロード
+        </a>
+      </div>
+    </section>
+
+    <section class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">印刷 / PDF</span>
+          <h2 class="text-base font-bold text-slate-900">掲示用シフト表（A3/A4印刷・PDF保存）</h2>
+        </div>
+        <p class="mt-2 text-sm text-slate-600">職員室への掲示や配布向けに整えた印刷ビューを開きます。ブラウザの印刷機能からそのままPDF保存も可能です。</p>
+      </div>
+      <div class="mt-5">
+        <a href="/shifts/plans/{{ plan_id }}/print" target="_blank" rel="noopener noreferrer" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+          印刷・PDF画面を開く ↗
+        </a>
+      </div>
+    </section>
+
+    <section class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">CSV</span>
+          <h2 class="text-base font-bold text-slate-900">明細データ (.csv)</h2>
+        </div>
+        <p class="mt-2 text-sm text-slate-600">Excel互換（UTF-8 BOM付き）の1セル1行明細データをダウンロードします。給与ソフト連携や独自集計に利用できます。</p>
+      </div>
+      <div class="mt-5">
+        <a href="/shifts/plans/{{ plan_id }}/export.csv" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          CSV をダウンロード
+        </a>
+      </div>
+    </section>
+
+    <section class="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">iCal</span>
+          <h2 class="text-base font-bold text-slate-900">カレンダー連携 (.ics)</h2>
+        </div>
+        <p class="mt-2 text-sm text-slate-600">GoogleカレンダーやAppleカレンダーへ勤務予定をそのまま取り込める iCalendar 形式を出力します。</p>
+      </div>
+      <div class="mt-5">
+        <a href="/shifts/plans/{{ plan_id }}/export.ics" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          iCal (.ics) をダウンロード
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <div class="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-800">
+    <strong>【免責事項】</strong>本シフト表はAI配置最適化による提案です。最終的な人員配置および法令適合の確認・承認責任は施設管理者が負います。
+  </div>
 </div>
 {% endblock %}

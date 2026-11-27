@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}シフトプラン詳細 (Timefold 最適化) | open-hoikuict{% endblock %}
+{% block title %}シフトプラン詳細 (AI最適化) | open-hoikuict{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6">
@@ -9,7 +9,7 @@
     <div>
       <div class="flex items-center gap-2">
         <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          <span>⚡</span> Timefold MILP Engine
+          <span>⚡</span> AI配置最適化エンジン
         </span>
         <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold
           {% if plan.status == 'approved' %}bg-emerald-100 text-emerald-800 border border-emerald-300
@@ -19,7 +19,7 @@
       </div>
       <h1 class="mt-2 text-2xl font-bold text-slate-900 tracking-tight">{{ plan.target_month }} シフト詳細</h1>
       <p class="mt-1 text-xs text-slate-500">
-        基準: {{ plan.staffing_standard_key }} ｜ セル数: {{ cells|length }} ｜ 最終更新: {{ plan.updated_at.strftime('%Y-%m-%d %H:%M') if plan.updated_at else '-' }}
+        基準: {{ plan.staffing_standard_key }} ｜ 割当コマ数: {{ cells|length }} ｜ 最終更新: {{ plan.updated_at.strftime('%Y-%m-%d %H:%M') if plan.updated_at else '-' }}
       </p>
     </div>
 
@@ -68,7 +68,7 @@
     </div>
   </div>
 
-  <!-- Timefold 思想: Diff Review（差分レビュー・適用）パネル -->
+  <!-- 変更案の比較レビュー・適用パネル -->
   {% if latest_proposal %}
   <section class="rounded-2xl border-2 border-indigo-500 bg-gradient-to-r from-indigo-50/90 via-white to-blue-50/90 p-5 shadow-md">
     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -123,7 +123,7 @@
   </section>
   {% endif %}
 
-  <!-- Timefold 思想: リアルタイム進捗パネル & 中断ボタン -->
+  <!-- 最適化の進捗・中断パネル -->
   <div id="realtimeProgressPanel" class="hidden rounded-2xl border-2 border-indigo-400 bg-white p-5 shadow-lg space-y-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2.5">
@@ -157,13 +157,13 @@
     </div>
   </div>
 
-  <!-- Timefold 思想: Score Explanation（スコア詳細説明）カード -->
+  <!-- シフト評価の内訳カード -->
   {% if score_info %}
   <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <div class="flex items-center gap-2">
-          <span class="text-base font-bold text-slate-900">最適化スコア評価 (Score Explanation)</span>
+          <span class="text-base font-bold text-slate-900">シフト評価の内訳</span>
           {% if score_info.hard_score == 0 %}
           <span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
             ✓ 法令・配置基準 100% 遵守 (Hard: 0)
@@ -175,7 +175,7 @@
           {% endif %}
         </div>
         <p class="mt-1 text-xs text-slate-500">
-          Timefold 思想に基づく多目的スコアリング。Hard制約（法令遵守）を満たした上で、Soft制約（希望・平準化・運用コスト）を最大化しています。
+          配置基準・労働基準法（必須条件）をすべて満たした上で、職員の希望休や勤務の公平性を最適化するスコアリングです。
         </p>
       </div>
 

@@ -400,3 +400,21 @@ def reset_onboarding_tour(
         session.commit()
 
     return {"status": "ok", "tour_key": tour_key, "is_completed": False}
+
+
+@router.get("/diagnostics-pack")
+def download_diagnostics_pack(
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+) -> Response:
+    """管理者向けに PII を除外した匿名化診断パック ZIP をダウンロードする。"""
+    require_live_admin(session, current_user)
+    from support_diagnostics import build_diagnostics_zip
+
+    payload = build_diagnostics_zip(session)
+    filename = f"open_hoikuict_diagnostics_{utc_now().strftime('%Y%m%d_%H%M%S')}.zip"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

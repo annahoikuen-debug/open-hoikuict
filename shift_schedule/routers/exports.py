@@ -23,7 +23,10 @@ DISCLAIMER_TEXT = "【免責事項】本シフト表は数理最適化による�
 def exports_menu(
     plan_id: int,
     request: Request,
+    session: Session = Depends(get_session),
 ) -> HTMLResponse:
+    repo = SqlModelShiftRepository(session)
+    plan = repo.get_plan(plan_id)
     templates = create_templates()
     return templates.TemplateResponse(
         request,
@@ -31,6 +34,7 @@ def exports_menu(
         {
             "request": request,
             "plan_id": plan_id,
+            "plan": plan,
         },
     )
 
@@ -100,5 +104,121 @@ def export_shift_ics(
         media_type="text/calendar",
         headers={
             "Content-Disposition": f"attachment; filename=shift_plan_{plan_id}.ics"
+        },
+    )
+
+
+@router.get("/plans/{plan_id}/export.xlsx")
+def export_shift_xlsx(
+    plan_id: int,
+    session: Session = Depends(get_session),
+) -> Response:
+    """シフト結果を勤務記号マトリクス＋日別明細の Excel (.xlsx) として出力する。"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    repo = SqlModelShiftRepository(session)
+    plan = repo.get_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="シフト計画が見つかりません")
+    cells = repo.list_plan_cells(plan_id)
+
+    wb = Workbook()
+    ws_matrix = wb.active
+    ws_matrix.title = "勤務記号マトリクス"
+
+    # 免責事項ヘッダー
+    ws_matrix.append([DISCLAIMER_TEXT])
+    ws_matrix.append([f"対象月: {plan.target_month}", f"基準: {plan.staffing_standard_key}"])
+    ws_matrix.append([])
+
+    dates = sorted({c.target_date for c in cells})
+    staff_ids = sorted({c.staff_user_id for c in cells})
+    cell_map: dict[tuple[int, object], list[str]] = {}
+    for c in cells:
+        if c.cell_state and c.cell_state != "off":
+            cell_map.setdefault((c.staff_user_id, c.target_date), []).append(c.slot_label)
+
+    header_row = ["職員ID"] + [d.strftime("%m/%d") for d in dates] + ["出勤日数"]
+    ws_matrix.append(header_row)
+    header_fill = PatternFill(start_color="E0E7FF", end_color="E0E7FF", fill_type="solid")
+    for cell_obj in ws_matrix[ws_matrix.max_row]:
+        cell_obj.font = Font(bold=True)
+        cell_obj.fill = header_fill
+        cell_obj.alignment = Alignment(horizontal="center")
+
+    for sid in staff_ids:
+        work_days = 0
+        row_vals: list[object] = [f"職員 {sid}"]
+        for d in dates:
+            labels = cell_map.get((sid, d), [])
+            if labels:
+                work_days += 1
+                row_vals.append(f"{labels[0]}〜{labels[-1]}" if len(labels) > 1 else labels[0])
+            else:
+                row_vals.append("休")
+        row_vals.append(work_days)
+        ws_matrix.append(row_vals)
+
+    ws_detail = wb.create_sheet("日別明細")
+    ws_detail.append(["職員ID", "日付", "スロット", "状態"])
+    for c in sorted(cells, key=lambda x: (x.target_date, x.staff_user_id, x.slot_label)):
+        ws_detail.append([c.staff_user_id, c.target_date.isoformat(), c.slot_label, c.cell_state])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=shift_plan_{plan_id}.xlsx"
+        },
+    )
+
+
+@router.get("/plans/{plan_id}/print", response_class=HTMLResponse)
+def print_shift_plan(
+    plan_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    """掲示用・PDF保存用の印刷最適化HTMLビューを返す。"""
+    repo = SqlModelShiftRepository(session)
+    plan = repo.get_plan(plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="シフト計画が見つかりません")
+    cells = repo.list_plan_cells(plan_id)
+    dates = sorted({c.target_date for c in cells})
+    staff_ids = sorted({c.staff_user_id for c in cells})
+    cell_map: dict[tuple[int, object], list[str]] = {}
+    for c in cells:
+        if c.cell_state and c.cell_state != "off":
+            cell_map.setdefault((c.staff_user_id, c.target_date), []).append(c.slot_label)
+
+    rows = []
+    for sid in staff_ids:
+        day_cells = []
+        work_days = 0
+        for d in dates:
+            labels = cell_map.get((sid, d), [])
+            if labels:
+                work_days += 1
+                summary = f"{labels[0]}-{labels[-1]}" if len(labels) > 1 else labels[0]
+            else:
+                summary = "休"
+            day_cells.append(summary)
+        rows.append({"staff_id": sid, "day_cells": day_cells, "work_days": work_days})
+
+    templates = create_templates()
+    return templates.TemplateResponse(
+        request,
+        "shift_schedule/print_view.html",
+        {
+            "request": request,
+            "plan": plan,
+            "dates": dates,
+            "rows": rows,
+            "disclaimer": DISCLAIMER_TEXT,
         },
     )

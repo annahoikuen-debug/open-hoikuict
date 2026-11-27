@@ -212,7 +212,6 @@ def health_overview(
         profile = profiles_by_child_id.get(child.id)
         allergies = allergies_by_child_id.get(child.id, [])
         check_records = checks_by_child_id.get(child.id, [])
-        chart_records = build_health_check_chart_records(check_records, range_key="all")
         attention_labels = build_health_attention_labels(
             profile=profile,
             allergies=allergies,
@@ -224,6 +223,7 @@ def health_overview(
         if not _matches_health_search(child, q):
             continue
 
+        chart_records = build_health_check_chart_records(check_records, range_key="all")
         rows.append(
             {
                 "child": child,

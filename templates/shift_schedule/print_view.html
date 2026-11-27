@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ plan.target_month }} 掲示用シフト表 | open-hoikuict</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif; color: #0f172a; font-size: 11px; margin: 16px; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #cbd5e1; }
+    .btn { padding: 6px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-size: 12px; font-weight: 600; text-decoration: none; color: #1e293b; }
+    .btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #cbd5e1; padding: 4px 2px; text-align: center; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    th { background: #f1f5f9; font-weight: 700; }
+    td.staff-col, th.staff-col { width: 72px; text-align: left; padding-left: 6px; font-weight: 600; }
+    td.off { color: #94a3b8; background: #f8fafc; }
+    .disclaimer { margin-top: 10px; font-size: 10px; color: #64748b; }
+    @media print {
+      .no-print { display: none !important; }
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <div>
+      <strong>{{ plan.target_month }} 勤務シフト表</strong>
+      <span style="margin-left: 8px; color: #64748b;">基準: {{ plan.staffing_standard_key }}</span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button type="button" class="btn btn-primary" onclick="window.print()">印刷 / PDFとして保存</button>
+      <a href="/shifts/plans/{{ plan.id }}/export" class="btn">出力メニューへ戻る</a>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="staff-col">職員ID</th>
+        {% for d in dates %}
+        <th>{{ d.strftime('%m/%d') }}</th>
+        {% endfor %}
+        <th style="width: 44px;">出勤</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="staff-col">職員 {{ row.staff_id }}</td>
+        {% for cell in row.day_cells %}
+        <td class="{% if cell == '休' %}off{% endif %}">{{ cell }}</td>
+        {% endfor %}
+        <td><strong>{{ row.work_days }}日</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="disclaimer">{{ disclaimer }}</p>
+</body>
+</html>
