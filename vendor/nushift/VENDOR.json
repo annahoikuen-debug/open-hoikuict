@@ -1,9 +1,12 @@
 {
   "source_repo": "E:\\nushift\\nushift",
-  "source_commit": "0133f4b",
+  "source_commit": "d291f1c",
   "files": {
     "__init__.py": "2b60071fd84e877a49d9505f7f5e571a28aef58ec8a513ff0014d9d0576595b7",
     "__main__.py": "0b89873abf98b990c0cc0e3a72b0ff10a5505a8ea047ab4bd68cbfeebf69ac1d",
+    "api/__init__.py": "ae948f47898a2da52d67d7a7add505cd3a905af38f723d7aebd59cd9be6bf021",
+    "api/app.py": "946e48c08ea50d617ab97eeb1dd24d5100e18968c8c89651639b480bd1bb94a4",
+    "api/routes.py": "868a97b9f11c022c45a52c21cc9146a5daaef1b51cf6f69c1094f5be8b666f73",
     "benchmark.py": "de735c4eb353c31d3cf76ef8c64f7422fa6dd25e290f5b5b0cb11fc2b93f44f2",
     "compliance.py": "76f21dc6b6170aded08ed194a3746cbfae6d3970b0098797a476512b2c5a60fe",
     "config.py": "d6cf1fc3e8b8b76121d445889a47440153a3928d0018b3422a768c4ad708dd63",
@@ -33,6 +36,7 @@
     "repair_engine/greedy.py": "f802a113fe0637cec356038ef70c0354a1e23b824fc4f89edc1c0ea2285cf9bb",
     "repair_engine/outcome.py": "abb909313d39918be9b7f709ee9e39d27f46b0891361449f513af73b7c88f215",
     "repair_engine/snapshot.py": "fc2dd2521a91693bc3a5a0663f20ae5323a04bc9de47fbfd5988d0cd125a53b8",
+    "rust_bridge.py": "8aaa0d6a27b6738c650590fa4e94bdc4957547510b142db6a4c2516417f89ee6",
     "sample_data.py": "c4dcd4b12ade1947f8fbe8888679ffe9c85fd383e92647cc9cdcd5dd22de2c4e",
     "score.py": "fcde7025bc84a60c1b795fd2d6362e315f9d61546ff4685742bb8e6a8aeedf56",
     "shadow_state.py": "816d3fc2e90206aad5a5902b322ec9bdb69c4183c1debf1312c4042d9e379d76",

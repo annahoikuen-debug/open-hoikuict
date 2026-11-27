@@ -30,6 +30,7 @@ from shift_schedule.services.diagnostics_service import (
     get_plan_diagnostics,
 )
 from vendor.nushift.shiftai.domain import Indictment, ShiftScore
+from shiftai.domain import Indictment, ShiftScore
 
 
 @pytest.fixture

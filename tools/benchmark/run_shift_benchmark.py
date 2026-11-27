@@ -19,9 +19,15 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+VENDOR_DIR = ROOT_DIR / "vendor" / "nushift"
+for _p in (str(VENDOR_DIR), str(ROOT_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from vendor.nushift.shiftai import local_rules
 from vendor.nushift.shiftai.domain import (
+from shiftai import local_rules
+from shiftai.domain import (
     AgeClass,
     ChildPlan,
     Contract,
@@ -36,6 +42,10 @@ from vendor.nushift.shiftai.monthly import MonthlySolveContext, solve_monthly_hi
 from vendor.nushift.shiftai.shift_patterns import ShiftPattern
 from vendor.nushift.shiftai.solver import is_highs_available
 from vendor.nushift.shiftai.standards import build_requirements
+from shiftai.monthly import MonthlySolveContext, solve_monthly_hierarchical
+from shiftai.shift_patterns import ShiftPattern
+from shiftai.solver import is_highs_available
+from shiftai.standards import build_requirements
 
 
 def create_benchmark_dataset(dataset_name: str = "standard_7days") -> MonthlySolveContext:

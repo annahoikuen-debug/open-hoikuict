@@ -261,7 +261,15 @@ def run_alembic_migrations() -> None:
     logger.info("Alembic マイグレーションが完了しました。")
 
 
+_SCHEMA_INIT_LOCK = threading.Lock()
+
+
 def create_db_and_tables() -> None:
+    with _SCHEMA_INIT_LOCK:
+        _create_db_and_tables_unlocked()
+
+
+def _create_db_and_tables_unlocked() -> None:
     import models  # noqa: F401
     import child_records.models  # noqa: F401
     import plan_docs.db_models  # noqa: F401

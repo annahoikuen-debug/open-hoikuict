@@ -20,6 +20,7 @@ from shift_schedule.contracts import SolveJobStatus
 from shift_schedule.db_models import ShiftSolveJobs
 from time_utils import utc_now
 from vendor.nushift.shiftai.domain import CancellationToken
+from shiftai.domain import CancellationToken
 
 logger = logging.getLogger(__name__)
 

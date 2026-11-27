@@ -10,6 +10,9 @@ from tools.benchmark.run_shift_benchmark import create_benchmark_dataset
 from vendor.nushift.shiftai.domain import SolveStatus
 from vendor.nushift.shiftai.monthly import solve_monthly_hierarchical
 from vendor.nushift.shiftai.solver import is_highs_available
+from shiftai.domain import SolveStatus
+from shiftai.monthly import solve_monthly_hierarchical
+from shiftai.solver import is_highs_available
 
 
 def test_standard_7days_regression_gate():

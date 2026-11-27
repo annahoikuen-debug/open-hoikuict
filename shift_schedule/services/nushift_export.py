@@ -17,11 +17,14 @@ from common.csv_utils import sanitize_csv_cell
 from models import (
     AttendanceRecord,
     AttendanceVerification,
+    Child,
     ChildCareCertification,
+    ChildStatus,
     StaffPaidLeaveRequest,
     User,
 )
 from shift_schedule.bridge import active_children, build_child_plan
+from shift_schedule.bridge import build_child_plan
 from shift_schedule.db_models import (
     ChildPlannedArrivalDefaults,
     StaffContracts,
@@ -88,8 +91,71 @@ def children_csv_string(session: Session, start_date: date, end_date: date) -> s
         all_days.append(current)
         current += timedelta(days=1)
 
+    if not all_days:
+        return "\ufeff" + output.getvalue()
+
+    # 対象期間に在籍し得る園児と関連レコードを一括プリフェッチ（N+1クエリ回避）
+    enrolled_children = list(
+        session.exec(
+            select(Child).where(
+                Child.status == ChildStatus.enrolled,
+                Child.enrollment_date <= end_date,
+                (Child.withdrawal_date.is_(None)) | (Child.withdrawal_date > start_date),
+            )
+        ).all()
+    )
+    child_ids = [c.id for c in enrolled_children]
+    if not child_ids:
+        return "\ufeff" + output.getvalue()
+
+    att_records = session.exec(
+        select(AttendanceRecord).where(
+            AttendanceRecord.child_id.in_(child_ids),
+            AttendanceRecord.attendance_date >= start_date,
+            AttendanceRecord.attendance_date <= end_date,
+        )
+    ).all()
+    att_map = {(r.child_id, r.attendance_date): r for r in att_records}
+
+    p_defaults_by_child: dict[int, list[ChildPlannedArrivalDefaults]] = {}
+    for p_def in session.exec(
+        select(ChildPlannedArrivalDefaults).where(
+            ChildPlannedArrivalDefaults.child_id.in_(child_ids),
+            ChildPlannedArrivalDefaults.effective_from <= end_date,
+            (ChildPlannedArrivalDefaults.effective_to.is_(None))
+            | (ChildPlannedArrivalDefaults.effective_to >= start_date),
+        )
+    ).all():
+        p_defaults_by_child.setdefault(p_def.child_id, []).append(p_def)
+
+    certs_by_child: dict[int, list[ChildCareCertification]] = {}
+    for cert in session.exec(
+        select(ChildCareCertification).where(
+            ChildCareCertification.child_id.in_(child_ids),
+            ChildCareCertification.is_active == True,  # noqa: E712
+            ChildCareCertification.effective_from <= end_date,
+            (ChildCareCertification.effective_to.is_(None))
+            | (ChildCareCertification.effective_to >= start_date),
+        )
+    ).all():
+        certs_by_child.setdefault(cert.child_id, []).append(cert)
+
+    verifs = session.exec(
+        select(AttendanceVerification).where(
+            AttendanceVerification.child_id.in_(child_ids),
+            AttendanceVerification.target_date >= start_date,
+            AttendanceVerification.target_date <= end_date,
+        )
+    ).all()
+    verif_map = {(v.child_id, v.target_date): v for v in verifs}
+
     for day in all_days:
         kids = active_children(session, day)
+        kids = [
+            c
+            for c in enrolled_children
+            if c.enrollment_date <= day and (c.withdrawal_date is None or c.withdrawal_date > day)
+        ]
         for child in kids:
             rec = session.exec(
                 select(AttendanceRecord).where(
@@ -120,6 +186,25 @@ def children_csv_string(session: Session, start_date: date, end_date: date) -> s
                     AttendanceVerification.target_date == day,
                 )
             ).first()
+            rec = att_map.get((child.id, day))
+            p_def = next(
+                (
+                    d
+                    for d in p_defaults_by_child.get(child.id, ())
+                    if d.effective_from <= day and (d.effective_to is None or d.effective_to >= day)
+                ),
+                None,
+            )
+            cert = next(
+                (
+                    c_item
+                    for c_item in certs_by_child.get(child.id, ())
+                    if c_item.effective_from <= day
+                    and (c_item.effective_to is None or c_item.effective_to >= day)
+                ),
+                None,
+            )
+            verif = verif_map.get((child.id, day))
 
             cp = build_child_plan(
                 session,

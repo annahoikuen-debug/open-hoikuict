@@ -520,9 +520,12 @@ def test_phase4_shift_requests_workflow_and_nav(client):
     client.app.dependency_overrides[get_current_staff_user] = lambda: staff_principal
     try:
         # (5) ナビゲーションリンク確認
+        # (5a) 一般職員向けナビゲーションリンク確認（管理導線は非表示）
         resp_staff_page = client.get("/children")
         assert "/shifts/staff" in resp_staff_page.text
         assert "/shifts/requests" in resp_staff_page.text
+        assert "/shifts/staff" not in resp_staff_page.text
+        assert "/shifts/requests" not in resp_staff_page.text
         assert "/staff/shift-requests" in resp_staff_page.text
         assert "/paid-leave" in resp_staff_page.text
 
@@ -567,8 +570,13 @@ def test_phase4_shift_requests_workflow_and_nav(client):
         assert resp_dup.status_code == 400
 
         # (3) 園長・管理者による承認
+        # (3) 園長・管理者による承認 & 管理者向けナビゲーション導線確認
         admin_principal = StaffUser(role=Role.ADMIN, name="園長", user_id=uuid4())
         client.app.dependency_overrides[get_current_staff_user] = lambda: admin_principal
+
+        resp_admin_nav = client.get("/children")
+        assert "/shifts/staff" in resp_admin_nav.text
+        assert "/shifts/requests" in resp_admin_nav.text
 
         resp_admin_list = client.get("/shifts/requests")
         assert resp_admin_list.status_code == 200

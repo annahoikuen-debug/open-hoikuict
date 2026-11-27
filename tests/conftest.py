@@ -14,6 +14,12 @@ _test_db_path = _test_db_dir / f"hoikuict_test_{_worker_id}.db"
 
 # 既存の環境変数がなければ設定（テストプロセス全体で有効）
 if "HOIKUICT_DATABASE_URL" not in os.environ:
+# 既存の環境変数がなければ設定（xdist ワーカーが master の一時DB URL を継承した場合は上書き）
+_master_db_url = f"sqlite:///{(_test_db_dir / 'hoikuict_test_master.db').as_posix()}"
+if "HOIKUICT_DATABASE_URL" not in os.environ or (
+    "PYTEST_XDIST_WORKER" in os.environ
+    and os.environ.get("HOIKUICT_DATABASE_URL") == _master_db_url
+):
     os.environ["HOIKUICT_DATABASE_URL"] = f"sqlite:///{_test_db_path.as_posix()}"
 
 from cache_service import invalidate_all_caches
