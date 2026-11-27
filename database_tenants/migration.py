@@ -42,6 +42,7 @@ def ensure_tenant_template_initialized(force_recreate: bool = False) -> Path:
     import child_records.models  # noqa: F401
     import plan_docs.db_models  # noqa: F401
     import shift_schedule.db_models  # noqa: F401
+    import class_kiosk.models  # noqa: F401
 
     if template_path.exists():
         template_path.unlink()

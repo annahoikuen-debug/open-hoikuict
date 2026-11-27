@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlmodel import Session, select
 
 
@@ -65,6 +65,11 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("047_attendance_idempotency_key", _migrate_attendance_idempotency_key),
         ("048_smart_hud_simple_mode_and_nap_checks", _migrate_smart_hud_simple_mode_and_nap_checks),
         ("049_facility_settings_board_qr", _migrate_facility_settings_board_qr),
+        ("050_meeting_note_lifecycle", _migrate_add_meeting_note_columns),
+        ("051_extended_care_bands", _migrate_care_certification_and_extended_care_columns),
+        ("052_weekly_sheet_columns", _migrate_weekly_sheet_columns),
+        ("053_annual_sheet_columns", _migrate_annual_sheet_columns),
+        ("054_plan_document_action_revision_id", _migrate_plan_document_action_columns),
     ]
 
 
@@ -420,11 +425,17 @@ def _migrate_add_message_columns() -> None:
 
 def _migrate_add_meeting_note_columns() -> None:
     try:
-        with _db().engine.connect() as conn:
+        with _db().engine.begin() as conn:
             columns = _db()._table_columns("meeting_notes")
-            if columns and "search_text" not in columns:
-                conn.execute(text("ALTER TABLE meeting_notes ADD COLUMN search_text VARCHAR"))
-            conn.commit()
+            if not columns:
+                return
+            for name, definition in {
+                "search_text": "VARCHAR",
+                "lifecycle_status": "VARCHAR NOT NULL DEFAULT 'active'",
+                "lifecycle_version": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE meeting_notes ADD COLUMN {name} {definition}"))
     except Exception as exc:
         _db()._log_migration_skip("meeting note column", exc)
 
@@ -543,18 +554,57 @@ def _migrate_survey_tables() -> None:
     return
 
 
+def _migrate_weekly_sheet_columns() -> None:
+    # Additive migration: existing weekly/individual plans remain untouched.
+    with _db().engine.begin() as conn:
+        insp = inspect(conn)
+        if not insp.has_table("plan_documents"):
+            return
+        columns = {c["name"] for c in insp.get_columns("plan_documents")}
+        for name, kind in (("weekly_sheet", "JSON"), ("weekly_sheet_key", "VARCHAR")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_sheet_key "
+                "ON plan_documents(weekly_sheet_key) WHERE weekly_sheet_key IS NOT NULL"
+            )
+        )
+
+
 def _migrate_monthly_sheet_columns() -> None:
     # Additive migration: existing monthly/individual plans remain untouched.
     with _db().engine.begin() as conn:
-        columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(plan_documents)")}
-        if not columns:
+        insp = inspect(conn)
+        if not insp.has_table("plan_documents"):
             return
+        columns = {c["name"] for c in insp.get_columns("plan_documents")}
         for name, kind in (("monthly_sheet", "JSON"), ("monthly_sheet_key", "VARCHAR")):
             if name not in columns:
-                conn.exec_driver_sql(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}")
-        conn.exec_driver_sql(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_sheet_key "
-            "ON plan_documents(monthly_sheet_key) WHERE monthly_sheet_key IS NOT NULL"
+                conn.execute(text(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_monthly_sheet_key "
+                "ON plan_documents(monthly_sheet_key) WHERE monthly_sheet_key IS NOT NULL"
+            )
+        )
+
+
+def _migrate_annual_sheet_columns() -> None:
+    """Add annual sheets without converting any existing plan or period."""
+    with _db().engine.begin() as conn:
+        insp = inspect(conn)
+        if not insp.has_table("plan_documents"):
+            return
+        columns = {c["name"] for c in insp.get_columns("plan_documents")}
+        for name, kind in (("annual_sheet", "JSON"), ("annual_sheet_key", "VARCHAR")):
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE plan_documents ADD COLUMN {name} {kind}"))
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_annual_sheet_key "
+                "ON plan_documents(annual_sheet_key) WHERE annual_sheet_key IS NOT NULL"
+            )
         )
 
 
@@ -600,6 +650,13 @@ def _migrate_plan_document_action_columns() -> None:
                     text(
                         "ALTER TABLE plan_document_actions "
                         "ADD COLUMN actor_name VARCHAR"
+                    )
+                )
+            if "revision_id" not in columns:
+                conn.execute(
+                    text(
+                        "ALTER TABLE plan_document_actions "
+                        "ADD COLUMN revision_id INTEGER REFERENCES plan_revisions(id)"
                     )
                 )
             conn.commit()
@@ -901,7 +958,6 @@ def _migrate_extended_care_billing_transfer() -> None:
                     "ADD COLUMN source_reference VARCHAR(120)"
                 )
             )
-        if line_cols:
             conn.execute(
                 text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS "
@@ -914,10 +970,12 @@ def _migrate_extended_care_billing_transfer() -> None:
 
 def _migrate_care_certification_and_extended_care_columns() -> None:
     with _db().engine.begin() as conn:
-        rule_cols = _db()._table_columns("extended_care_fee_rules")
-        charge_cols = _db()._table_columns("extended_care_charges")
+        insp = inspect(conn)
+        rule_cols = {c["name"] for c in insp.get_columns("extended_care_fee_rules")} if insp.has_table("extended_care_fee_rules") else set()
+        charge_cols = {c["name"] for c in insp.get_columns("extended_care_charges")} if insp.has_table("extended_care_charges") else set()
 
         rule_additions = {
+            "fee_bands_json": "TEXT",
             "care_time_category": "VARCHAR(32)",
             "normal_start_time": "VARCHAR",
             "normal_end_time": "VARCHAR",
@@ -935,6 +993,7 @@ def _migrate_care_certification_and_extended_care_columns() -> None:
                 conn.execute(text(f"ALTER TABLE extended_care_fee_rules ADD COLUMN {column_name} {column_sql}"))
 
         charge_additions = {
+            "fee_breakdown_json": "TEXT",
             "certification_id": "INTEGER REFERENCES child_care_certifications(id)",
             "care_time_category_snapshot": "VARCHAR(32)",
             "calculation_version": "VARCHAR(32) DEFAULT 'legacy_v1' NOT NULL",
@@ -1010,7 +1069,6 @@ def _migrate_care_certification_and_extended_care_columns() -> None:
                     "ADD COLUMN source_reference VARCHAR(120)"
                 )
             )
-        if line_cols:
             conn.execute(
                 text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS "
@@ -1024,6 +1082,7 @@ def _migrate_care_certification_and_extended_care_columns() -> None:
         charge_cols = _db()._table_columns("extended_care_charges")
 
         rule_additions = {
+            "fee_bands_json": "TEXT",
             "care_time_category": "VARCHAR(32)",
             "normal_start_time": "VARCHAR",
             "normal_end_time": "VARCHAR",
@@ -1041,6 +1100,7 @@ def _migrate_care_certification_and_extended_care_columns() -> None:
                 conn.execute(text(f"ALTER TABLE extended_care_fee_rules ADD COLUMN {column_name} {column_sql}"))
 
         charge_additions = {
+            "fee_breakdown_json": "TEXT",
             "certification_id": "INTEGER REFERENCES child_care_certifications(id)",
             "care_time_category_snapshot": "VARCHAR(32)",
             "calculation_version": "VARCHAR(32) DEFAULT 'legacy_v1' NOT NULL",

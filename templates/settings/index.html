@@ -36,6 +36,7 @@
   <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="nursery-settings">
     <h2 id="nursery-settings" class="px-5 py-3 font-semibold text-slate-600">園の運用</h2>
     {{ item('/classrooms/', 'クラス管理', 'クラス名・表示順・所属園児数を確認します。') }}
+    {% if current_user.is_admin and class_kiosk_admin_url %}{{ item(class_kiosk_admin_url, 'クラス用スマホ', 'クラス共用のAndroidスマホを登録・管理します。') }}{% endif %}
     {{ item('/message-templates', '定型文テンプレート管理', '連絡帳返信やお知らせで使う文例を登録・編集します。') }}
     {% if current_user.is_admin %}{{ item('/settings/facility', '施設基本設定', 'お迎え最終時刻や補食判定時刻、補食費用を設定します。') }}{% endif %}
     {% if current_user.is_admin %}{{ item('/settings/child-records', '児童記録設定', '児童記録に使う項目を設定します。') }}{% endif %}
@@ -52,6 +53,7 @@
   </section>
   <section class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-labelledby="maintenance-settings">
     <h2 id="maintenance-settings" class="px-5 py-3 font-semibold text-slate-600">保守</h2>
+    {{ item('/settings/parent-contact-fields', '保護者の日次連絡項目', '年齢またはクラスごとに連絡帳の入力項目を設定します。') }}
     {{ item('/settings/backups', 'バックアップ・復元' if restore_enabled else 'バックアップ管理', 'バックアップの状況確認・実行・予約と、園全体の復元を行います。' if restore_enabled else 'バックアップの状況確認と実行・予約を行います。') }}
   </section>
   {% endif %}

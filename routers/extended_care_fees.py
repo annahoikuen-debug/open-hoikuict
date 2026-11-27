@@ -44,8 +44,10 @@ from time_utils import local_today, utc_now
 
 router = APIRouter(prefix="/extended-care-fees", tags=["extended-care-fees"])
 from template_utils import create_templates
+from routers.extended_care_bands import router as bands_router, settings_bootstrap
 
 templates = create_templates()
+router.include_router(bands_router)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -431,6 +433,7 @@ def extended_care_fee_settings(
             "request": request,
             "current_user": current_user,
             "rules": rules,
+            "settings_state": settings_bootstrap(rules, current_user),
             "errors": [],
             "form_values": _default_rule_form_values(),
             "billing_setting": get_extended_care_billing_setting(session),
@@ -439,6 +442,7 @@ def extended_care_fee_settings(
             "billing_errors": [],
             "message": message,
         },
+        headers={"Cache-Control": "private, no-store"},
     )
 
 
@@ -520,7 +524,7 @@ def update_extended_care_billing_setting(
     if errors:
         return templates.TemplateResponse(
             request,
-            "extended_care_fees/settings.html",
+            "extended_care_fees/legacy_settings.html",
             {
                 "request": request,
                 "current_user": current_user,
@@ -574,6 +578,8 @@ def update_extended_care_fee_rule(
     rule = session.get(ExtendedCareFeeRule, rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="料金ルールが見つかりません")
+    if rule.fee_bands_json is not None:
+        raise HTTPException(status_code=409, detail="時間帯別ルールは標準時間・短時間の専用枠から更新してください。")
 
     values, errors = _parse_rule_form(
         name=name,
@@ -733,7 +739,7 @@ def _settings_response(
 ):
     return templates.TemplateResponse(
         request,
-        "extended_care_fees/settings.html",
+        "extended_care_fees/legacy_settings.html",
         {
             "request": request,
             "current_user": current_user,

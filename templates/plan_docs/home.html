@@ -1,27 +1,24 @@
 {% extends "base.html" %}
-{% block title %}文書作成 | hoiku-plan-docs{% endblock %}
+{% block title %}指導計画 | open-hoikuict{% endblock %}
 {% block content %}
-  <section class="toolbar-band">
-    <div>
-      <p class="eyebrow">帳票作成</p>
-      <h1>年案・月案の帳票作成</h1>
-      <a class="button button--primary" href="/plans/monthly-library">帳票から月案をつくる・開く</a>
-      <p class="lead">{{ user.nursery_label }} / {{ user.classroom_label }}</p>
+<div class="plan-index">
+  <header><h1>指導計画</h1><p>{{ user.nursery_label }}　／　{{ user.classroom_label }}</p></header>
+  <section aria-labelledby="standard-heading">
+    <h2 id="standard-heading">自園の帳票</h2>
+    <p>書きたい計画を選んでください。保存した計画の続きも、ここから開けます。</p>
+    <a class="text-link" href="/manual-guide-preview/#chapter/3" target="_blank" rel="noopener noreferrer">指導計画の書き方を見る</a>
+    <div class="period-links">
+      {% for title, hint, href in [
+        ('年案','年度とクラスを選ぶ','/plans/annual-library'),
+        ('月案','カレンダーから月を選ぶ','/plans/monthly-plans/'),
+        ('週案','カレンダーから週を選ぶ','/plans/weekly-plans/'),
+        ('日案','カレンダーから日を選ぶ','/plans/daily-plans/')] %}
+        <a href="{{ href }}"><strong>{{ title }}</strong><span>{{ hint }}</span><b aria-hidden="true">›</b></a>
+      {% endfor %}
     </div>
+    <a class="text-link" href="/plans/monthly-library">月案の帳票を直接開く</a>
   </section>
-
-  <!-- P1-3: 文脈ヘルプ -->
-  {% with help_id="help-plan-docs-home", help_title="指導計画（年案・月案）の作成フロー", help_steps=[
-    {"title": "日案・月案の作成", "desc": "クラスごとの日案・月案を作成します。前日振り返りを引用して下書きを素早く作れます。"},
-    {"title": "文例・AIサジェスト", "desc": "定型文例の挿入や AI 候補生成で記入負担を減らします。"},
-    {"title": "印刷・PDF出力", "desc": "A4 帳票 PDF や印刷プレビューで、提出用のレイアウトを事前確認できます。"}
-  ], help_cautions=[
-    "添付した図表（環境構成図等）は PDF 帳票に自動で焼き込まれます。",
-    "印刷・提出前にプレビューで改ページ位置を確認してください。"
-  ] %}
-  {% include "shared/context_help.html" %}
-  {% endwith %}
-
+  <a class="legacy-entry" href="/plans/legacy/"><div><strong>旧式の帳票</strong><span>以前の帳票を探す{% if user.can_edit %}・旧式で年案や月案を作る{% endif %}</span></div><b aria-hidden="true">›</b></a>
   {% if reflection_reminders %}
     <section class="section-block reflection-reminder-panel" aria-labelledby="reflection-reminder-heading">
       <div class="section-heading">
@@ -61,6 +58,7 @@
         {% endif %}
       </div>
       {% if review_notifications %}
+        {% from 'plan_docs/_review_notifications.html' import message %}
         <div class="review-notification-list">
           {% for notification in review_notifications %}
             <article class="review-notification{% if notification.read_at is none %} review-notification--unread{% endif %}">
@@ -70,15 +68,9 @@
                   <span>{{ notification.created_at|jst_datetime("%Y-%m-%d %H:%M") }}</span>
                 </div>
                 <h3>{{ notification.document_title }}</h3>
+                <p>{{ message(notification) }}</p>
                 {% if notification.notification_kind == 'review_outcome' %}
-                  {% if notification.decision_status == 'approved' %}
-                  <p>{{ notification.decided_by_name or notification.requested_by_name }}さんが承認しました。</p>
-                  {% else %}
-                  <p>{{ notification.decided_by_name or notification.requested_by_name }}さんが却下（差戻し）しました。</p>
-                  {% endif %}
                   {% if notification.decision_comment %}<p>{{ notification.decision_comment }}</p>{% endif %}
-                {% else %}
-                <p>{{ notification.requested_by_name }}さんからレビュー依頼が届いています。</p>
                 {% endif %}
               </div>
               <div>
@@ -103,58 +95,9 @@
       {% endif %}
     </section>
   {% endif %}
-
-  <section class="work-grid">
-    {% if user.can_edit %}
-      <a class="action-panel" href="/plans/annual-plans/new">
-        <span class="action-panel__label">年間計画</span>
-        <strong>年案</strong>
-        <span>年度、クラスの姿、4期の見通しから構造化帳票を作成します。</span>
-      </a>
-      <a class="action-panel action-panel--accent" href="/plans/monthly-plans/new">
-        <span class="action-panel__label">月間計画</span>
-        <strong>月案</strong>
-        <span>前月反省、現在の姿、年間計画の文脈をつないで月案を作成します。</span>
-      </a>
-      <a class="action-panel" href="/plans/weekly-plans/new">
-        <span class="action-panel__label">週間計画</span>
-        <strong>週案</strong>
-        <span>月案と前週の振り返りを受けて、1週間の環境と援助を見通します。</span>
-      </a>
-      <a class="action-panel action-panel--accent" href="/plans/daily-plans/">
-        <span class="action-panel__label">日間計画</span>
-        <strong>日案カレンダー</strong>
-        <span>クラスごとの活動内容と未作成の日を確認し、日案を作成します。</span>
-      </a>
-      <a class="action-panel" href="/plans/bunrei/annual">
-        <span class="action-panel__label">文例選択</span>
-        <strong>年案を文例から作成</strong>
-        <span>年齢と期別の文例を選び、作成後すぐに修正します。</span>
-      </a>
-      <a class="action-panel action-panel--accent" href="/plans/bunrei/monthly">
-        <span class="action-panel__label">文例選択</span>
-        <strong>月案を文例から作成</strong>
-        <span>年齢、月、項目別の文例を選び、クラスに合わせて修正します。</span>
-      </a>
-      <a class="action-panel" href="/plans/bunrei/facility/new">
-        <span class="action-panel__label">園文例</span>
-        <strong>自作文例を追加</strong>
-        <span>園で使っている文例を追加し、年案・月案の文例選択で使います。</span>
-      </a>
-    {% else %}
-      <div class="empty-state">
-        <strong>閲覧モードです</strong>
-        <span>作成が必要な場合は、編集可能な職員セッションに切り替えてください。</span>
-      </div>
-    {% endif %}
-  </section>
-
-  <section class="section-block">
-    <div class="section-heading">
-      <h2>最近の帳票</h2>
-      <a href="/plans/documents/">すべて見る</a>
-    </div>
+  <section aria-labelledby="recent-heading">
+    <div class="list-heading"><h2 id="recent-heading">最近の帳票</h2><a class="text-link" href="/plans/documents/">すべて見る</a></div>
     {% include "plan_docs/documents/_list.html" %}
   </section>
+</div>
 {% endblock %}
-

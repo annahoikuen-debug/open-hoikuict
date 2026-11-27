@@ -59,6 +59,8 @@ class RestoreFixture(unittest.TestCase):
             "HOIKUICT_COOKIE_SECURE": "false", "HOIKUICT_STAFF_AUTH_MODE": "local_password",
         })
         self.environment.start()
+        import shift_schedule.db_models  # noqa: F401
+        import class_kiosk.models  # noqa: F401
         self.engine = create_engine(os.environ["HOIKUICT_DATABASE_URL"])
         SQLModel.metadata.create_all(self.engine)
         with Session(self.engine) as session:

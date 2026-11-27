@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ request.state.csrf_token if request is defined and request.state is defined and request.state.csrf_token is defined else csrf_token|default('', true) }}">
   <title>{% block title %}open-hoikuict{% endblock %}</title>
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">

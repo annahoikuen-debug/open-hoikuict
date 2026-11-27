@@ -1445,6 +1445,26 @@ class DailyContactReply(SQLModel, table=True):
     child: Optional[Child] = Relationship(back_populates="daily_contact_replies")
 
 
+class ParentContactFieldSetting(SQLModel, table=True):
+    __tablename__ = "parent_contact_field_settings"
+    id: int = Field(default=1, primary_key=True)
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    revision: int = Field(default=0)
+    updated_by_name: Optional[str] = None
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ParentContactFieldAudit(SQLModel, table=True):
+    __tablename__ = "parent_contact_field_audits"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    previous_policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    policy: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    revision: int
+    changed_by_name: str
+    changed_by_user_id: uuid.UUID
+    changed_at: datetime = Field(default_factory=utc_now)
+
+
 class UserOnboardingState(SQLModel, table=True):
     __tablename__ = "user_onboarding_states"
     __table_args__ = (UniqueConstraint("user_id", "tour_key", name="uq_user_onboarding_user_tour"),)
@@ -1559,6 +1579,22 @@ class MeetingNote(SQLModel, table=True):
     updated_by: Optional[str] = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    lifecycle_status: str = Field(default="active")
+    lifecycle_version: int = Field(default=0)
+
+
+class MeetingNoteAction(SQLModel, table=True):
+    __tablename__ = "meeting_note_actions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    note_id: int = Field(foreign_key="meeting_notes.id", index=True)
+    action: str
+    from_status: str
+    to_status: str
+    actor_user_id: Optional[str] = None
+    actor_name: str
+    reason: Optional[str] = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Survey(SQLModel, table=True):

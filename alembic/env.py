@@ -22,6 +22,7 @@ import models  # noqa: F401
 import child_records.models  # noqa: F401
 import plan_docs.db_models  # noqa: F401
 import shift_schedule.db_models  # noqa: F401
+import class_kiosk.models  # noqa: F401
 from database import DATABASE_URL, engine
 
 # SQLModel の全モデルメタデータを対象に設定

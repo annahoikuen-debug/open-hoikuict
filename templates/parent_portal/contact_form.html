@@ -4,6 +4,8 @@
 {% block title %}日次連絡入力 | open-hoikuict{% endblock %}
 
 {% block content %}
+{% set field_visibility = field_visibility|default({}) %}
+<style>[data-contact-group][hidden], [data-meal-container][hidden]{display:none!important}</style>
 {% set selected_contact_type = form_data.contact_type if form_data and form_data.contact_type is not none else 'present'
 %}
 {% set selected_absence_reason = form_data.absence_reason if form_data and form_data.absence_reason else '' %}
@@ -73,6 +75,7 @@ selected_absence_reason else 'present') %}
     class="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <input type="hidden" name="date" value="{{ target_date_value }}">
     <input type="hidden" name="contact_revision" value="{{ contact_revision }}">
+    <input type="hidden" name="contact_fields_revision" value="{{ contact_fields_revision|default('') }}">
     <input type="hidden" name="contact_layout_version" value="2">
     <input type="hidden" name="copied_from_previous" value="0">
     <input type="hidden" id="contact_type" name="contact_type" value="{{ selected_contact_type }}">
@@ -218,7 +221,7 @@ selected_absence_reason else 'present') %}
       </details>
 
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <div>
+        <div data-contact-group="temperature" {% if not field_visibility.get('temperature', true) %}hidden{% endif %}>
           <label for="temperature" class="mb-1 block text-sm font-medium text-gray-600">体温</label>
           <input id="temperature" type="text" inputmode="decimal" name="temperature" value="{{ form_data.temperature }}"
             placeholder="36.7" aria-describedby="temperature-help temperature-error"
@@ -229,7 +232,7 @@ selected_absence_reason else 'present') %}
             class="mt-2 hidden rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
           {{ temperature_picker('temperature') }}
         </div>
-        <div>
+        <div data-contact-group="sleep" {% if not field_visibility.get('sleep', true) %}hidden{% endif %}>
           <input type="hidden" name="care_fields_version" value="1">
           <div class="mb-3 flex flex-wrap gap-3">
             <label class="text-sm">就寝<input type="time" name="bedtime" value="{{ form_data.bedtime }}"
@@ -243,7 +246,7 @@ selected_absence_reason else 'present') %}
         </div>
         <input type="hidden" name="meal_fields_version" value="1">
         {% include 'parent_portal/_meal_fields.html' %}
-        <div>
+        <div data-contact-group="stool" {% if not field_visibility.get('stool', true) %}hidden{% endif %}>
           <p class="mb-2 text-sm font-medium">排便（前日夕方から連絡時まで）</p>
           <div class="mb-3 flex flex-wrap gap-3"><label class="text-sm">性状
               <select name="stool_consistency" class="mt-1 block rounded border px-3 py-3">
@@ -258,30 +261,30 @@ selected_absence_reason else 'present') %}
           <input type="text" name="bowel_movement_status" value="{{ form_data.bowel_movement_status }}"
             placeholder="あり / なし" class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
-        <div>
+        <div data-contact-group="mood" {% if not field_visibility.get('mood', true) %}hidden{% endif %}>
           <label for="mood" class="mb-1 block text-sm font-medium text-gray-600">機嫌</label>
           <input id="mood" type="text" name="mood" value="{{ form_data.mood }}" placeholder="良好 / 少し眠そう"
             class="w-full rounded border border-gray-300 px-3 py-2">
           {{ choices('mood', [('🙂', '良好'), ('😐', 'ふつう'), ('😟', '不機嫌'), ('😴', '眠そう')]) }}
         </div>
-        <div>
+        <div data-contact-group="cough" {% if not field_visibility.get('cough', true) %}hidden{% endif %}>
           <label class="mb-1 block text-sm font-medium text-gray-600">咳</label>
           <input type="text" name="cough" value="{{ form_data.cough }}" placeholder="なし / 少し"
             class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
-        <div>
+        <div data-contact-group="runny_nose" {% if not field_visibility.get('runny_nose', true) %}hidden{% endif %}>
           <label class="mb-1 block text-sm font-medium text-gray-600">鼻水</label>
           <input type="text" name="runny_nose" value="{{ form_data.runny_nose }}" placeholder="なし / 少し"
             class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
-        <div>
+        <div data-contact-group="medication" {% if not field_visibility.get('medication', true) %}hidden{% endif %}>
           <label class="mb-1 block text-sm font-medium text-gray-600">服薬</label>
           <input type="text" name="medication" value="{{ form_data.medication }}" placeholder="なし / 朝に服用"
             class="w-full rounded border border-gray-300 px-3 py-2">
         </div>
       </div>
 
-      <div>
+      <div data-contact-group="condition" {% if not field_visibility.get('condition', true) %}hidden{% endif %}>
         <div class="mb-1 flex flex-wrap items-center justify-between gap-1">
           <label class="block text-sm font-medium text-gray-700">体調メモ</label>
           <span class="text-xs text-gray-400">タップで定型文を挿入</span>
@@ -524,8 +527,7 @@ selected_absence_reason else 'present') %}
 
   const btnCopyPrevious = document.getElementById("btn-copy-previous");
   if (btnCopyPrevious) {
-    const prevData = {{ previous_copy_fields| tojson
-  }};
+    const prevData = {{ (previous_copy_fields|default({})) | tojson }};
   btnCopyPrevious.addEventListener("click", () => {
     // 出席モードに設定
     const presentRadio = modeInputs.find((r) => r.value === "present");

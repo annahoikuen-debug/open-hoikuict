@@ -79,9 +79,26 @@ class PlanDocument:
     parent_document_id: int | None = None
     related_document_ids: list[int] = field(default_factory=list)
     schedule: PlanSchedule | None = None
+    weekly_sheet: dict | None = None
     monthly_sheet: dict | None = None
+    annual_sheet: dict | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    daily_plan_reopened: bool = False
+
+    @property
+    def plan_format_label(self) -> str:
+        if self.document_type == DocumentType.ANNUAL_PLAN:
+            sheet = self.annual_sheet
+        elif self.document_type == DocumentType.MONTHLY_PLAN:
+            sheet = self.monthly_sheet
+        elif self.document_type == DocumentType.WEEKLY_PLAN:
+            sheet = self.weekly_sheet
+        elif self.document_type == DocumentType.DAILY_PLAN:
+            return "自園の帳票"
+        else:
+            return ""
+        return "旧式" if sheet is None else "自園の帳票"
 
     @property
     def document_type_label(self) -> str:
@@ -89,7 +106,24 @@ class PlanDocument:
 
     @property
     def status_label(self) -> str:
+        if self.daily_plan_reopened:
+            return {
+                "editing": "修正中・再承認が必要",
+                "pending": "再承認待ち",
+                "reapproved": "承認済み（再承認）",
+            }.get(self.daily_revision_phase, STATUS_LABELS[self.status])
         return STATUS_LABELS.get(self.status, self.status.value)
+
+    @property
+    def daily_revision_phase(self) -> str:
+        if self.daily_plan_reopened:
+            return {
+                DocumentStatus.DRAFT: "editing",
+                DocumentStatus.REJECTED: "editing",
+                DocumentStatus.IN_REVIEW: "pending",
+                DocumentStatus.APPROVED: "reapproved",
+            }.get(self.status, "initial")
+        return "initial"
 
     @property
     def can_edit_body(self) -> bool:

@@ -85,6 +85,9 @@ from plan_docs.routers.documents import router as plan_docs_documents_router
 from plan_docs.routers.home import router as plan_docs_home_router
 from plan_docs.routers.plans import router as plan_docs_plans_router
 from plan_docs.routers.monthly_library import router as monthly_library_router
+from plan_docs.routers.annual_library import router as annual_library_router
+from plan_docs.routers.weekly_library import router as weekly_library_router
+from plan_docs.routers.reflections import router as reflections_router
 from shift_schedule.routers.contracts import router as shift_contracts_router
 from shift_schedule.routers.exports import router as shift_exports_router
 from shift_schedule.routers.facility import router as shift_facility_router
@@ -111,6 +114,9 @@ from auth import (
     staff_auth_http_exception_handler,
 )
 from csrf import CsrfTokenMiddleware, verify_csrf
+from class_kiosk.router import router as class_kiosk_router, admin_router as class_kiosk_admin_router, KioskResponseHeaders
+from class_kiosk.push import enabled as class_kiosk_worker_enabled, worker_loop as class_kiosk_worker_loop
+from class_kiosk.push import validate_configuration as validate_class_kiosk_push_configuration
 from security_config import deployment_environment, parent_auth_mode, staff_auth_mode, validate_runtime_security
 from security_headers import SecurityHeadersMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -121,6 +127,7 @@ logger = logging.getLogger(__name__)
 
 def initialize_application() -> None:
     validate_runtime_security()
+    validate_class_kiosk_push_configuration()
     from profile_config import format_profile_banner, should_enable_multi_tenant
 
     logger.info("\n" + format_profile_banner())
@@ -147,6 +154,8 @@ async def lifespan(app: FastAPI):
     background_tasks = [] if restore_probe else [asyncio.create_task(_after_restore_release(_preview_cleanup_loop))]
     if not restore_probe and parent_push_worker_enabled():
         background_tasks.append(asyncio.create_task(_after_restore_release(parent_push_worker_loop)))
+    if not restore_probe and class_kiosk_worker_enabled():
+        background_tasks.append(asyncio.create_task(_after_restore_release(class_kiosk_worker_loop)))
     if not restore_probe and parent_auth_mode() == "local_password" and os.getenv("HOIKUICT_PARENT_MAIL_TRANSPORT", "capture") != "disabled":
         background_tasks.append(asyncio.create_task(_after_restore_release(parent_mail_worker_loop)))
     if not restore_probe and staff_auth_mode() == "local_password":
@@ -188,6 +197,7 @@ app = FastAPI(
 app.add_exception_handler(StarletteHTTPException, staff_auth_http_exception_handler)
 app.add_middleware(CsrfTokenMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(KioskResponseHeaders)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
@@ -200,6 +210,8 @@ app.mount(
     name="manual_guide",
 )
 app.include_router(staff_portal_router)
+app.include_router(class_kiosk_router)
+app.include_router(class_kiosk_admin_router)
 app.include_router(search_router)
 app.include_router(message_templates_router)
 app.include_router(classrooms_router)
@@ -263,6 +275,9 @@ app.include_router(plan_docs_plans_router, prefix="/plans")
 app.include_router(plan_docs_documents_router, prefix="/plans")
 app.include_router(plan_docs_bunrei_router, prefix="/plans")
 app.include_router(monthly_library_router, prefix="/plans")
+app.include_router(annual_library_router, prefix="/plans")
+app.include_router(weekly_library_router, prefix="/plans")
+app.include_router(reflections_router, prefix="/plans")
 app.include_router(shift_home_router, dependencies=[Depends(get_current_staff_user)])
 app.include_router(shift_facility_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])
 app.include_router(shift_contracts_router, dependencies=[Depends(get_current_staff_user), Depends(require_admin)])

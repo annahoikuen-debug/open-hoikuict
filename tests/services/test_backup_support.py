@@ -11,6 +11,8 @@ def full_databases(main_db: Path, facility_db: Path, *, attachments=False, child
     import models
     import child_records.models  # noqa: F401
     import plan_docs.db_models  # noqa: F401
+    import shift_schedule.db_models  # noqa: F401
+    import class_kiosk.models  # noqa: F401
     from plan_docs.services.bunrei import _ensure_facility_table
 
     main_db.parent.mkdir(parents=True, exist_ok=True)

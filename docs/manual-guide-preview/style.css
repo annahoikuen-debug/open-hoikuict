@@ -22,7 +22,7 @@ body {
   margin: 0
 }
 
-body.large-text {
+:root.large-text {
   --base: 19px
 }
 

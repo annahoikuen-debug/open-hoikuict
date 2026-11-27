@@ -75,6 +75,7 @@ class ExtendedCareFeeRule(SQLModel, table=True):
     evening_grace_minutes: Optional[int] = None
     evening_rounding_minutes: Optional[int] = None
     evening_unit_price: Optional[int] = None
+    fee_bands_json: Optional[str] = None
     is_active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -131,6 +132,7 @@ class ExtendedCareCharge(SQLModel, table=True):
     certification_id: Optional[int] = Field(default=None, foreign_key="child_care_certifications.id", index=True)
     care_time_category_snapshot: Optional[CareTimeCategory] = Field(default=None, index=True)
     calculation_version: str = Field(default="legacy_v1", max_length=32)
+    fee_breakdown_json: Optional[str] = None
     actual_check_in_at: Optional[datetime] = None
     normal_start_at: Optional[datetime] = None
     normal_end_at: Optional[datetime] = None

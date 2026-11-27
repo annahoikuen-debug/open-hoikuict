@@ -688,8 +688,9 @@ def generate_simple_daily_plan(data: dict[str, object], user: StaffUser) -> Plan
     class_name = clean_text(data.get("class_name")) or classroom_ref or "クラス未設定"
     age_class = clean_text(data.get("age_class"))
     owner_name = clean_text(data.get("owner_name")) or user.name
-    aim = clean_text(str(data.get("daily_aims") or ""))
-    content = clean_text(str(data.get("daily_content") or ""))
+    # The two textarea values include the line break between the draft and an appended example.
+    aim = str(data.get("daily_aims") or "").replace("\r\n", "\n").strip()
+    content = str(data.get("daily_content") or "").replace("\r\n", "\n").strip()
     example_id = clean_text(str(data.get("example_id") or ""))
     example_source_ref = clean_text(str(data.get("example_source_ref") or ""))
     parent_document_id = _to_int(data.get("parent_document_id"))
