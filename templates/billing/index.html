@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from 'billing/_reopen_controls.html' import reopen_button %}
 {% from 'shared/ui_macros.html' import status_badge %}
+{% from 'shared/_closing_stepper.html' import closing_stepper %}
 {% block title %}請求入力 | open-hoikuict{% endblock %}
 
 {% block content %}
@@ -67,6 +68,7 @@
 </section>
 {% endif %}
 
+{{ closing_stepper(active_step=4) }}
 <div class="grid gap-4 lg:grid-cols-2">
   <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <h2 class="text-base font-semibold text-slate-900">施設設定</h2>

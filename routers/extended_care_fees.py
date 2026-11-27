@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
+import calendar
+import re
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -266,6 +268,81 @@ def remove_extended_care_manual_conflict_route(
         url=f"/extended-care-fees/billing-transfer?{urlencode(params)}",
         status_code=303,
     )
+
+
+@router.post("/bulk-confirm")
+def bulk_confirm_extended_care_charges(
+    request: Request,
+    month: str = Form(...),
+    classroom_id: Optional[str] = Form(default=None),
+    exclude_anomalies: bool = Form(default=True),
+    return_url: str = Form(default="/extended-care-fees/"),
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_staff_user),
+):
+    """対象月（・クラス）の正常な draft 延長保育料を一括で確認済みにする。"""
+    require_can_edit(current_user)
+    target_month = (month or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}", target_month):
+        raise HTTPException(status_code=400, detail="対象月を YYYY-MM 形式で指定してください")
+    year_num, month_num = map(int, target_month.split("-"))
+    month_start = date(year_num, month_num, 1)
+    month_end = date(year_num, month_num, calendar.monthrange(year_num, month_num)[1])
+
+    cls_id: Optional[int] = None
+    if classroom_id and str(classroom_id).strip().isdigit():
+        cls_id = int(str(classroom_id).strip())
+
+    from models import AttendanceRecord, Child, ExtendedCareChargeStatus
+
+    stmt = select(ExtendedCareCharge).where(
+        ExtendedCareCharge.target_date >= month_start,
+        ExtendedCareCharge.target_date <= month_end,
+        ExtendedCareCharge.status == ExtendedCareChargeStatus.draft,
+        ExtendedCareCharge.final_amount > 0,
+    )
+    if cls_id is not None:
+        stmt = stmt.join(Child, ExtendedCareCharge.child_id == Child.id).where(Child.classroom_id == cls_id)
+
+    charges = session.exec(stmt).all()
+    record_ids = [c.attendance_record_id for c in charges if c.attendance_record_id is not None]
+    records_by_id: dict[int, AttendanceRecord] = {}
+    if record_ids:
+        for rec in session.exec(select(AttendanceRecord).where(AttendanceRecord.id.in_(record_ids))).all():
+            if rec.id is not None:
+                records_by_id[rec.id] = rec
+
+    confirmed_count = 0
+    skipped_count = 0
+    for charge in charges:
+        if exclude_anomalies:
+            record = records_by_id.get(charge.attendance_record_id)
+            has_anomaly = (
+                record is None
+                or record.check_out_at is None
+                or record.check_out_at > datetime.combine(record.attendance_date + timedelta(days=1), time(3, 0))
+                or (charge.morning_extended_minutes > 0 and record.check_in_at is None)
+            )
+            if has_anomaly:
+                skipped_count += 1
+                continue
+        try:
+            confirm_charge(charge, current_user.name)
+            session.add(charge)
+            confirmed_count += 1
+        except ValueError:
+            skipped_count += 1
+
+    if confirmed_count > 0:
+        session.commit()
+
+    if "application/json" in request.headers.get("accept", ""):
+        return {"confirmed_count": confirmed_count, "skipped_count": skipped_count, "month": target_month}
+
+    safe_ret = return_url if return_url.startswith("/extended-care-fees") else "/extended-care-fees/"
+    sep = "&" if "?" in safe_ret else "?"
+    msg = f"{confirmed_count}件を一括確認しました" + (f"（個別確認が必要: {skipped_count}件）" if skipped_count else "")
+    return RedirectResponse(url=f"{safe_ret}{sep}{urlencode({'message': msg})}", status_code=303)
 
 
 @router.post("/{charge_id}/confirm")

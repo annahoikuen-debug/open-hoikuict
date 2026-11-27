@@ -199,7 +199,8 @@ def health_overview(
 
     changed = False
     for child in children:
-        changed = sync_health_records_from_legacy_extra_data(session, child) or changed
+        if child.extra_data:
+            changed = sync_health_records_from_legacy_extra_data(session, child) or changed
     if changed:
         session.commit()
         children = session.exec(statement).all()
@@ -210,7 +211,7 @@ def health_overview(
         ParentMedicalResponse.child_id.in_(child_ids), ParentMedicalResponse.status == "pending"
     )).all()) if child_ids else set()
     allergies_by_child_id = load_allergies_for_children(session, child_ids, include_inactive=False)
-    checks_by_child_id = load_health_checks_for_children(session, child_ids)
+    checks_by_child_id = load_health_checks_for_children(session, child_ids, per_child_limit=15)
     today_date = local_today()
 
     rows: list[dict[str, object]] = []

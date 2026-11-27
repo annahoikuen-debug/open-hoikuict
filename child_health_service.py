@@ -312,18 +312,50 @@ def load_allergies_for_children(
 def load_health_checks_for_children(
     session: Session,
     child_ids: list[int],
+    per_child_limit: Optional[int] = None,
 ) -> dict[int, list[HealthCheckRecord]]:
     if not child_ids:
         return {}
-    records = session.exec(
-        select(HealthCheckRecord)
-        .where(HealthCheckRecord.child_id.in_(child_ids))
-        .order_by(
-            HealthCheckRecord.checked_at.desc(),
-            HealthCheckRecord.updated_at.desc(),
-            HealthCheckRecord.id.desc(),
+    if per_child_limit is not None and per_child_limit > 0:
+        from sqlalchemy import func
+
+        rn_subq = (
+            select(
+                HealthCheckRecord.id.label("rec_id"),
+                func.row_number()
+                .over(
+                    partition_by=HealthCheckRecord.child_id,
+                    order_by=(
+                        HealthCheckRecord.checked_at.desc(),
+                        HealthCheckRecord.updated_at.desc(),
+                        HealthCheckRecord.id.desc(),
+                    ),
+                )
+                .label("rn"),
+            )
+            .where(HealthCheckRecord.child_id.in_(child_ids))
+            .subquery()
         )
-    ).all()
+        records = session.exec(
+            select(HealthCheckRecord)
+            .join(rn_subq, HealthCheckRecord.id == rn_subq.c.rec_id)
+            .where(rn_subq.c.rn <= per_child_limit)
+            .order_by(
+                HealthCheckRecord.checked_at.desc(),
+                HealthCheckRecord.updated_at.desc(),
+                HealthCheckRecord.id.desc(),
+            )
+        ).all()
+    else:
+        records = session.exec(
+            select(HealthCheckRecord)
+            .where(HealthCheckRecord.child_id.in_(child_ids))
+            .order_by(
+                HealthCheckRecord.checked_at.desc(),
+                HealthCheckRecord.updated_at.desc(),
+                HealthCheckRecord.id.desc(),
+            )
+        ).all()
     grouped: dict[int, list[HealthCheckRecord]] = {}
     for record in records:
         grouped.setdefault(record.child_id, []).append(record)

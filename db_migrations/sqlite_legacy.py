@@ -64,6 +64,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("046_daily_contact_review_columns", _migrate_daily_contact_review_columns),
         ("047_attendance_idempotency_key", _migrate_attendance_idempotency_key),
         ("048_smart_hud_simple_mode_and_nap_checks", _migrate_smart_hud_simple_mode_and_nap_checks),
+        ("049_facility_settings_board_qr", _migrate_facility_settings_board_qr),
     ]
 
 
@@ -1318,3 +1319,20 @@ def _migrate_smart_hud_simple_mode_and_nap_checks() -> None:
             )
     except Exception as exc:
         _db()._log_migration_skip("smart hud / simple mode / nap checks", exc)
+
+
+def _migrate_facility_settings_board_qr() -> None:
+    """048 実行済みDB向けに board_qr_enabled / board_qr_version 列を冪等に追加する。"""
+    try:
+        additions = {
+            "board_qr_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "board_qr_version": "INTEGER NOT NULL DEFAULT 1",
+        }
+        with _db().engine.begin() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(facility_settings)")}
+            if columns:
+                for name, ddl in additions.items():
+                    if name not in columns:
+                        conn.exec_driver_sql(f"ALTER TABLE facility_settings ADD COLUMN {name} {ddl}")
+    except Exception as exc:
+        _db()._log_migration_skip("facility_settings board_qr", exc)

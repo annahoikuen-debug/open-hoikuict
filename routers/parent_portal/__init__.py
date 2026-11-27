@@ -2533,9 +2533,20 @@ def parent_profile_photo(request: Request, photo_id: str, session: Session = Dep
 
 def _parent_pickup_context(request, parent, child, day, session, *, error="", status_code=200, values=None):
     record = load_pickup_record(session, child.id, day)
+    latest_revision = pickup_revision(record)
+    conflict_latest = None
+    if status_code == 409 and record is not None:
+        conflict_latest = {
+            "planned_pickup_time": record.planned_pickup_time or "未設定",
+            "pickup_person": record.pickup_person or "未設定",
+        }
+    resolved_revision = latest_revision if status_code == 409 else (
+        values.get("revision", latest_revision) if values else latest_revision
+    )
     return templates.TemplateResponse(request, "parent_portal/pickup.html", {
         "current_parent_user": parent, "parent_portal_mode": True, "child": child, "closing_time": closing_time(session),
-        "day": day, "record": record, "revision": values.get("revision", pickup_revision(record)) if values else pickup_revision(record), "error": error,
+        "day": day, "record": record, "revision": resolved_revision, "error": error,
+        "conflict_latest": conflict_latest,
         "pickup_values": values if values is not None else {
             "planned_pickup_time": record.planned_pickup_time or "" if record else "",
             "pickup_person": record.pickup_person or "" if record else "",

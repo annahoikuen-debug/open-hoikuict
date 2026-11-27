@@ -752,8 +752,14 @@ async function handleSolveSubmit(e) {
   const icon = document.getElementById("solveIcon");
 
   btn.disabled = true;
-  btnText.textContent = "リクエスト中...";
+  btnText.textContent = "配置基準を解析・最適化中 (0秒)...";
   icon.textContent = "⏳";
+  let elapsed = 0;
+  const solveTimer = setInterval(() => {
+    elapsed += 1;
+    const phase = elapsed < 4 ? "配置基準・希望休を解析中" : "最適シフトを探索中";
+    btnText.textContent = `${phase} (${elapsed}秒)...`;
+  }, 1000);
 
   try {
     const formData = new FormData(form);
@@ -775,6 +781,8 @@ async function handleSolveSubmit(e) {
     btn.disabled = false;
     btnText.textContent = "全月再生成";
     icon.textContent = "⚡";
+  } finally {
+    clearInterval(solveTimer);
   }
 }
 

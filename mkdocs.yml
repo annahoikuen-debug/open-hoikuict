@@ -88,6 +88,7 @@ exclude_docs: |
   /serverless-solver-implementation-plan.md
   /shift-organic-integration-implementation-plan-27steps-2026-11-10.md
   /soft_centric_product_roadmap.md
+  /commercial-release-9-improvements-implementation-plan-2026-11-27.md
   /archive/
 validation:
   nav:

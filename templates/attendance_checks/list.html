@@ -16,17 +16,26 @@
       </div>
       <p class="text-xs text-slate-500">全園児の打刻・連絡・目視確認</p>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2">
+      {% if selected_filter == "action_needed" %}
+      <a href="?date={{ target_date_value }}&layout={{ selected_layout }}&filter=all&classroom_id={{ selected_classroom_id_value }}&hud={{ hud_param }}" class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+        <span>📋</span> 全員表示へ
+      </a>
+      {% else %}
+      <a href="?date={{ target_date_value }}&layout={{ selected_layout }}&filter=action_needed&classroom_id={{ selected_classroom_id_value }}&hud={{ hud_param }}" class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 transition-colors shadow-sm">
+        <span>🚨</span> 未対応のみ表示
+      </a>
+      {% endif %}
       {% if show_smart_hud %}
-      <a href="?{{ return_query_base }}&hud=0" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm" title="通常の表形式リスト表示に切り替えます">
+      <a href="?{{ return_query_base }}&hud=0" class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm" title="通常の表形式リスト表示に切り替えます">
         <span>📋</span> 通常表示へ
       </a>
       {% else %}
-      <a href="?{{ return_query_base }}&hud=1" class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm" title="3色シグナルと例外集中HUD表示に切り替えます">
+      <a href="?{{ return_query_base }}&hud=1" class="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm" title="3色シグナルと例外集中HUD表示に切り替えます">
         <span>⚡</span> スマートHUDへ
       </a>
       {% endif %}
-      <a data-roster-link href="/attendance-checks/roster?date={{ target_date_value }}" class="text-xs font-medium text-slate-600 hover:text-indigo-600">名前一覧へ</a>
+      <a data-roster-link href="/attendance-checks/roster?date={{ target_date_value }}" class="text-xs font-medium text-slate-600 hover:text-indigo-600 px-2">名前一覧へ</a>
     </div>
   </header>
   <form

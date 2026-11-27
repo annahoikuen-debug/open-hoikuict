@@ -1,0 +1,35 @@
+{# 月末締め〜全銀出力 5ステップ進行ウィザード (Phase 3 #3) #}
+{% macro closing_stepper(active_step=1, month='', unconfirmed_count=0, cycle_status='') %}
+{% set steps = [
+  {'num': 1, 'label': '延長保育再計算', 'href': '/extended-care-fees/?month=' ~ month},
+  {'num': 2, 'label': '延長料確認', 'href': '/extended-care-fees/?month=' ~ month ~ '&unconfirmed_only=1', 'badge': unconfirmed_count if unconfirmed_count else 0},
+  {'num': 3, 'label': '請求へ転送', 'href': '/extended-care-fees/billing-transfer?month=' ~ month},
+  {'num': 4, 'label': '請求月確定', 'href': '/billing/'},
+  {'num': 5, 'label': '全銀データ出力', 'href': '/billing/'},
+] %}
+<nav aria-label="月末締め進行ステップ" class="no-print mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <span class="text-xs font-bold tracking-wide text-slate-500">月末締めフロー{% if month %} ({{ month }}){% endif %}</span>
+    {% if cycle_status == 'confirmed' or cycle_status == 'exported' %}
+    <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">確定・出力フェーズ</span>
+    {% endif %}
+  </div>
+  <ol class="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-5">
+    {% for s in steps %}
+    {% set is_done = s.num < active_step %}
+    {% set is_current = s.num == active_step %}
+    <li>
+      <a href="{{ s.href }}" class="flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition {% if is_done %}border-emerald-200 bg-emerald-50 text-emerald-800{% elif is_current %}border-indigo-400 bg-indigo-50 font-bold text-indigo-900 shadow-xs{% else %}border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100{% endif %}">
+        <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold {% if is_done %}bg-emerald-600 text-white{% elif is_current %}bg-indigo-600 text-white{% else %}bg-slate-300 text-slate-700{% endif %}">
+          {% if is_done %}✓{% else %}{{ s.num }}{% endif %}
+        </span>
+        <span class="truncate">{{ s.label }}</span>
+        {% if s.badge %}
+        <span class="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{{ s.badge }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+{% endmacro %}

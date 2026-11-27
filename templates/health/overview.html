@@ -16,6 +16,18 @@
     </div>
   </div>
 
+  {% if summary.attention_count > 0 and current_attention != "needs_attention" %}
+  <div class="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3.5 text-sm text-rose-900 shadow-sm">
+    <div class="flex items-center gap-2.5">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white">!</span>
+      <span><strong>{{ summary.attention_count }}名</strong>の園児に健康アラート（期限切れアレルギー・要確認事項等）があります。</span>
+    </div>
+    <a href="/health?status={{ current_status }}&attention=needs_attention{% if current_classroom_id is not none %}&classroom_id={{ current_classroom_id }}{% endif %}" class="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 shadow-sm">
+      要対応のみ表示する
+    </a>
+  </div>
+  {% endif %}
+
   <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">表示園児数</p>

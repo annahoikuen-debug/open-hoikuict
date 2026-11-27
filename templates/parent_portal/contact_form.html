@@ -86,12 +86,12 @@ selected_absence_reason else 'present') %}
         {% if has_previous_entry %}
         <div>
           <button type="button" id="btn-copy-previous"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border-2 border-indigo-400 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-800 shadow-xs transition hover:bg-indigo-100 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            前回の入力を反映（{{ previous_entry_date }}）
+            昨朝の設定をコピー（{{ previous_entry_date }}）
           </button>
         </div>
         {% endif %}

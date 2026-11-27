@@ -1556,13 +1556,31 @@ def confirm_cycle(
         raise HTTPException(status_code=404, detail="請求月が見つかりません")
     if cycle.status != BillingCycleStatus.generated:
         raise HTTPException(status_code=400, detail="generated状態の請求月のみ確定できます")
+    now = utc_now()
     cycle.status = BillingCycleStatus.confirmed
-    cycle.confirmed_at = utc_now()
+    cycle.confirmed_at = now
     cycle.confirmed_by = current_user.name
-    cycle.updated_at = utc_now()
+    cycle.updated_at = now
     session.add(cycle)
+
+    # 配下の draft 請求明細も一括で confirmed へ昇格させ、全銀出力可能な状態に連動させる
+    draft_claims = session.exec(
+        select(BillingClaim).where(
+            BillingClaim.billing_cycle_id == cycle_id,
+            BillingClaim.status == BillingClaimStatus.draft,
+        )
+    ).all()
+    for claim in draft_claims:
+        claim.status = BillingClaimStatus.confirmed
+        claim.updated_at = now
+        session.add(claim)
+
     session.commit()
-    return {"id": cycle.id, "status": cycle.status.value}
+    return {
+        "id": cycle.id,
+        "status": cycle.status.value,
+        "confirmed_claims_count": len(draft_claims),
+    }
 
 
 @router.post("/cycles/{cycle_id}/unconfirm")
@@ -1577,13 +1595,39 @@ def unconfirm_cycle(
         raise HTTPException(status_code=404, detail="請求月が見つかりません")
     if cycle.status != BillingCycleStatus.confirmed:
         raise HTTPException(status_code=400, detail="confirmed状態の請求月のみ確定取消できます")
+    locked_claim = session.exec(
+        select(BillingClaim).where(
+            BillingClaim.billing_cycle_id == cycle_id,
+            BillingClaim.status.in_([BillingClaimStatus.exported, BillingClaimStatus.paid]),
+        )
+    ).first()
+    if locked_claim:
+        raise HTTPException(status_code=400, detail="全銀出力済みまたは入金済みの明細があるため確定取消できません")
+
+    now = utc_now()
     cycle.status = BillingCycleStatus.generated
     cycle.confirmed_at = None
     cycle.confirmed_by = None
-    cycle.updated_at = utc_now()
+    cycle.updated_at = now
     session.add(cycle)
+
+    confirmed_claims = session.exec(
+        select(BillingClaim).where(
+            BillingClaim.billing_cycle_id == cycle_id,
+            BillingClaim.status == BillingClaimStatus.confirmed,
+        )
+    ).all()
+    for claim in confirmed_claims:
+        claim.status = BillingClaimStatus.draft
+        claim.updated_at = now
+        session.add(claim)
+
     session.commit()
-    return {"id": cycle.id, "status": cycle.status.value}
+    return {
+        "id": cycle.id,
+        "status": cycle.status.value,
+        "reverted_claims_count": len(confirmed_claims),
+    }
 
 
 # ==========================================
