@@ -117,6 +117,7 @@ def legacy(backup):
 
 def test_contract_covers_registered_application_schema():
     import child_records.models  # noqa: F401
+    import class_kiosk.models  # noqa: F401
     import plan_docs.db_models  # noqa: F401
     import shift_schedule.db_models  # noqa: F401
     contract, _ = load_contract()

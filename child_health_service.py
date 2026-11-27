@@ -362,6 +362,64 @@ def load_health_checks_for_children(
     return grouped
 
 
+def load_health_overview_records_for_children(
+    session: Session,
+    child_ids: list[int],
+) -> dict[int, list[HealthCheckRecord]]:
+    """/health 一覧向けに必要最小限の健康記録（健診履歴 + 最新日次検温）を取得する。"""
+    if not child_ids:
+        return {}
+    from sqlalchemy import func
+
+    # 1. 健診記録（入園時・定期健診）は園児あたり年1〜2件のため一括取得
+    graph_records = session.exec(
+        select(HealthCheckRecord)
+        .where(
+            HealthCheckRecord.child_id.in_(child_ids),
+            HealthCheckRecord.check_type.in_(list(GRAPH_CHECK_TYPES)),
+        )
+        .order_by(
+            HealthCheckRecord.checked_at.desc(),
+            HealthCheckRecord.updated_at.desc(),
+            HealthCheckRecord.id.desc(),
+        )
+    ).all()
+
+    # 2. 日次検温等は最新1件のみ取得（大量 daily レコードのフルスキャンを回避）
+    rn_subq = (
+        select(
+            HealthCheckRecord.id.label("rec_id"),
+            func.row_number()
+            .over(
+                partition_by=HealthCheckRecord.child_id,
+                order_by=(
+                    HealthCheckRecord.checked_at.desc(),
+                    HealthCheckRecord.updated_at.desc(),
+                    HealthCheckRecord.id.desc(),
+                ),
+            )
+            .label("rn"),
+        )
+        .where(
+            HealthCheckRecord.child_id.in_(child_ids),
+            HealthCheckRecord.check_type == HealthCheckType.daily,
+        )
+        .subquery()
+    )
+    latest_daily_records = session.exec(
+        select(HealthCheckRecord)
+        .join(rn_subq, HealthCheckRecord.id == rn_subq.c.rec_id)
+        .where(rn_subq.c.rn == 1)
+    ).all()
+
+    grouped: dict[int, list[HealthCheckRecord]] = {}
+    for record in graph_records:
+        grouped.setdefault(record.child_id, []).append(record)
+    for record in latest_daily_records:
+        grouped.setdefault(record.child_id, []).append(record)
+    return grouped
+
+
 def sync_health_records_from_legacy_extra_data(
     session: Session,
     child: Child,

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 import logging
 import os
+import random
+import threading
+import time
 from datetime import date, timedelta
 
 from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 from sqlmodel import SQLModel, Session, create_engine, select
 
 from family_support import bootstrap_family_data, sync_parent_child_links, sync_family_to_children
@@ -27,7 +32,7 @@ if _is_sqlite_url:
     engine = create_engine(
         DATABASE_URL,
         echo=False,
-        connect_args={"timeout": 15},
+        connect_args={"timeout": 30},
     )
 elif _is_postgres_url:
     from sqlalchemy.pool import QueuePool
@@ -60,6 +65,9 @@ if _is_sqlite_url:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute("PRAGMA cache_size = -64000")
             cursor.execute("PRAGMA temp_store = MEMORY")
+            cursor.execute("PRAGMA wal_autocheckpoint=1000")
+            cursor.execute("PRAGMA journal_size_limit=67108864")
+            cursor.execute("PRAGMA mmap_size=268435456")
         finally:
             cursor.close()
 elif _is_postgres_url:
@@ -113,6 +121,50 @@ async def run_db_async(func, *args, **kwargs):
     FastAPI イベントループをブロックしないよう asyncio.to_thread でオフロードする。
     """
     return await asyncio.to_thread(func, *args, **kwargs)
+
+
+_sqlite_write_lock = threading.RLock()
+
+
+@contextmanager
+def sqlite_write_section():
+    """組み込み SQLite 構成で同時書き込みを直列化し、SQLITE_BUSY 待機遅延を抑止する。"""
+    if not _is_sqlite_url:
+        yield
+        return
+    with _sqlite_write_lock:
+        yield
+
+
+def commit_with_retry(session: Session, *, max_attempts: int = 5) -> None:
+    """SQLite の書き込み競合時にジッター付き指数バックオフで commit を再試行する。"""
+    if not _is_sqlite_url:
+        session.commit()
+        return
+    with sqlite_write_section():
+        for attempt in range(max_attempts):
+            try:
+                session.commit()
+                return
+            except OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.02 * (2**attempt) + random.uniform(0.0, 0.015))
+
+
+def sqlite_wal_checkpoint(mode: str = "PASSIVE") -> None:
+    """SQLite WAL の肥大化を抑えるためチェックポイントを実行する。"""
+    if not _is_sqlite_url:
+        return
+    database_name = engine.url.database
+    if not database_name or database_name == ":memory:":
+        return
+    safe_mode = mode if mode in {"PASSIVE", "FULL", "RESTART", "TRUNCATE"} else "PASSIVE"
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"PRAGMA wal_checkpoint({safe_mode})"))
+    except Exception as exc:
+        logger.debug("SQLite WAL checkpoint スキップ: %s", exc)
 
 
 # 組み込みマイグレーションの実行順序。適用済みのものは schema_migrations

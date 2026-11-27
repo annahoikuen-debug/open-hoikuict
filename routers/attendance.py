@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 from auth import Role, get_current_staff_user, require_can_edit
 from attendance_checks_service import sync_attendance_alarm
 from attendance_correction_service import cancel_punch, correction_revision
-from database import get_session
+from database import commit_with_retry, get_session, sqlite_write_section
 from models import AttendanceCorrection
 from staff_permissions import can_export_documents
 from extended_care_fee_service import charge_status_label, recalculate_attendance_charge, calculation_issues_for_records
@@ -1022,10 +1022,11 @@ def check_in(
             record.idempotency_key = idempotency_key
 
     record.updated_at = audit_now
-    session.add(record)
-    session.flush()
-    sync_attendance_alarm(session, child_id=child_id, target_date=day, record=record, now=audit_now)
-    session.commit()
+    with sqlite_write_section():
+        session.add(record)
+        session.flush()
+        sync_attendance_alarm(session, child_id=child_id, target_date=day, record=record, now=audit_now)
+        commit_with_retry(session)
 
     return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
 
@@ -1083,11 +1084,12 @@ def check_out(
     record.lock_version += 1
     record.updated_at = audit_now
 
-    session.add(record)
-    session.flush()
-    recalculate_attendance_charge(session, record)
-    sync_attendance_alarm(session, child_id=child_id, target_date=day, record=record, now=audit_now)
-    session.commit()
+    with sqlite_write_section():
+        session.add(record)
+        session.flush()
+        recalculate_attendance_charge(session, record)
+        sync_attendance_alarm(session, child_id=child_id, target_date=day, record=record, now=audit_now)
+        commit_with_retry(session)
 
     return RedirectResponse(url=_build_redirect_url(day, return_query), status_code=303)
 

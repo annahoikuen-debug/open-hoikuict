@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from auth import get_current_staff_user, require_can_edit
 from audit_logger import record_audit_event
+from cache_service import get_cached_classrooms
 from csrf import verify_csrf
 from child_health_service import (
     build_health_attention_labels,
@@ -25,7 +26,7 @@ from child_health_service import (
     latest_measurement_summary,
     load_child_allergies,
     load_allergies_for_children,
-    load_health_checks_for_children,
+    load_health_overview_records_for_children,
     load_health_check_records,
     load_health_profiles_for_children,
     notify_fever_to_guardians,
@@ -181,7 +182,7 @@ def health_overview(
     current_attention = _normalize_attention(attention)
     current_classroom_id = _parse_optional_int(classroom_id)
 
-    classrooms = session.exec(select(Classroom).order_by(Classroom.display_order, Classroom.id)).all()
+    classrooms = get_cached_classrooms(session)
     statement = (
         select(Child)
         .options(selectinload(Child.classroom), selectinload(Child.family))
@@ -197,21 +198,13 @@ def health_overview(
 
     children = session.exec(statement).all()
 
-    changed = False
-    for child in children:
-        if child.extra_data:
-            changed = sync_health_records_from_legacy_extra_data(session, child) or changed
-    if changed:
-        session.commit()
-        children = session.exec(statement).all()
-
     child_ids = [child.id for child in children if child.id is not None]
     profiles_by_child_id = load_health_profiles_for_children(session, child_ids)
     pending_medical = set(session.exec(select(ParentMedicalResponse.child_id).distinct().where(
         ParentMedicalResponse.child_id.in_(child_ids), ParentMedicalResponse.status == "pending"
     )).all()) if child_ids else set()
     allergies_by_child_id = load_allergies_for_children(session, child_ids, include_inactive=False)
-    checks_by_child_id = load_health_checks_for_children(session, child_ids, per_child_limit=15)
+    checks_by_child_id = load_health_overview_records_for_children(session, child_ids)
     today_date = local_today()
 
     rows: list[dict[str, object]] = []

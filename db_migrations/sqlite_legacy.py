@@ -70,6 +70,7 @@ def _sqlite_migrations() -> list[tuple[str, Callable[[], None]]]:
         ("052_weekly_sheet_columns", _migrate_weekly_sheet_columns),
         ("053_annual_sheet_columns", _migrate_annual_sheet_columns),
         ("054_plan_document_action_revision_id", _migrate_plan_document_action_columns),
+        ("055_health_check_records_composite_index", _migrate_health_check_records_composite_index),
     ]
 
 
@@ -1396,3 +1397,17 @@ def _migrate_facility_settings_board_qr() -> None:
                         conn.exec_driver_sql(f"ALTER TABLE facility_settings ADD COLUMN {name} {ddl}")
     except Exception as exc:
         _db()._log_migration_skip("facility_settings board_qr", exc)
+
+
+def _migrate_health_check_records_composite_index() -> None:
+    """health_check_records の園児別最新取得用複合インデックスを冪等に追加する。"""
+    try:
+        with _db().engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_health_check_records_child_checked "
+                    "ON health_check_records (child_id, checked_at DESC, updated_at DESC, id DESC)"
+                )
+            )
+    except Exception as exc:
+        _db()._log_migration_skip("health_check_records composite index", exc)

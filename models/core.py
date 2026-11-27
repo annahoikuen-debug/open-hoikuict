@@ -870,6 +870,15 @@ class ChildAllergy(SQLModel, table=True):
 
 class HealthCheckRecord(SQLModel, table=True):
     __tablename__ = "health_check_records"
+    __table_args__ = (
+        Index(
+            "ix_health_check_records_child_checked",
+            "child_id",
+            "checked_at",
+            "updated_at",
+            "id",
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     child_id: int = Field(foreign_key="children.id", index=True)

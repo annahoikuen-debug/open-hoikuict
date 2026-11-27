@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from database import (
     create_db_and_tables,
+    sqlite_wal_checkpoint,
 )
 from routers.attendance import router as attendance_router
 from routers.monitoring import router as monitoring_router
@@ -170,6 +171,7 @@ async def lifespan(app: FastAPI):
         for task in background_tasks:
             with suppress(asyncio.CancelledError):
                 await task
+        sqlite_wal_checkpoint("PASSIVE")
 
 
 async def _after_restore_release(factory) -> None:
@@ -184,6 +186,7 @@ async def _preview_cleanup_loop() -> None:
     while True:
         await asyncio.sleep(60 * 60)
         await asyncio.to_thread(_cleanup_stale_previews)
+        await asyncio.to_thread(sqlite_wal_checkpoint, "PASSIVE")
 
 
 from version import __version__

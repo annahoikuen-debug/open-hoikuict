@@ -43,7 +43,7 @@ from daily_contact_service import (
     save_bulk_parent_contacts,
 )
 from facility_settings_service import is_parent_billing_enabled
-from database import get_session
+from database import commit_with_retry, get_session, sqlite_write_section
 from models import (
     Child,
     ChildProfileChangeRequest,
@@ -1678,19 +1678,20 @@ def save_parent_contact(
         "submitted_family_id": child.family_id,
         contact_fields.SNAPSHOT_KEY: snapshot,
     }
-    session.add(entry)
-    try:
-        session.flush()
-    except IntegrityError:
-        session.rollback()
-        if not session.exec(select(DailyContactEntry.id).where(
-                DailyContactEntry.child_id == child_id, DailyContactEntry.target_date == day)).first():
-            raise
-        return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
-            entry=None, target_date_value=day.isoformat(), published_reply=published_reply,
-            form_error="日次連絡が更新されました。最新の内容を確認してください。", form_data=form_data, status_code=409)
-    sync_attendance_alarm(session, child_id=child_id, target_date=day, entry=entry, now=now)
-    session.commit()
+    with sqlite_write_section():
+        session.add(entry)
+        try:
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            if not session.exec(select(DailyContactEntry.id).where(
+                    DailyContactEntry.child_id == child_id, DailyContactEntry.target_date == day)).first():
+                raise
+            return _render_contact_form(request, session, current_parent_user=current_parent_user, child=child,
+                entry=None, target_date_value=day.isoformat(), published_reply=published_reply,
+                form_error="日次連絡が更新されました。最新の内容を確認してください。", form_data=form_data, status_code=409)
+        sync_attendance_alarm(session, child_id=child_id, target_date=day, entry=entry, now=now)
+        commit_with_retry(session)
 
     is_copy_from_previous = (
         contact_layout_version == "2"
@@ -2615,11 +2616,12 @@ def parent_pickup_save(request: Request, child_id: int, date: str = Form(...), r
         clean_snack = str(snack_required or "").strip()
         if clean_snack not in {"0", "1"}:
             clean_snack = "0"
-        save_pickup_plan(session, child_id=child_id, day=day, revision=revision,
-            planned_pickup_time=planned_pickup_time, pickup_person=pickup_person,
-            snack_required=clean_snack == "1", actor_name=parent.display_name,
-            parent_account_id=parent.id, source="parent_portal")
-        session.commit()
+        with sqlite_write_section():
+            save_pickup_plan(session, child_id=child_id, day=day, revision=revision,
+                planned_pickup_time=planned_pickup_time, pickup_person=pickup_person,
+                snack_required=clean_snack == "1", actor_name=parent.display_name,
+                parent_account_id=parent.id, source="parent_portal")
+            commit_with_retry(session)
     except HTTPException as exc:
         session.rollback()
         return _parent_pickup_context(request, parent, child, day, session, error=str(exc.detail), status_code=exc.status_code,
