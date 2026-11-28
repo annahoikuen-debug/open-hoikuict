@@ -1009,120 +1009,134 @@ current_path.startswith('/parent-accounts/registration-qr') %}
             {% set _show_admin_nav = (not staff_session_user) or staff_session_user.is_admin %}
             {% set _show_billing_nav = (not staff_session_user) or staff_session_user.is_admin or staff_session_user.can_manage_billing_accounts %}
             {% set _show_records_mgr_nav = (not staff_session_user) or staff_session_user.is_admin or staff_session_user.can_manage_child_records %}
-            <nav class="mt-6 space-y-6">
-              <div>
-                <p class="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">基本業務</p>
-                <div class="mt-3 space-y-1">
+            {% set _daily_open = (current_path == '/' or current_path == '/staff/portal' or current_path.startswith('/attendance') or current_path.startswith('/daily-contacts') or current_path.startswith('/health') or current_path.startswith('/staff-rooms') or current_path.startswith('/calendar')) %}
+            {% set _shift_open = (current_path.startswith('/shifts') or current_path.startswith('/staff/shift-requests') or current_path.startswith('/paid-leave')) %}
+            {% set _records_open = (current_path.startswith('/children') or current_path.startswith('/families') or current_path.startswith('/child-records') or current_path.startswith('/plans') or current_path.startswith('/document-') or current_path.startswith('/meeting-notes') or current_path.startswith('/records') or current_path.startswith('/event-series') or current_path.startswith('/notices') or current_path.startswith('/videos') or current_path.startswith('/staff-surveys') or current_path.startswith('/parent-accounts') or current_path.startswith('/child-change-requests')) %}
+            {% set _admin_open = (current_path.startswith('/extended-care-fees') or current_path.startswith('/billing') or current_path.startswith('/toukouen') or current_path.startswith('/guardian') or current_path.startswith('/surveys') or current_path.startswith('/data-transfers') or current_path.startswith('/parent-portal') or settings_active) %}
+            <nav class="mt-6 space-y-4">
+              <details {% if _daily_open or (not _shift_open and not _records_open and not _admin_open) %}open{% endif %} class="group">
+                <summary class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500 hover:text-slate-800 select-none">
+                  <span>毎日の保育</span>
+                  <span class="text-[10px] transition-transform group-open:rotate-90">▶</span>
+                </summary>
+                <div class="mt-2 space-y-1">
                   <a href="/" data-shortcut="d" data-tour-step="1"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path == '/' or current_path == '/staff/portal' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">ホーム</a>
-                  <a href="/children"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/children') and '/health' not in current_path and '/progress-records' not in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">園児一覧</a>
-                  {% if staff_session_user and staff_session_user.can_manage_child_records %}
-                  <a href="/families/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/families') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">家族・兄弟姉妹の管理</a>
-                  {% endif %}
-                  <a href="/child-records/progress"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/child-records/progress') or '/progress-records' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">児童票作成状況</a>
-                  <a href="/plans/" data-tour-step="5"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/plans') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">指導計画</a>
-                  {% if staff_session_user and staff_session_user.can_export_documents %}
-                  <a href="/document-exports"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/document-exports') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">帳票出力センター</a>
-                  {% endif %}
-                  <a href="/health"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/health') or '/health' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">健康管理</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path == '/' or current_path == '/staff/portal' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">ホーム</a>
                   <a href="/attendance" data-shortcut="a" data-tour-step="2"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path == '/attendance' or current_path.startswith('/attendance/') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠一覧</a>
-                  <a href="/toukouen"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/toukouen') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">登降園打刻（ピムス対応）</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path == '/attendance' or current_path.startswith('/attendance/') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠一覧</a>
                   <a href="/attendance-checks/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/attendance-checks') and current_path != '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠確認</a>
-                  <a href="/attendance-checks/roster"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path == '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">子どもの名前一覧</a>
-                  {% if _show_billing_nav %}
-                  <a href="/extended-care-fees/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/extended-care-fees') and not settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">延長保育料金</a>
-                  <a href="/billing/" data-tour-step="7"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/billing') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">請求入力</a>
-                  {% endif %}
-                  {% if _show_admin_nav %}
-                  <a href="/guardian/setup"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/guardian') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者キオスク</a>
-                  {% endif %}
-                </div>
-              </div>
-
-              <div>
-                <p class="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">連絡と記録</p>
-                <div class="mt-3 space-y-1">
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/attendance-checks') and current_path != '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">出欠確認</a>
                   <a href="/daily-contacts" data-shortcut="c" data-tour-step="3"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/daily-contacts') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">日次連絡</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/daily-contacts') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">日次連絡</a>
+                  <a href="/health"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/health') or '/health' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">健康管理</a>
                   <a href="/staff-rooms/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/staff-rooms') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">連絡タイムライン</a>
-                  <a href="/document-reviews/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/document-reviews') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">文書の確認依頼</a>
-                  <a href="/meeting-notes/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/meeting-notes') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">議事録</a>
-                  <a href="/records/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/records') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">経緯レコード</a>
-                  <a href="/event-series/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/event-series') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">行事シリーズ</a>
-                  <a href="/notices" data-shortcut="n" data-tour-step="4"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/notices') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">お知らせ管理</a>
-                  <a href="/videos"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/videos') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">動画配信管理</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/staff-rooms') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">連絡タイムライン</a>
+                  <a href="/calendar"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/calendar') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">カレンダー</a>
+                </div>
+              </details>
+
+              <details {% if _shift_open %}open{% endif %} class="group border-t border-slate-100 pt-3">
+                <summary class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500 hover:text-slate-800 select-none">
+                  <span>シフト・休暇</span>
+                  <span class="text-[10px] transition-transform group-open:rotate-90">▶</span>
+                </summary>
+                <div class="mt-2 space-y-1">
+                  <a href="/staff/shift-requests"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/staff/shift-requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休申請</a>
+                  <a href="/paid-leave"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/paid-leave') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">有給休暇管理</a>
                   {% if _show_admin_nav %}
                   <a href="/shifts/" data-tour-step="6"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts') and not current_path.startswith('/shifts/staff') and not current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/shifts') and not current_path.startswith('/shifts/staff') and not current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト</a>
                   <a href="/shifts/staff"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts/staff') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト設定</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/shifts/staff') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">職員シフト設定</a>
                   <a href="/shifts/requests"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休管理</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/shifts/requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休管理</a>
                   {% endif %}
-                  <a href="/staff/shift-requests"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/staff/shift-requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">希望休申請</a>
-                  <a href="/paid-leave"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/paid-leave') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">有給休暇管理</a>
-                  {% if _show_admin_nav %}
-                  <a href="/surveys/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/surveys') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">アンケート管理</a>
-                  {% endif %}
-                  <a href="/staff-surveys/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/staff-surveys') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">アンケート</a>
                 </div>
-              </div>
+              </details>
 
-              {% if _show_records_mgr_nav %}
-              <div>
-                <p class="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">アカウント</p>
-                <div class="mt-3 space-y-1">
+              <details {% if _records_open %}open{% endif %} class="group border-t border-slate-100 pt-3">
+                <summary class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500 hover:text-slate-800 select-none">
+                  <span>記録・園児・お知らせ</span>
+                  <span class="text-[10px] transition-transform group-open:rotate-90">▶</span>
+                </summary>
+                <div class="mt-2 space-y-1">
+                  <a href="/children"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/children') and '/health' not in current_path and '/progress-records' not in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">園児一覧</a>
+                  <a href="/child-records/progress"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/child-records/progress') or '/progress-records' in current_path %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">児童票作成状況</a>
+                  <a href="/plans/" data-tour-step="5"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/plans') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">指導計画</a>
+                  <a href="/document-reviews/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/document-reviews') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">文書の確認依頼</a>
+                  <a href="/meeting-notes/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/meeting-notes') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">議事録</a>
+                  <a href="/records/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/records') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">経緯レコード</a>
+                  <a href="/event-series/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/event-series') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">行事シリーズ</a>
+                  <a href="/notices" data-shortcut="n" data-tour-step="4"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/notices') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">お知らせ管理</a>
+                  <a href="/videos"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/videos') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">動画配信管理</a>
+                  <a href="/staff-surveys/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/staff-surveys') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">アンケート</a>
+                  {% if staff_session_user and staff_session_user.can_export_documents %}
+                  <a href="/document-exports"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/document-exports') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">帳票出力センター</a>
+                  {% endif %}
+                  {% if staff_session_user and staff_session_user.can_manage_child_records %}
+                  <a href="/families/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/families') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">家族・兄弟姉妹の管理</a>
+                  {% endif %}
+                  {% if _show_records_mgr_nav %}
                   <a href="/parent-accounts"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/parent-accounts') and not settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者アカウント</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/parent-accounts') and not settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者アカウント</a>
                   <a href="/child-change-requests"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/child-change-requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">プロフィール変更申請</a>
-                  {% if _show_admin_nav %}
-                  <a href="/data-transfers/"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/data-transfers') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">データ入出力</a>
-                  <a href="/parent-portal/login"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/parent-portal') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者画面確認</a>
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/child-change-requests') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">プロフィール変更申請</a>
                   {% endif %}
                 </div>
-              </div>
-              {% endif %}
-              <div>
-                <p class="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">カレンダー</p>
-                <div class="mt-3 space-y-1">
-                  <a href="/calendar"
-                    class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if current_path.startswith('/calendar') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">カレンダー</a>
+              </details>
+
+              {% if _show_billing_nav or _show_admin_nav %}
+              <details {% if _admin_open %}open{% endif %} class="group border-t border-slate-100 pt-3">
+                <summary class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500 hover:text-slate-800 select-none">
+                  <span>運営・請求・設定</span>
+                  <span class="text-[10px] transition-transform group-open:rotate-90">▶</span>
+                </summary>
+                <div class="mt-2 space-y-1">
+                  {% if _show_billing_nav %}
+                  <a href="/extended-care-fees/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/extended-care-fees') and not settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">延長保育料金</a>
+                  <a href="/billing/" data-tour-step="7"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/billing') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">口座振替・請求管理</a>
+                  {% endif %}
+                  {% if _show_admin_nav %}
+                  <a href="/toukouen"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/toukouen') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">登降園打刻（ピムス対応）</a>
+                  <a href="/attendance-checks/roster"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path == '/attendance-checks/roster' %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">子どもの名前一覧</a>
+                  <a href="/guardian/setup"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/guardian') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者キオスク</a>
+                  <a href="/surveys/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/surveys') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">アンケート管理</a>
+                  <a href="/data-transfers/"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/data-transfers') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">データ入出力</a>
+                  <a href="/parent-portal/login"
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if current_path.startswith('/parent-portal') %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">保護者画面確認</a>
+                  <a href="/settings" data-tour-step="8" {% if settings_active %}aria-current="page" {% endif %}
+                    class="block rounded-xl px-3 py-2 text-sm font-medium {% if settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">設定</a>
+                  {% endif %}
                 </div>
-              </div>
-              <div class="border-t border-slate-200 pt-4">
-                {% if _show_admin_nav %}
-                <a href="/settings" data-tour-step="8" {% if settings_active %}aria-current="page" {% endif %}
-                  class="block rounded-xl px-3 py-2.5 text-sm font-medium {% if settings_active %}bg-indigo-50 text-indigo-700{% else %}text-slate-700 hover:bg-slate-100{% endif %}">設定</a>
-                {% endif %}
+              </details>
+              {% endif %}
+
+              <div class="border-t border-slate-200 pt-3">
                 <a href="/manual-guide-preview/" target="_blank" rel="noopener noreferrer"
-                  class="mt-1 flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                  class="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
                   <span>操作マニュアル</span>
                   <span class="text-xs text-slate-400">↗</span>
                 </a>

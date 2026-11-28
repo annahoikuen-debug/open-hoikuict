@@ -339,6 +339,28 @@ def plans_approve(
     return RedirectResponse(url=f"/shifts/plans/{plan_id}", status_code=303)
 
 
+@router.post("/plans/{plan_id}/reopen", dependencies=[Depends(require_can_edit)])
+def plans_reopen(
+    plan_id: int,
+    repo: ShiftRepository = Depends(ShiftRepositoryDep),
+) -> RedirectResponse:
+    """確定済みシフトを改訂モード（AI作成済み）に戻し、突発欠勤等の差し替えを可能にする。"""
+    plan = repo.get_plan(plan_id)
+    if plan is None:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    if plan.status == PlanStatus.APPROVED:
+        cells = repo.list_plan_cells(plan_id)
+        plan.status = PlanStatus.GENERATED if cells else PlanStatus.DRAFT
+        repo.save_plan(plan)
+    return RedirectResponse(
+        url=f"/shifts/plans/{plan_id}?msg=改訂モードに切り替えました。修正後に再度「シフト確定」を押してください。",
+        status_code=303,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Timefold 思想に基づくリアルタイムジョブ制御 & 差分レビュー API
 # ---------------------------------------------------------------------------

@@ -4,6 +4,11 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6">
+  {% if request is defined and request.query_params.get('msg') %}
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+    {{ request.query_params.get('msg') }}
+  </div>
+  {% endif %}
   <!-- ヘッダーエリア -->
   <div class="flex flex-wrap items-start justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
     <div>
@@ -14,7 +19,7 @@
         <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold
           {% if plan.status == 'approved' %}bg-emerald-100 text-emerald-800 border border-emerald-300
           {% else %}bg-amber-100 text-amber-800 border border-amber-300{% endif %}">
-          ステータス: {{ plan.status }}
+          状態: {% if plan.status == 'approved' %}確定済み{% elif plan.status == 'generated' %}AI作成済み{% elif plan.status == 'draft' %}下書き{% else %}{{ plan.status }}{% endif %}
         </span>
       </div>
       <h1 class="mt-2 text-2xl font-bold text-slate-900 tracking-tight">{{ plan.target_month }} シフト詳細</h1>
@@ -46,11 +51,17 @@
       </form>
       {% endif %}
 
-      <!-- 承認・確定ボタン -->
+      <!-- 承認・確定ボタン / 確定後差し替えボタン -->
       {% if plan.status != 'approved' and cells %}
-      <form method="post" action="/shifts/plans/{{ plan.id }}/approve" class="m-0" onsubmit="return confirm('シフトを承認・確定しますか？（承認後は編集・再求解できません）');">
+      <form method="post" action="/shifts/plans/{{ plan.id }}/approve" class="m-0" onsubmit="return confirm('シフトを承認・確定しますか？');">
         <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all">
           <span>✓</span> <span>シフト確定</span>
+        </button>
+      </form>
+      {% elif plan.status == 'approved' %}
+      <form method="post" action="/shifts/plans/{{ plan.id }}/reopen" class="m-0" onsubmit="return confirm('確定済みシフトを改訂モードに切り替えますか？（突発欠勤や交代の差し替えが可能になります）');">
+        <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 shadow-xs hover:bg-amber-100 transition-all">
+          <span>✏️</span> <span>確定版を差し替える（改訂）</span>
         </button>
       </form>
       {% endif %}
@@ -103,19 +114,19 @@
     {% if latest_proposal.diff_summary %}
     <div class="mt-4 pt-4 border-t border-indigo-100/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
       <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100">
-        <span class="text-slate-500 block">提案 Hard スコア</span>
+        <span class="text-slate-500 block">法令・配置基準</span>
         <span class="font-bold text-sm {% if latest_proposal.hard_score == 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
-          {{ latest_proposal.hard_score }} 点
+          {% if latest_proposal.hard_score == 0 %}✓ すべて適合{% else %}⚠ 要確認 ({{ latest_proposal.hard_score }}件){% endif %}
         </span>
       </div>
       <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100">
-        <span class="text-slate-500 block">提案 Soft スコア</span>
+        <span class="text-slate-500 block">希望・公平性スコア</span>
         <span class="font-bold text-sm text-slate-800">{{ latest_proposal.soft_score|round(1) }} 点</span>
       </div>
       <div class="bg-white/80 p-2.5 rounded-xl border border-indigo-100 col-span-2">
-        <span class="text-slate-500 block">差分サマリ (JSON)</span>
-        <span class="font-mono text-[11px] text-slate-700 truncate block" title="{{ latest_proposal.diff_summary }}">
-          {{ latest_proposal.diff_summary }}
+        <span class="text-slate-500 block">変更内容の要約</span>
+        <span class="text-xs text-slate-700 block mt-0.5">
+          下のシフト表で変更箇所を確認し、問題なければ「この変更を適用する」を押してください。
         </span>
       </div>
     </div>
@@ -166,22 +177,22 @@
           <span class="text-base font-bold text-slate-900">シフト評価の内訳</span>
           {% if score_info.hard_score == 0 %}
           <span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-            ✓ 法令・配置基準 100% 遵守 (Hard: 0)
+            ✓ 法令・配置基準 すべてクリア
           </span>
           {% else %}
           <span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-300">
-            ⚠️ ハード制約違反あり (Hard: {{ score_info.hard_score }})
+            ⚠️ 要確認：配置・労基法アラート ({{ score_info.hard_score }}件)
           </span>
           {% endif %}
         </div>
         <p class="mt-1 text-xs text-slate-500">
-          配置基準・労働基準法（必須条件）をすべて満たした上で、職員の希望休や勤務の公平性を最適化するスコアリングです。
+          配置基準・労働基準法（必須条件）をすべて満たした上で、職員の希望休や勤務の公平性を調整した結果です。
         </p>
       </div>
 
       <div class="flex items-center gap-3 text-right">
         <div class="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-          <span class="text-[11px] text-slate-500 block">ソフト最適度スコア</span>
+          <span class="text-[11px] text-slate-500 block">希望・公平性マッチ度</span>
           <span class="font-mono text-sm font-bold text-indigo-700">{{ score_info.soft_score|round(1) }} 点</span>
         </div>
         <button type="button" onclick="toggleScoreBreakdown()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">

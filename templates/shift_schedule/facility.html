@@ -41,10 +41,12 @@
         <div>
           <label class="block text-sm font-medium text-slate-700">配置基準キー</label>
           <select name="staffing_standard_key" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2">
-            <option value="fukuoka_city" {% if settings.staffing_standard_key == 'fukuoka_city' %}selected{% endif %}>福岡市</option>
-            <option value="osaka_city" {% if settings.staffing_standard_key == 'osaka_city' %}selected{% endif %}>大阪市</option>
-            <option value="tokyo" {% if settings.staffing_standard_key == 'tokyo' %}selected{% endif %}>東京都</option>
-            <option value="generic" {% if settings.staffing_standard_key == 'generic' %}selected{% endif %}>汎用</option>
+            <option value="fukuoka_city" {% if settings.staffing_standard_key == 'fukuoka_city' %}selected{% endif %}>福岡市（認可保育所）</option>
+            <option value="osaka_city" {% if settings.staffing_standard_key == 'osaka_city' %}selected{% endif %}>大阪市（認可保育所）</option>
+            <option value="tokyo" {% if settings.staffing_standard_key == 'tokyo' %}selected{% endif %}>東京都（認可保育所）</option>
+            <option value="generic" {% if settings.staffing_standard_key == 'generic' %}selected{% endif %}>全国基準（認可保育所）</option>
+            <option value="enterprise_led" {% if settings.staffing_standard_key == 'enterprise_led' %}selected{% endif %}>企業主導型保育事業（目安）</option>
+            <option value="small_scale" {% if settings.staffing_standard_key == 'small_scale' %}selected{% endif %}>小規模保育事業（目安）</option>
           </select>
         </div>
         <div>

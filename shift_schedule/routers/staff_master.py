@@ -92,6 +92,7 @@ def staff_master_list(
             "staff_list": staff_data,
             "role_options": [r.value for r in Role],
             "employment_options": [e.value for e in EmploymentType],
+            "default_month": today.strftime("%Y-%m"),
         },
     )
 

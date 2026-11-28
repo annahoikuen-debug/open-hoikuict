@@ -1,9 +1,9 @@
-# 🧸 nusoft (open-hoikuict v0.8.2 / nusoft v0.8.2)
+# 🧸 nusoft (open-hoikuict v0.9.0 / nusoft v0.9.0)
 
 > **保育のすべてをつなぎ、先生の時間をこどもたちへ**  
 > 職員配置基準連動型 数理最適化シフト自動作成エンジン（NuShift）と、保育園・こども園の日常業務をワンストップで支える次世代保育総合ICTソリューション。
 
-[![Version](https://img.shields.io/badge/version-v0.8.2%20(nusoft%20v0.8.2)-blue.svg)](version.py)
+[![Version](https://img.shields.io/badge/version-v0.9.0%20(nusoft%20v0.9.0)-blue.svg)](version.py)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](pyproject.toml)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20%7C%20All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](pyproject.toml)

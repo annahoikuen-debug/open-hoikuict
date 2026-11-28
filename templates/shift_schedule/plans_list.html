@@ -12,13 +12,20 @@
     </div>
   </div>
 
-  <form method="post" action="/shifts/plans" class="mt-4 flex gap-2 max-w-md">
+  <div class="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4 text-xs text-indigo-950">
+    <p class="font-bold text-indigo-800">かんたん3ステップでシフト作成（ZIP出力・手動取込は不要です）</p>
+    <p class="mt-1 text-indigo-900/80">① <a href="/shifts/facility" class="underline font-semibold">施設設定</a> で開園時間と配置基準を選ぶ → ② <a href="/shifts/staff" class="underline font-semibold">職員シフト設定</a> で資格・契約を確認 → ③ 下のフォームから対象月を作成して「全月再生成」を押すだけ</p>
+  </div>
+
+  <form method="post" action="/shifts/plans" class="mt-4 flex flex-wrap gap-2 max-w-xl">
     <input type="month" name="target_month" required class="flex-1 rounded-lg border border-slate-300 px-3 py-2">
     <select name="staffing_standard_key" class="rounded-lg border border-slate-300 px-3 py-2">
-      <option value="fukuoka_city">福岡市</option>
-      <option value="osaka_city">大阪市</option>
-      <option value="tokyo">東京都</option>
-      <option value="generic">汎用</option>
+      <option value="fukuoka_city">福岡市（認可保育所）</option>
+      <option value="osaka_city">大阪市（認可保育所）</option>
+      <option value="tokyo">東京都（認可保育所）</option>
+      <option value="generic">全国基準（認可保育所）</option>
+      <option value="enterprise_led">企業主導型保育事業（目安）</option>
+      <option value="small_scale">小規模保育事業（目安）</option>
     </select>
     <button type="submit" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">作成</button>
   </form>
@@ -44,7 +51,7 @@
             {% elif plan.status == 'generated' %}bg-amber-100 text-amber-700
             {% elif plan.status == 'draft' %}bg-gray-100 text-gray-600
             {% else %}bg-slate-100 text-slate-600{% endif %}
-          ">{{ plan.status }}</span>
+          ">{% if plan.status == 'approved' %}確定済み{% elif plan.status == 'generated' %}AI作成済み{% elif plan.status == 'draft' %}下書き{% else %}{{ plan.status }}{% endif %}</span>
         </td>
         <td class="px-3 py-3 text-right">
           <a href="/shifts/plans/{{ plan.id }}" class="text-sm font-medium text-indigo-600 hover:underline">詳細</a>
