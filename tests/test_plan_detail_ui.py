@@ -71,7 +71,7 @@ def test_plan_detail_html_contains_timefold_ui_components(auth_client, ui_test_p
     html = response.text
 
     # 1. ヘッダーとバッジ
-    assert "Timefold MILP Engine" in html
+    assert "AI配置最適化エンジン" in html
     assert "制約重み設定" in html
     assert "突発欠勤再計画" in html
 

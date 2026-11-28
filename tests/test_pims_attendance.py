@@ -3,7 +3,7 @@ from __future__ import annotations
 import codecs
 import csv
 import io
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
@@ -207,7 +207,7 @@ def test_f05_f06_punch_and_daily_status(client: TestClient, db_session: Session)
     assert st["PUNCH_TEST_01"]["check_out_time"] == "17:15"
 
     # 4. 別日 (明日) の判定 -> 昨日の降園/登園ログに関係なく全員 "未登園" からスタート
-    tomorrow = date(today.year, today.month, today.day + 1 if today.day < 28 else 28)
+    tomorrow = today + timedelta(days=1)
     st_tomorrow = pims_service.get_daily_child_states(db_session, tomorrow)
     assert st_tomorrow["PUNCH_TEST_01"]["status"] == "未登園"
 

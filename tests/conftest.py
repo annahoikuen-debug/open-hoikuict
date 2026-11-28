@@ -12,8 +12,6 @@ _test_db_dir = Path(tempfile.gettempdir()) / "hoikuict_pytest"
 _test_db_dir.mkdir(parents=True, exist_ok=True)
 _test_db_path = _test_db_dir / f"hoikuict_test_{_worker_id}.db"
 
-# 既存の環境変数がなければ設定（テストプロセス全体で有効）
-if "HOIKUICT_DATABASE_URL" not in os.environ:
 # 既存の環境変数がなければ設定（xdist ワーカーが master の一時DB URL を継承した場合は上書き）
 _master_db_url = f"sqlite:///{(_test_db_dir / 'hoikuict_test_master.db').as_posix()}"
 if "HOIKUICT_DATABASE_URL" not in os.environ or (

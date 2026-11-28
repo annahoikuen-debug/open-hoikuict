@@ -522,8 +522,6 @@ def test_phase4_shift_requests_workflow_and_nav(client):
         # (5) ナビゲーションリンク確認
         # (5a) 一般職員向けナビゲーションリンク確認（管理導線は非表示）
         resp_staff_page = client.get("/children")
-        assert "/shifts/staff" in resp_staff_page.text
-        assert "/shifts/requests" in resp_staff_page.text
         assert "/shifts/staff" not in resp_staff_page.text
         assert "/shifts/requests" not in resp_staff_page.text
         assert "/staff/shift-requests" in resp_staff_page.text

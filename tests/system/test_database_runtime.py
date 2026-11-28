@@ -28,7 +28,7 @@ class DatabaseRuntimeTests(unittest.TestCase):
                         busy_timeout = connection.execute(text("PRAGMA busy_timeout")).scalar_one()
                 self.assertEqual(str(journal_mode).lower(), "wal")
                 self.assertEqual(foreign_keys, 1)
-                self.assertEqual(busy_timeout, 15000)
+                self.assertEqual(busy_timeout, 30000)
             finally:
                 engine.dispose()
 

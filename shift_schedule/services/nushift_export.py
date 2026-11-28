@@ -24,7 +24,6 @@ from models import (
     User,
 )
 from shift_schedule.bridge import active_children, build_child_plan
-from shift_schedule.bridge import build_child_plan
 from shift_schedule.db_models import (
     ChildPlannedArrivalDefaults,
     StaffContracts,

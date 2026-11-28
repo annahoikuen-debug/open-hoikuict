@@ -7,14 +7,23 @@ from sqlmodel import Session, select
 from database import engine
 from models import User
 from shift_schedule.contracts import SolveJobStatus
-from shift_schedule.db_models import ShiftPlanCells, ShiftPlanProposals, ShiftPlans, ShiftSolveJobs
+from shift_schedule.db_models import ShiftFacilitySettings, ShiftPlanCells, ShiftPlanProposals, ShiftPlans, ShiftSolveJobs
 from shift_schedule.services.replan import execute_realtime_replan
 
 
 def test_realtime_replan_handles_sudden_absence():
     """突発欠勤が発生した際、他日を固定したまま対象日のみ高速に再計画できることを検証。"""
     with Session(engine) as session:
+        if session.get(ShiftFacilitySettings, 1) is None:
+            session.add(ShiftFacilitySettings(id=1))
+            session.commit()
         users = session.exec(select(User)).all()
+        if len(users) < 3:
+            import uuid
+            for i in range(3 - len(users)):
+                session.add(User(email=f"replan_{uuid.uuid4().hex[:8]}@example.com", display_name=f"再計画職員{i}", staff_role="can_edit", is_active=True))
+            session.commit()
+            users = session.exec(select(User)).all()
         assert len(users) >= 3
         u1_id = users[0].id.hex
         u2_id = users[1].id.hex

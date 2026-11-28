@@ -24,8 +24,6 @@ for _p in (str(VENDOR_DIR), str(ROOT_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from vendor.nushift.shiftai import local_rules
-from vendor.nushift.shiftai.domain import (
 from shiftai import local_rules
 from shiftai.domain import (
     AgeClass,
@@ -38,10 +36,6 @@ from shiftai.domain import (
     SolveStatus,
     StaffMember,
 )
-from vendor.nushift.shiftai.monthly import MonthlySolveContext, solve_monthly_hierarchical
-from vendor.nushift.shiftai.shift_patterns import ShiftPattern
-from vendor.nushift.shiftai.solver import is_highs_available
-from vendor.nushift.shiftai.standards import build_requirements
 from shiftai.monthly import MonthlySolveContext, solve_monthly_hierarchical
 from shiftai.shift_patterns import ShiftPattern
 from shiftai.solver import is_highs_available

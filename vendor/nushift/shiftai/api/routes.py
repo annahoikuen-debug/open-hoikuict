@@ -25,6 +25,11 @@ class StaffDayValidationRequest(BaseModel):
     max_consecutive_days: int = Field(ge=0, default=5)
 
 
+class GridSolveRequest(BaseModel):
+    days_count: int = Field(ge=1, le=31, default=14)
+    start_date: str | None = None
+
+
 @router.get("/health")
 def api_health() -> dict[str, Any]:
     return {

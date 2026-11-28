@@ -17,7 +17,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 import database
 from csrf import CsrfTokenMiddleware, verify_csrf
-from models import Child, Classroom
+from models import Child, Classroom, StaffClassroomAssignment, User
 from plan_docs.auth_adapter import StaffUser, resolve_plan_docs_staff_user
 from plan_docs.contracts import DocumentType, Role
 from plan_docs.db_models import PlanDocumentRow
@@ -60,12 +60,17 @@ class MonthlyCarryOverTests(unittest.TestCase):
         SQLModel.metadata.create_all(self.engine)
         with Session(self.engine) as session:
             session.add_all([Classroom(id=1, name="A組"), Classroom(id=2,name="B組")])
+            staff = User(email="staff@example.com", display_name="架空職員", staff_role="can_edit", is_active=True)
+            session.add(staff)
+            session.flush()
+            session.add(StaffClassroomAssignment(staff_user_id=staff.id, classroom_id=1, starts_on=date(2020, 1, 1)))
             for i in (1, 2):
                 session.add(Child(id=i, last_name="架空", first_name=str(i), last_name_kana="カクウ",
                     first_name_kana=str(i), birth_date=date(2024, 5, 1),
                     enrollment_date=date(2024, 6, 1), classroom_id=1))
             session.commit()
-        self.user = StaffUser(role=Role.CAN_EDIT, actor_ref="staff:test", nursery_ref="test-nursery",
+            staff_id = staff.id
+        self.user = StaffUser(role=Role.CAN_EDIT, user_id=staff_id, actor_ref=f"staff:{staff_id}", nursery_ref="test-nursery",
                               classroom_refs=("A組",), name="架空職員")
         self.app = FastAPI(dependencies=[Depends(verify_csrf)])
         self.app.add_middleware(CsrfTokenMiddleware)

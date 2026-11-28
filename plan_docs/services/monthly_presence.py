@@ -62,7 +62,6 @@ def heartbeat(session, user, payload, context):
     # An approved/reviewing sheet cannot have active body editors.
     if context["status"] not in {"未保存", "下書き", "差戻し"}:
         return {"peers": [], "ttl_seconds": TTL, "editable": context["editable"], "edit_reason": context["edit_reason"]}
-    for actor_id, tab_id, field, state in rows:
     for actor_id, _tab_id, field, state in rows:
         staff = session.get(User, UUID(actor_id), populate_existing=True)
         if not staff or not staff.is_active or staff.staff_role not in {"can_edit", "admin"}:

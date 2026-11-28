@@ -52,6 +52,12 @@ def test_proposal_lifecycle_and_pin_protection():
     from models import User
     with Session(engine) as session:
         users = session.exec(select(User)).all()
+        if len(users) < 2:
+            import uuid
+            for i in range(2 - len(users)):
+                session.add(User(email=f"diff_{uuid.uuid4().hex[:8]}@example.com", display_name=f"差分職員{i}", staff_role="can_edit", is_active=True))
+            session.commit()
+            users = session.exec(select(User)).all()
         assert len(users) >= 2
         u1_id = users[0].id.hex
         u2_id = users[1].id.hex

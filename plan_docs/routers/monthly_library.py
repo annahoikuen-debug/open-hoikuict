@@ -244,7 +244,6 @@ def _save_merged(payload, user, repository):
                 "owner": payload.owner_name}
         merged, conflicts, remote = merge_cells(base, mine,
             {"fields": sheet["fields"], "owner": latest["owner_name"]})
-        def field_label(key):
         def field_label(key, latest=latest, sheet=sheet):
             label = "担任名" if key == "@owner" else latest["definitions"].get(key, {}).get("label", key)
             if key.startswith("child:"):

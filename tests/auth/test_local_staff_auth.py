@@ -58,6 +58,7 @@ class LocalStaffAuthenticationTests(unittest.TestCase):
                 "HOIKUICT_COOKIE_SECURE": "0",
                 "HOIKUICT_CSRF_ENFORCE": "0",
                 "HOIKUICT_PARENT_MAIL_FROM": "noreply@example.jp",
+                "HOIKUICT_STAFF_RECOVERY_BASE_URL": "https://nursery.example.jp",
             },
         )
         self.environment.start()

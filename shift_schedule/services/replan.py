@@ -44,22 +44,16 @@ from shift_schedule.services.duty_patterns import (
     get_active_duty_patterns,
     to_shiftai_patterns,
 )
-from vendor.nushift.shiftai.local_rules import build_standard
-from vendor.nushift.shiftai.shift_patterns import default_patterns
-from vendor.nushift.shiftai.standards import build_requirements
 from shiftai.local_rules import build_standard
 from shiftai.shift_patterns import default_patterns
 from shiftai.standards import build_requirements
 from shift_schedule.services.solver_manager import JobPriority
-from vendor.nushift.shiftai.domain import (
 from shiftai.domain import (
     CellState,
     ShiftDay,
     SolveResult,
     SolveStatus,
 )
-from vendor.nushift.shiftai.local_search import ruin_and_recreate
-from vendor.nushift.shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 from shiftai.local_search import ruin_and_recreate
 from shiftai.solver import is_highs_available, snap_to_patterns, solve_shift
 
